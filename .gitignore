@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.local
+.idea/
+.DS_Store
+
+# secrets — never commit. `.env*` catches .env, .env2, .env.local, .env.bak;
+# `*.env` catches prod.env. Templates are re-allowed explicitly.
+.env*
+*.env
+!.env.example

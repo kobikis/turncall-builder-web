@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # CONTRIBUTING.md requires a DCO sign-off, and here that sign-off also carries
+  # the licence-relicensing grant — so enforce it rather than just asking.
+  # Plain bash so there is no third-party action in the supply chain.
+  dco:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Check commits are signed off
+        run: |
+          # Use the branch tip, not HEAD: actions/checkout resolves a PR to a
+          # synthetic merge commit that carries no sign-off of its own.
+          # --no-merges likewise spares a contributor's own merge commits.
+          head='${{ github.event.pull_request.head.sha }}'
+          base=$(git merge-base origin/${{ github.base_ref }} "$head")
+          missing=$(git log --no-merges --format='%H %s' \
+            --invert-grep --grep='^Signed-off-by: .\+ <.\+@.\+>$' "$base".."$head")
+          if [ -n "$missing" ]; then
+            echo "::error::Commits missing a Signed-off-by trailer:"
+            echo "$missing"
+            echo "Fix with: git commit --amend -s   (or git rebase --signoff $base)"
+            exit 1
+          fi
+          echo "All commits signed off."
+
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # 24, not 20: node 20 ships npm 10, whose tree resolution disagrees with
+          # the npm 11 that wrote package-lock.json, and `npm ci` then refuses to
+          # install (it demanded an esbuild build absent from the lock). Keep this
+          # on the same npm major as whoever regenerates the lock file.
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      # Verified clean at the time this was added, so it is safe to gate on.
+      - run: npm run typecheck
+      - run: npm test
+      # Build last: it is the slowest step and re-runs tsc, so a type error
+      # surfaces from the fast job above rather than here.
+      - run: npm run build

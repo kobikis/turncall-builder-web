@@ -1,0 +1,32 @@
+{
+  "name": "turncall-builder-web",
+  "private": true,
+  "version": "0.9.0",
+  "license": "LicenseRef-FSL-1.1-ALv2",
+  "description": "Conversational agent builder for TurnCall \u2014 web console",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@pipecat-ai/client-js": "^1.12.0",
+    "@pipecat-ai/small-webrtc-transport": "^1.10.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.0"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.5.3",
+    "vite": "^5.3.4",
+    "vitest": "^4.1.10"
+  }
+}
