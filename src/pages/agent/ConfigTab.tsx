@@ -7,9 +7,9 @@ import { useAgent } from "./AgentPage";
 type Providers = { stt: string[]; llm: string[]; tts: string[]; s2s: string[] };
 const FALLBACK_PROVIDERS: Providers = {
   stt: ["deepgram", "openai", "elevenlabs", "cartesia"],
-  llm: ["openai", "anthropic", "openrouter", "ollama", "custom_openai"],
+  llm: ["openai", "anthropic", "openrouter", "ollama", "custom_openai", "bedrock"],
   tts: ["deepgram", "openai", "elevenlabs", "cartesia"],
-  s2s: ["openai", "google"],
+  s2s: ["openai", "google", "aws"],
 };
 
 const STATUS_HINTS: Record<string, string> = {
@@ -90,6 +90,13 @@ export default function ConfigTab() {
   }, []);
 
   const isS2S = (cfg.pipeline_mode || "cascade") === "s2s";
+  // Placeholder hints per S2S provider — OpenAI's would be actively misleading
+  // next to a Nova Sonic or Gemini dropdown.
+  const S2S_HINTS: Record<string, { model: string; voice: string }> = {
+    openai: { model: "gpt-4o-realtime-preview", voice: "alloy" },
+    google: { model: "models/gemini-3.1-flash-live-preview", voice: "Charon" },
+    aws: { model: "amazon.nova-2-sonic-v1:0", voice: "matthew" },
+  };
 
   // Fetch S2S model + voice lists whenever the S2S provider changes.
   const s2sProvider = cfg.s2s?.provider || "openai";
@@ -129,6 +136,10 @@ export default function ConfigTab() {
       ok = false;
     };
   }, [llmProvider]);
+
+  // Bedrock (LLM) and Nova Sonic (S2S) share one aws block, so the region field
+  // shows for either.
+  const usesAws = isS2S ? s2sProvider === "aws" : llmProvider === "bedrock";
 
   // Fetch the voice list live whenever the TTS provider changes.
   const ttsProvider = cfg.tts?.provider || "deepgram";
@@ -298,7 +309,7 @@ export default function ConfigTab() {
                 label="S2S model"
                 value={cfg.s2s?.model || ""}
                 options={s2sModels}
-                placeholder="gpt-4o-realtime-preview"
+                placeholder={(S2S_HINTS[s2sProvider] || S2S_HINTS.openai).model}
                 onChange={(v) => patch((c) => (c.s2s = { ...c.s2s, model: v }))}
               />
               <PickField
@@ -306,7 +317,7 @@ export default function ConfigTab() {
                 label="Voice"
                 value={cfg.s2s?.voice || ""}
                 options={s2sVoices}
-                placeholder="alloy"
+                placeholder={(S2S_HINTS[s2sProvider] || S2S_HINTS.openai).voice}
                 onChange={(v) => patch((c) => (c.s2s = { ...c.s2s, voice: v }))}
               />
             </div>
@@ -376,6 +387,31 @@ export default function ConfigTab() {
             />
           </div>
           </>
+          )}
+          {usesAws && (
+            <div style={{ display: "flex", gap: 12 }}>
+              <div className="field" style={{ flex: 1 }}>
+                <label htmlFor="cfg-aws-region">AWS region</label>
+                <input
+                  id="cfg-aws-region"
+                  className="input"
+                  value={cfg.aws?.region || ""}
+                  placeholder="us-east-1"
+                  onChange={(e) =>
+                    patch((c) => {
+                      const region = e.target.value.trim();
+                      if (region) c.aws = { ...c.aws, region };
+                      else delete c.aws;
+                    })
+                  }
+                />
+                <p className="muted" style={{ fontSize: 12.5, margin: "4px 0 0" }}>
+                  Bedrock model availability is region-specific, and access is granted
+                  per model per region. Leave blank to use the server's AWS_REGION.
+                  Credentials are configured on the TurnCall server, never here.
+                </p>
+              </div>
+            </div>
           )}
           <fieldset style={{ border: 0, padding: 0, margin: "0 0 16px" }}>
             <legend style={{ padding: 0, fontWeight: 500, fontSize: 13 }}>Built-in tools</legend>
