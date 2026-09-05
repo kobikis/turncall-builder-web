@@ -37,6 +37,11 @@ export default function Layout() {
           {user && (
             <div className="account">
               <div className="muted account-email">{user.email}</div>
+              {/* Per-user, so it sits with the account rather than the
+                  workspace nav above — you can only connect your own. */}
+              <NavLink to="/settings/github" className="link-btn">
+                GitHub
+              </NavLink>
               <button className="link-btn" type="button" onClick={() => void logout()}>
                 Log out
               </button>
