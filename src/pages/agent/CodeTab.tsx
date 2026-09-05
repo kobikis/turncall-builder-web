@@ -121,10 +121,11 @@ export default function CodeTab() {
       <div className="card">
         <h3>Push this agent's code to GitHub</h3>
         <p className="muted" style={{ fontSize: 13 }}>
-          The generated backend — tool handlers, Dockerfile, compose file — can be
-          pushed to a repository you already own, so you can run it yourself
-          instead of only through the builder. Nothing is ever created on your
-          GitHub: you choose the repository, branch and folder.
+          The generated backend — tool handlers, Dockerfile, compose file — plus
+          <code>agent.json</code> with this agent's prompt, model, voice and
+          tools, can be pushed to a repository you already own, so you can run it
+          yourself instead of only through the builder. Nothing is ever created
+          on your GitHub: you choose the repository, branch and folder.
         </p>
         <p style={{ fontSize: 13 }}>
           <Link to="/settings/github">Connect your GitHub account</Link> to get
@@ -261,6 +262,14 @@ export default function CodeTab() {
       </div>
 
       {link && (
+        <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>
+          A push writes the backend code and <code>agent.json</code> — the
+          prompt, model, voice and tools. Editing the prompt or model changes
+          <code> agent.json</code> only; the code changes when tools do.
+        </p>
+      )}
+
+      {link && (
         <p className="muted" style={{ fontSize: 12.5, marginTop: 12 }}>
           <a href={treeUrl} target="_blank" rel="noreferrer">
             {link.owner}/{link.repo}
@@ -282,7 +291,8 @@ cp .env.example .env     # then fill it in
 docker compose up -d --build`}
           </pre>
           <p className="muted" style={{ fontSize: 12.5 }}>
-            Secrets are never pushed — <code>.env.example</code> lists what to fill in.
+            Secrets are never pushed — <code>.env.example</code> lists what to
+            fill in, and secrets inside <code>agent.json</code> are redacted.
           </p>
         </details>
       )}
