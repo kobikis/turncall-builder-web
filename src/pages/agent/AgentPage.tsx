@@ -129,6 +129,7 @@ export default function AgentPage() {
         <NavLink to="calls" className={({ isActive }) => `tab${isActive ? " active" : ""}`}>Calls</NavLink>
         <NavLink to="knowledge" className={({ isActive }) => `tab${isActive ? " active" : ""}`}>Knowledge</NavLink>
         <NavLink to="takeaways" className={({ isActive }) => `tab${isActive ? " active" : ""}`}>Takeaways</NavLink>
+        <NavLink to="code" className={({ isActive }) => `tab${isActive ? " active" : ""}`}>Code</NavLink>
       </nav>
 
       {/* keyed by agent id so switching agents tears down any live test call */}
