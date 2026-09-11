@@ -9,7 +9,7 @@ const FALLBACK_PROVIDERS: Providers = {
   stt: ["deepgram", "openai", "elevenlabs", "cartesia"],
   llm: ["openai", "anthropic", "openrouter", "ollama", "custom_openai", "bedrock"],
   tts: ["deepgram", "openai", "elevenlabs", "cartesia"],
-  s2s: ["openai", "google", "aws"],
+  s2s: ["openai", "openai_live", "google", "aws"],
 };
 
 const STATUS_HINTS: Record<string, string> = {
@@ -93,7 +93,8 @@ export default function ConfigTab() {
   // Placeholder hints per S2S provider — OpenAI's would be actively misleading
   // next to a Nova Sonic or Gemini dropdown.
   const S2S_HINTS: Record<string, { model: string; voice: string }> = {
-    openai: { model: "gpt-4o-realtime-preview", voice: "alloy" },
+    openai: { model: "gpt-realtime-2.1", voice: "alloy" },
+    openai_live: { model: "gpt-live-1", voice: "alloy" },
     google: { model: "models/gemini-3.1-flash-live-preview", voice: "Charon" },
     aws: { model: "amazon.nova-2-sonic-v1:0", voice: "matthew" },
   };
