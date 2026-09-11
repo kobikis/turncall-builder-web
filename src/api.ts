@@ -44,3 +44,55 @@ export const api = async <T = any>(path: string, init?: RequestInit): Promise<T>
     throw new ApiError((body as { detail?: string })?.detail || `Request failed (${r.status})`, r.status);
   return body as T;
 };
+
+// A builder turn, narrated. `api()` parses the whole body before returning, so
+// it cannot show anything while a turn is still working — this is its sibling,
+// not an option on it: same cookie, same workspace header, same ApiError, but
+// the body is read as it arrives.
+//
+// The status code is checked before the first byte is consumed, which is where
+// an expired session lands — so a 404 is still a real 404 the caller can retry.
+export const streamEvents = async (
+  path: string,
+  body: unknown,
+  onEvent: (event: Record<string, unknown>) => void,
+): Promise<void> => {
+  let r: Response;
+  const workspaceHeader: Record<string, string> = activeWorkspaceId
+    ? { "X-Workspace-Id": activeWorkspaceId }
+    : {};
+  try {
+    r = await fetch(`/api${path}`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", ...workspaceHeader },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError("Cannot reach the builder API — is it running?", 0);
+  }
+  if (!r.ok || !r.body) {
+    const failed = await r.json().catch(() => null);
+    throw new ApiError(
+      (failed as { detail?: string })?.detail || `Request failed (${r.status})`,
+      r.status,
+    );
+  }
+
+  const reader = r.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    // Frames are separated by a blank line. Whatever follows the last one is a
+    // partial frame and waits for more bytes rather than being parsed.
+    const frames = buffer.split("\n\n");
+    buffer = frames.pop() ?? "";
+    for (const frame of frames) {
+      const line = frame.split("\n").find((l) => l.startsWith("data: "));
+      if (line) onEvent(JSON.parse(line.slice(6)) as Record<string, unknown>);
+    }
+  }
+};
