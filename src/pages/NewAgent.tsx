@@ -1,14 +1,22 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, ApiError } from "../api";
+import { api, ApiError, streamEvents } from "../api";
 import { Backend } from "../types";
 
 // The builder — "New agent" from the Agents list, or "Edit in chat" from an
 // agent page (route param :id → edit an existing agent, grounded on its config).
-type Msg = { role: "user" | "assistant"; text: string };
+// `check` marks the builder's summary of what it understood — the one message
+// the user is meant to read carefully rather than skim, so it does not look like
+// every other question.
+type Msg = { role: "user" | "assistant"; text: string; check?: boolean };
+// A document staged on the session before the agent exists. `readable` is
+// whether the builder could extract text from it — attached and understood are
+// different things, and the user should know which they got.
+type StagedDoc = { name: string; size: number; readable: boolean };
 type Turn = {
-  action: "ask" | "finalize";
+  action: "ask" | "confirm" | "finalize";
   question?: string;
+  summary?: string;
   agent_config?: unknown;
   pending_apply?: boolean;
 };
@@ -30,8 +38,11 @@ export default function NewAgent() {
   const [agentId, setAgentId] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [applyMsg, setApplyMsg] = useState("");
-  const [queuedDocs, setQueuedDocs] = useState<File[]>([]);
+  const [stagedDocs, setStagedDocs] = useState<StagedDoc[]>([]);
   const [docMsg, setDocMsg] = useState("");
+  // What the turn is doing right now. The wait is the builder reading, not
+  // writing, so this is the only thing that makes a slow turn legible.
+  const [progress, setProgress] = useState<string[]>([]);
   // Builder-model picker: which LLM drives the interview itself. Empty
   // provider = deployment default; locked once the session exists (create-only).
   const [builderProviders, setBuilderProviders] = useState<string[]>([]);
@@ -59,7 +70,10 @@ export default function NewAgent() {
     return failed;
   }
 
-  // "+ Add docs": upload now if the agent exists, else queue for Create.
+  // "+ Add docs": into the agent's KB if it exists, else staged on the session.
+  // Staging server-side (not holding File objects here) is what lets the builder
+  // read a menu while you are still describing the agent, and what makes a
+  // failed upload at Create retryable instead of a manual chore.
   async function onPickDocs(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
     e.target.value = ""; // let the same file be re-picked
@@ -73,8 +87,46 @@ export default function NewAgent() {
           ? `Added ${files.length - failed.length}; failed: ${failed.join(", ")}`
           : `Added ${files.length} doc${files.length > 1 ? "s" : ""} to the knowledge base.`
       );
-    } else {
-      setQueuedDocs((q) => [...q, ...files]);
+      return;
+    }
+    const sid = await ensureSession();
+    if (!sid) return; // ensureSession surfaced the reason
+    setDocMsg("Attaching…");
+    const added: StagedDoc[] = [];
+    const failed: string[] = [];
+    for (const f of files) {
+      try {
+        const form = new FormData();
+        form.append("file", f);
+        const r = await api(`/sessions/${sid}/documents`, { method: "POST", body: form });
+        added.push(r.data);
+      } catch (err) {
+        // 422 carries the actual reason (type, size) — worth showing verbatim.
+        failed.push(err instanceof ApiError ? `${f.name} — ${err.message}` : f.name);
+      }
+    }
+    setStagedDocs((d) => [...d.filter((x) => !added.some((a) => a.name === x.name)), ...added]);
+    const unreadable = added.filter((d) => !d.readable).map((d) => d.name);
+    setDocMsg(
+      [
+        failed.length ? `Couldn't attach ${failed.join("; ")}` : "",
+        unreadable.length
+          ? `${unreadable.join(", ")} attached, but the builder can't read the text — the agent still gets it.`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
+  }
+
+  async function removeStagedDoc(name: string) {
+    if (!sessionId) return;
+    try {
+      await api(`/sessions/${sessionId}/documents/${encodeURIComponent(name)}`, { method: "DELETE" });
+      setStagedDocs((d) => d.filter((x) => x.name !== name));
+      setDocMsg("");
+    } catch {
+      setDocMsg(`Couldn't remove ${name}.`);
     }
   }
 
@@ -173,6 +225,24 @@ export default function NewAgent() {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight });
   }, [msgs, busy]);
 
+  // One turn, read as it happens. Progress events are shown while it works;
+  // the result event carries exactly what the non-streaming endpoint returns,
+  // and a failure after the first byte arrives as an event because the status
+  // code is spent by then.
+  async function runTurn(sid: string, text: string): Promise<Turn> {
+    setProgress([]);
+    const out: { turn?: Turn; failure?: { status: number; detail: string } } = {};
+    await streamEvents(`/sessions/${sid}/messages/stream`, { message: text }, (e) => {
+      if (e.type === "progress") setProgress((p) => [...p, String(e.text)]);
+      if (e.type === "result") out.turn = e as unknown as Turn;
+      if (e.type === "error")
+        out.failure = { status: Number(e.status), detail: String(e.detail) };
+    });
+    if (out.failure) throw new ApiError(out.failure.detail, out.failure.status);
+    if (!out.turn) throw new ApiError("The builder returned nothing.", 502);
+    return out.turn;
+  }
+
   async function send() {
     if (!input.trim() || busy) return;
     const text = input.trim();
@@ -186,12 +256,9 @@ export default function NewAgent() {
         setInput(text);
         return;
       }
-      let r;
+      let turn: Turn;
       try {
-        r = await api(`/sessions/${sid}/messages`, {
-          method: "POST",
-          body: JSON.stringify({ message: text, doc_names: queuedDocs.map((f) => f.name) }),
-        });
+        turn = await runTurn(sid, text);
       } catch (e) {
         if (!(e instanceof ApiError && e.status === 404)) throw e;
         // Session expired server-side: start fresh and say so — the builder
@@ -201,17 +268,23 @@ export default function NewAgent() {
           method: "POST",
           body: sessionBody(),
         });
-        sid = s.data.session_id;
-        setSessionId(sid);
-        setNotice("The builder session expired — started a new one. Earlier answers were lost; this message begins a fresh conversation.");
-        r = await api(`/sessions/${sid}/messages`, {
-          method: "POST",
-          body: JSON.stringify({ message: text, doc_names: queuedDocs.map((f) => f.name) }),
-        });
+        const fresh: string = s.data.session_id;
+        sid = fresh;
+        setSessionId(fresh);
+        // Documents were staged on the old session and went with it.
+        setStagedDocs([]);
+        setNotice(
+          stagedDocs.length
+            ? "The builder session expired — started a new one. Earlier answers and attached documents were lost; this message begins a fresh conversation."
+            : "The builder session expired — started a new one. Earlier answers were lost; this message begins a fresh conversation."
+        );
+        turn = await runTurn(fresh, text);
       }
-      const turn: Turn = r.data;
       if (turn.action === "ask") {
         setMsgs((m) => [...m, { role: "assistant", text: turn.question || "" }]);
+      } else if (turn.action === "confirm") {
+        // Nothing is built yet. The next message either corrects it or accepts it.
+        setMsgs((m) => [...m, { role: "assistant", text: turn.summary || "", check: true }]);
       } else {
         setConfig(JSON.stringify(turn.agent_config, null, 2));
         if (turn.pending_apply) {
@@ -274,18 +347,17 @@ export default function NewAgent() {
         setCreateError("The agent was created, but its backend failed to start.");
         return;
       }
-      // Upload any docs queued during the build, now that the agent (and its KB)
-      // can exist. The agent is created regardless — a failed doc is reported,
-      // never rolled back; the user can retry from the Knowledge tab.
-      if (queuedDocs.length) {
-        setDocMsg(`Uploading ${queuedDocs.length} doc(s)…`);
-        const failed = await uploadDocs(newId, queuedDocs);
-        setQueuedDocs([]);
-        if (failed.length) {
-          setCreateError(`Agent created, but these docs failed to upload: ${failed.join(", ")}. Retry from the Knowledge tab.`);
-          return;
-        }
+      // Documents staged on the session were forwarded into the agent's
+      // knowledge base server-side. Anything that failed is still staged, so
+      // pressing Create again retries it.
+      const knowledge = r.data.knowledge as { uploaded: string[]; failed: string[] } | null;
+      if (knowledge?.failed.length) {
+        setCreateError(
+          `Agent created, but these documents failed to upload: ${knowledge.failed.join(", ")}. Press Create again to retry, or add them from the Knowledge tab.`
+        );
+        return;
       }
+      setStagedDocs([]);
       nav(`/agents/${newId}`);
     } catch (e) {
       setCreateError(e instanceof Error ? e.message : "Create failed.");
@@ -322,17 +394,36 @@ export default function NewAgent() {
         <div ref={chatRef} className="chat">
           {msgs.map((m, i) => (
             <div key={i} className={`row ${m.role}`}>
-              <span className="bubble">{m.text}</span>
+              <span className="bubble" style={m.check ? { borderLeft: "3px solid var(--accent, #e07a3f)" } : undefined}>
+                {m.check && (
+                  <span className="muted" style={{ display: "block", fontSize: 12, marginBottom: 6 }}>
+                    Check this before I build it
+                  </span>
+                )}
+                {m.text}
+              </span>
             </div>
           ))}
-          {busy && <p className="muted">…</p>}
+          {busy && (
+            <div className="muted" style={{ fontSize: 12.5 }}>
+              {progress.length === 0
+                ? "…"
+                : progress.map((line, i) => (
+                    <div key={`${line}-${i}`}>
+                      {/* The last line is what it is doing now; the rest are done. */}
+                      {i === progress.length - 1 ? line + "…" : line}
+                    </div>
+                  ))}
+            </div>
+          )}
           {chatError && <p role="alert" className="error-text">{chatError}</p>}
         </div>
-        {(queuedDocs.length > 0 || docMsg) && (
+        {(stagedDocs.length > 0 || docMsg) && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginTop: 10 }}>
-            {queuedDocs.map((f, i) => (
+            {stagedDocs.map((f) => (
               <span
-                key={`${f.name}-${i}`}
+                key={f.name}
+                title={f.readable ? undefined : "Attached, but the builder can't read this one"}
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12.5,
                   padding: "3px 6px 3px 10px", borderRadius: 14,
@@ -340,9 +431,10 @@ export default function NewAgent() {
                 }}
               >
                 {f.name}
+                {!f.readable && <span className="muted">(unread)</span>}
                 <button
                   aria-label={`Remove ${f.name}`}
-                  onClick={() => setQueuedDocs((q) => q.filter((_, j) => j !== i))}
+                  onClick={() => removeStagedDoc(f.name)}
                   style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 0, fontSize: 13 }}
                 >
                   ✕
@@ -397,7 +489,7 @@ export default function NewAgent() {
             onClick={() => docsRef.current?.click()}
             disabled={creating}
             aria-label="Add documents to the knowledge base"
-            title={agentId ? "Add docs to the knowledge base" : "Attach docs (uploaded when you Create)"}
+            title={agentId ? "Add docs to the knowledge base" : "Attach docs (the builder reads them as you build)"}
             style={{
               flex: "0 0 auto", width: 38, height: 38, borderRadius: "50%",
               border: "1px solid rgba(255,255,255,0.18)", background: "transparent",
