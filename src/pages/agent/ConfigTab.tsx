@@ -9,8 +9,38 @@ const FALLBACK_PROVIDERS: Providers = {
   stt: ["deepgram", "openai", "elevenlabs", "cartesia"],
   llm: ["openai", "anthropic", "openrouter", "ollama", "custom_openai", "bedrock"],
   tts: ["deepgram", "openai", "elevenlabs", "cartesia"],
-  s2s: ["openai", "google", "aws"],
+  s2s: ["openai", "openai_live", "google", "aws"],
 };
+
+// A raw provider id is only self-explanatory when it names a vendor. Several
+// name an *integration* instead: `openai` and `openai_live` are two different
+// OpenAI protocols (Realtime vs the full-duplex Live API), and bedrock /
+// openrouter / custom_openai are gateways rather than vendors. Label those;
+// leave the plain vendor names alone. Keyed by role because `openai` means
+// something different under stt than under s2s.
+const PROVIDER_LABELS: Record<keyof Providers, Record<string, string>> = {
+  stt: {},
+  tts: {},
+  llm: {
+    openrouter: "openrouter — multi-model routing with fallback",
+    ollama: "ollama — local models",
+    custom_openai: "custom_openai — any OpenAI-compatible endpoint",
+    bedrock: "bedrock — AWS-hosted models (gateway)",
+  },
+  s2s: {
+    openai: "openai — Realtime, turn-based",
+    openai_live: "openai_live — GPT-Live-1, full duplex (handles interruptions)",
+    google: "google — Gemini Live",
+    aws: "aws — Amazon Nova Sonic",
+  },
+};
+
+const providerOptions = (role: keyof Providers, list: string[]) =>
+  list.map((p) => (
+    <option key={p} value={p}>
+      {PROVIDER_LABELS[role][p] ?? p}
+    </option>
+  ));
 
 const STATUS_HINTS: Record<string, string> = {
   degraded: "running, but event/tool verification is unconfigured (webhook registration failed) — the backend rejects unsigned traffic, so no events will appear",
@@ -93,7 +123,8 @@ export default function ConfigTab() {
   // Placeholder hints per S2S provider — OpenAI's would be actively misleading
   // next to a Nova Sonic or Gemini dropdown.
   const S2S_HINTS: Record<string, { model: string; voice: string }> = {
-    openai: { model: "gpt-4o-realtime-preview", voice: "alloy" },
+    openai: { model: "gpt-realtime-2.1", voice: "alloy" },
+    openai_live: { model: "gpt-live-1", voice: "alloy" },
     google: { model: "models/gemini-3.1-flash-live-preview", voice: "Charon" },
     aws: { model: "amazon.nova-2-sonic-v1:0", voice: "matthew" },
   };
@@ -301,7 +332,7 @@ export default function ConfigTab() {
                   value={cfg.s2s?.provider || "openai"}
                   onChange={(e) => patch((c) => (c.s2s = { ...c.s2s, provider: e.target.value }))}
                 >
-                  {providers.s2s.map((p) => <option key={p} value={p}>{p}</option>)}
+                  {providerOptions("s2s", providers.s2s)}
                 </select>
               </div>
               <PickField
@@ -332,7 +363,7 @@ export default function ConfigTab() {
                 value={cfg.stt?.provider || "deepgram"}
                 onChange={(e) => patch((c) => (c.stt = { ...c.stt, provider: e.target.value }))}
               >
-                {providers.stt.map((p) => <option key={p} value={p}>{p}</option>)}
+                {providerOptions("stt", providers.stt)}
               </select>
             </div>
             <PickField
@@ -353,7 +384,7 @@ export default function ConfigTab() {
                 value={cfg.llm?.provider || "openai"}
                 onChange={(e) => patch((c) => (c.llm = { ...c.llm, provider: e.target.value }))}
               >
-                {providers.llm.map((p) => <option key={p} value={p}>{p}</option>)}
+                {providerOptions("llm", providers.llm)}
               </select>
             </div>
             <PickField
@@ -374,7 +405,7 @@ export default function ConfigTab() {
                 value={cfg.tts?.provider || "deepgram"}
                 onChange={(e) => patch((c) => (c.tts = { ...c.tts, provider: e.target.value }))}
               >
-                {providers.tts.map((p) => <option key={p} value={p}>{p}</option>)}
+                {providerOptions("tts", providers.tts)}
               </select>
             </div>
             <PickField
