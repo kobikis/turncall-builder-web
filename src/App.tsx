@@ -18,6 +18,7 @@ import KnowledgeTab from "./pages/agent/KnowledgeTab";
 import TakeawaysTab from "./pages/agent/TakeawaysTab";
 import CodeTab from "./pages/agent/CodeTab";
 import GitHubSettings from "./pages/GitHubSettings";
+import Skills from "./pages/Skills";
 import PhoneNumbersList from "./pages/PhoneNumbersList";
 import AddPhoneNumber from "./pages/AddPhoneNumber";
 import EditPhoneNumber from "./pages/EditPhoneNumber";
@@ -118,6 +119,14 @@ export default function App() {
         </Route>
         {/* Per-user, not workspace-scoped: you can only connect your own. */}
         <Route path="settings/github" element={<GitHubSettings />} />
+        <Route
+          path="skills"
+          element={
+            <RequireRole min="admin">
+              <Skills />
+            </RequireRole>
+          }
+        />
         <Route path="phone-numbers" element={<PhoneNumbersList />} />
         <Route
           path="phone-numbers/new"

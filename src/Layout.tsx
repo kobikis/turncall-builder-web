@@ -33,6 +33,13 @@ export default function Layout() {
             Members
           </NavLink>
         )}
+        {isAdmin(activeWorkspace?.role) && (
+          // A skill is prompt text in the builder that holds the deployment's
+          // LLM key — authoring one is an admin's, like membership.
+          <NavLink to="/skills" className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
+            Skills
+          </NavLink>
+        )}
         <div className="foot">
           {user && (
             <div className="account">
