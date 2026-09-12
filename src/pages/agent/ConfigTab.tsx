@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
 import { McpServers } from "./McpServers";
+import {
+  ConnectedApps,
+  type CatalogApp,
+  type ConnectedAccount,
+} from "./ConnectedApps";
 import { api } from "../../api";
 import { useAuth } from "../../auth";
 import { canEdit } from "../../roles";
@@ -115,9 +120,18 @@ export default function ConfigTab() {
   const [voices, setVoices] = useState<Opt[]>([]); // live, for the selected TTS provider
   const [s2sModels, setS2sModels] = useState<string[]>([]); // live, for the selected S2S provider
   const [s2sVoices, setS2sVoices] = useState<Opt[]>([]);
+  const [catalog, setCatalog] = useState<CatalogApp[]>([]);
+  const [connected, setConnected] = useState<ConnectedAccount[]>([]);
 
   useEffect(() => {
     api("/providers").then((r) => setProviders(r.data)).catch(() => {});
+  }, []);
+
+  // Integrations are optional: an unconfigured deployment answers 503 here, and
+  // the picker then renders its empty state rather than an error.
+  useEffect(() => {
+    api("/integrations/catalog").then((r) => setCatalog(r.data)).catch(() => {});
+    api("/integrations").then((r) => setConnected(r.data)).catch(() => {});
   }, []);
 
   const isS2S = (cfg.pipeline_mode || "cascade") === "s2s";
@@ -484,6 +498,20 @@ export default function ConfigTab() {
               Comma-separated — the agent refuses to discuss these.
             </p>
           </div>
+          <ConnectedApps
+            apps={Array.isArray(cfg.integrations) ? cfg.integrations : []}
+            catalog={catalog}
+            connected={connected}
+            editable={editable}
+            onChange={(apps) =>
+              patch((c) => {
+                // Same rule as mcp_servers: omit the key rather than sending an
+                // empty array, so "none" is a removal and not a no-op.
+                if (apps.length) c.integrations = apps;
+                else delete c.integrations;
+              })
+            }
+          />
           <McpServers
             servers={Array.isArray(cfg.mcp_servers) ? cfg.mcp_servers : []}
             editable={editable}
