@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { McpServers } from "./McpServers";
 import { api } from "../../api";
 import { useAuth } from "../../auth";
 import { canEdit } from "../../roles";
@@ -483,6 +484,19 @@ export default function ConfigTab() {
               Comma-separated — the agent refuses to discuss these.
             </p>
           </div>
+          <McpServers
+            servers={Array.isArray(cfg.mcp_servers) ? cfg.mcp_servers : []}
+            editable={editable}
+            onChange={(servers) =>
+              patch((c) => {
+                // Omit the key entirely when empty rather than sending [] — the
+                // mapper only forwards it when present, so an empty array would
+                // read as "no change" rather than "remove them".
+                if (servers.length) c.mcp_servers = servers;
+                else delete c.mcp_servers;
+              })
+            }
+          />
           <div className="field">
             <label htmlFor="cfg-server-url">Tool server URL</label>
             <input
@@ -498,7 +512,7 @@ export default function ConfigTab() {
           </div>
           <p className="muted" style={{ fontSize: 12.5 }}>
             {customCount > 0 ? `${customCount} custom tool${customCount > 1 ? "s" : ""}. ` : ""}
-            Custom tools, speech-to-speech, voicemail, MCP, and analysis live in{" "}
+            Custom tools, speech-to-speech, voicemail, and analysis live in{" "}
             <strong>Advanced (JSON)</strong>.
           </p>
         </div>
