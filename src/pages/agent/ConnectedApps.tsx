@@ -6,6 +6,7 @@
 // action and its arguments are chosen here. Connecting an app is a Workspace
 // act and lives on /integrations; this is the per-agent half.
 
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { AppHead, describe, shortTool, type CatalogAction, type CatalogApp } from "../../apps";
@@ -115,6 +116,30 @@ export function pickable(
   return out;
 }
 
+// Whether the section is expanded, remembered across page loads.
+//
+// Not per agent: the question is whether this Workspace cares about
+// integrations at all, and answering it once per agent would be answering it
+// again every time. Wrapped because a browser in private mode throws on
+// localStorage, and a collapsed section is not worth a blank page.
+const OPEN_KEY = "turncall.connectedApps.open";
+
+function rememberedOpen(): boolean {
+  try {
+    return localStorage.getItem(OPEN_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function remember(open: boolean): void {
+  try {
+    localStorage.setItem(OPEN_KEY, open ? "1" : "0");
+  } catch {
+    /* private mode — the toggle still works, it just will not be remembered */
+  }
+}
+
 type Props = {
   /** Attachments on this agent, in either shape. */
   apps: AttachmentValue[];
@@ -143,6 +168,11 @@ export function ConnectedApps({ apps, catalog, connected, needs = [], editable, 
       authorized: authorized.has(slug),
     }));
 
+  const [open, setOpen] = useState(rememberedOpen);
+  // What a collapsed section still says. A heading alone would make minimizing
+  // it a choice between the grid and knowing whether anything is attached.
+  const inUse = rows.filter((r) => parsed.has(r.app)).length;
+
   const update = (slug: string, next: Partial<Parsed>) => {
     // `disabled` is what a browser enforces; this is what enforces it when the
     // event does not come from one. A viewer must not be able to change an
@@ -155,16 +185,13 @@ export function ConnectedApps({ apps, catalog, connected, needs = [], editable, 
   };
 
   return (
-    <fieldset style={{ border: 0, padding: 0, margin: "0 0 16px" }}>
-      <legend style={{ padding: 0, fontWeight: 500, fontSize: 13 }}>Connected apps</legend>
-      <p className="muted" style={{ fontSize: 12.5, margin: "0 0 10px" }}>
-        Apps your workspace has authorized. Choose when each one runs: during a
-        call, so the agent can use it — or when a call ends, to post a summary.
-      </p>
-
+    <div style={{ margin: "0 0 16px" }}>
       {/* The builder cannot attach an app, so when it decided the agent needs
           one it could only write it down. Saying nothing here would leave the
-          agent quietly missing the capability it was built around. */}
+          agent quietly missing the capability it was built around.
+
+          Outside the collapsible part on purpose: this is a call to action, and
+          minimizing the section must not be a way to lose it. */}
       {unmet.map(({ slug, name, authorized }) => (
         <div className="callout warn" key={slug} style={{ marginBottom: 10 }}>
           <strong>This agent needs {name}.</strong>{" "}
@@ -178,6 +205,28 @@ export function ConnectedApps({ apps, catalog, connected, needs = [], editable, 
           )}
         </div>
       ))}
+
+      <details
+        open={open}
+        onToggle={(e) => {
+          const next = e.currentTarget.open;
+          setOpen(next);
+          remember(next);
+        }}
+      >
+        <summary style={{ cursor: "pointer", fontWeight: 500, fontSize: 13 }}>
+          Connected apps
+          {inUse > 0 && (
+            <span className="muted" style={{ fontWeight: 400 }}>
+              {" "}
+              · {inUse} in use
+            </span>
+          )}
+        </summary>
+      <p className="muted" style={{ fontSize: 12.5, margin: "10px 0" }}>
+        Apps your workspace has authorized. Choose when each one runs: during a
+        call, so the agent can use it — or when a call ends, to post a summary.
+      </p>
 
       {rows.length === 0 ? (
         <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>
@@ -304,6 +353,7 @@ export function ConnectedApps({ apps, catalog, connected, needs = [], editable, 
         Credentials never live in this configuration — they are minted for each
         call and expire within the hour.
       </p>
-    </fieldset>
+      </details>
+    </div>
   );
 }
