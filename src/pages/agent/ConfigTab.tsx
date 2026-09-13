@@ -6,6 +6,7 @@ import {
   type CatalogApp,
   type ConnectedAccount,
 } from "./ConnectedApps";
+import { Section } from "./Section";
 import { api } from "../../api";
 import { useAuth } from "../../auth";
 import { canEdit } from "../../roles";
@@ -311,6 +312,7 @@ export default function ConfigTab() {
         </>
       ) : (
         <div style={{ flex: 1, overflowY: "auto" }}>
+          <Section id="prompt" title="Prompt">
           <div className="field">
             <label htmlFor="cfg-prompt">System prompt</label>
             <textarea
@@ -331,6 +333,13 @@ export default function ConfigTab() {
               placeholder="What the agent says first (blank = caller speaks first)"
             />
           </div>
+          </Section>
+
+          <Section
+            id="models"
+            title="Speech and models"
+            hint={isS2S ? "speech-to-speech" : "cascade"}
+          >
           <div className="field">
             <label htmlFor="cfg-mode">Pipeline mode</label>
             <select
@@ -466,8 +475,13 @@ export default function ConfigTab() {
               </div>
             </div>
           )}
-          <fieldset style={{ border: 0, padding: 0, margin: "0 0 16px" }}>
-            <legend style={{ padding: 0, fontWeight: 500, fontSize: 13 }}>Built-in tools</legend>
+          </Section>
+
+          <Section
+            id="builtin-tools"
+            title="Built-in tools"
+            hint={tools.length || ""}
+          >
             <div className="radio-row">
               {BUILTIN_TOOLS.map((name) => (
                 <label key={name}>
@@ -486,7 +500,9 @@ export default function ConfigTab() {
                 </label>
               ))}
             </div>
-          </fieldset>
+          </Section>
+
+          <Section id="guardrails" title="Guardrails" hint={topics.length || ""}>
           <div className="field">
             <label htmlFor="cfg-topics">Prohibited topics</label>
             <input
@@ -505,6 +521,8 @@ export default function ConfigTab() {
               Comma-separated — the agent refuses to discuss these.
             </p>
           </div>
+          </Section>
+
           <ConnectedApps
             apps={Array.isArray(cfg.integrations) ? (cfg.integrations as AttachmentValue[]) : []}
             needs={Array.isArray(cfg.needs_integrations) ? (cfg.needs_integrations as string[]) : []}
@@ -533,6 +551,11 @@ export default function ConfigTab() {
               })
             }
           />
+          <Section
+            id="tool-server"
+            title="Tool server"
+            hint={cfg.server_url ? "your server" : "generated backend"}
+          >
           <div className="field">
             <label htmlFor="cfg-server-url">Tool server URL</label>
             <input
@@ -551,6 +574,7 @@ export default function ConfigTab() {
             Custom tools, speech-to-speech, voicemail, and analysis live in{" "}
             <strong>Advanced (JSON)</strong>.
           </p>
+          </Section>
         </div>
       )}
 

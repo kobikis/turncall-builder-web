@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Section } from "./Section";
 
 // The transports the Console can offer. stdio is deliberately absent: it runs a
 // subprocess on the TurnCall host, and the builder's mapper refuses it (ADR-0017),
@@ -62,8 +63,7 @@ export function McpServers({ servers, editable, onChange }: Props) {
     onChange([...servers, { name: "", transport: "http", url: "" }]);
 
   return (
-    <fieldset style={{ border: 0, padding: 0, margin: "0 0 16px" }}>
-      <legend style={{ padding: 0, fontWeight: 500, fontSize: 13 }}>MCP servers</legend>
+    <Section id="mcp" title="MCP servers" hint={servers.length || ""}>
       <p className="muted" style={{ fontSize: 12.5, margin: "0 0 10px" }}>
         Tool servers the agent connects out to — Slack, a calendar, your own CRM.
         Their tools are discovered when a call starts and offered to the model
@@ -159,6 +159,6 @@ export function McpServers({ servers, editable, onChange }: Props) {
         A server the agent can't reach costs it those tools, not the call — discovery
         gives up after a few seconds and the agent starts without them.
       </p>
-    </fieldset>
+    </Section>
   );
 }
