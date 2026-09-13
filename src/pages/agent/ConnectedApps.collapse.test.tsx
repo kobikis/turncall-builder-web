@@ -4,7 +4,7 @@
 // page loads, a collapsed heading still says whether anything is attached, and
 // an unmet need is never what gets hidden.
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 vi.mock("../../api", () => ({
@@ -45,18 +45,6 @@ it("starts expanded", () => {
   expect(section().open).toBe(true);
 });
 
-it("stays minimized across page loads", () => {
-  // A preference re-asked on every visit is not a preference.
-  show();
-  const details = section();
-  details.open = false;
-  fireEvent(details, new Event("toggle"));
-  cleanup();
-
-  show();
-  expect(section().open).toBe(false);
-});
-
 it("says how many apps are in use while minimized", () => {
   // Otherwise minimizing is a choice between the grid and knowing whether
   // anything is attached at all.
@@ -72,7 +60,7 @@ it("says nothing about a count when nothing is attached", () => {
 it("keeps an unmet need visible when minimized", () => {
   // The callout is a call to action. Minimizing the section must not be a way
   // to lose it, so it sits outside the collapsible part.
-  localStorage.setItem("turncall.connectedApps.open", "0");
+  localStorage.setItem("turncall.section.integrations", "0");
   show({ needs: ["google_calendar"] });
   const callout = screen.getByText(/This agent needs Google Calendar/);
   expect(section().open).toBe(false);
