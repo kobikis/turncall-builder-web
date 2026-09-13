@@ -1,8 +1,15 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 
-import { ConnectedApps, pickable } from "./ConnectedApps";
+import {
+  ConnectedApps,
+  pickable,
+  readAttachment,
+  writeAttachment,
+  type AttachmentValue,
+} from "./ConnectedApps";
 
 afterEach(cleanup);
 
@@ -11,11 +18,22 @@ const CATALOG = [
     app: "slack_v2",
     name: "Slack",
     tools: ["slack_v2-post-message", "slack_v2-list-channels"],
+    actions: [
+      {
+        id: "slack_v2-post-message",
+        label: "Post the call summary",
+        summary_arg: "text",
+        inputs: [{ name: "channel", label: "Channel", placeholder: "#sales-calls" }],
+      },
+    ],
   },
   {
+    // No end-of-call Actions: create-event needs a start and an end, which a
+    // finished call cannot supply.
     app: "google_calendar",
     name: "Google Calendar",
     tools: ["google_calendar-create-event"],
+    actions: [],
   },
 ];
 
@@ -24,24 +42,38 @@ const CONNECTED = [
   { id: "apn_2", app: "google_calendar" },
 ];
 
+const SUMMARY = {
+  app: "slack_v2",
+  call_ended: {
+    action: "slack_v2-post-message",
+    args: { channel: "#calls" },
+    summary_arg: "text",
+  },
+};
+
 function show(props: Partial<Parameters<typeof ConnectedApps>[0]> = {}) {
   const onChange = vi.fn();
   render(
-    <ConnectedApps
-      apps={[]}
-      catalog={CATALOG}
-      connected={CONNECTED}
-      editable
-      onChange={onChange}
-      {...props}
-    />,
+    <MemoryRouter>
+      <ConnectedApps
+        apps={[]}
+        catalog={CATALOG}
+        connected={CONNECTED}
+        editable
+        onChange={onChange}
+        {...props}
+      />
+    </MemoryRouter>,
   );
   return onChange;
 }
 
+const duringCalls = (name: string) => screen.getByLabelText(`${name}: available during calls`);
+const whenEnds = (name: string) => screen.getByLabelText(`${name}: when a call ends`);
+
 // The states worth pinning are the ones where an editor could lose an
-// attachment, be shown something they cannot use, or be stuck with an app they
-// can no longer take off.
+// attachment, be shown something they cannot use, or silently get a trigger
+// they did not ask for.
 
 describe("which apps are offered", () => {
   it("offers what the workspace has connected", () => {
@@ -53,8 +85,7 @@ describe("which apps are offered", () => {
 
   it("keeps an attached app that has since been disconnected", () => {
     // Otherwise it stays attached to the agent with no way to take it off.
-    const rows = pickable(["slack_v2"], CATALOG, []);
-    expect(rows.map((a) => a.app)).toEqual(["slack_v2"]);
+    expect(pickable(["slack_v2"], CATALOG, []).map((a) => a.app)).toEqual(["slack_v2"]);
   });
 
   it("does not list the same app twice when it is attached and connected", () => {
@@ -62,41 +93,161 @@ describe("which apps are offered", () => {
   });
 
   it("survives an app the catalog has never heard of", () => {
-    const rows = pickable(["dropbox"], CATALOG, []);
-    expect(rows[0]).toEqual({ app: "dropbox", name: "dropbox", tools: [] });
+    expect(pickable(["dropbox"], CATALOG, [])[0]).toEqual({
+      app: "dropbox",
+      name: "dropbox",
+      tools: [],
+    });
+  });
+
+  it("finds an app attached in the object form", () => {
+    expect(pickable([SUMMARY], CATALOG, []).map((a) => a.app)).toEqual(["slack_v2"]);
   });
 });
 
-describe("the picker", () => {
-  it("attaches an app without disturbing the others", () => {
-    const onChange = show({ apps: ["slack_v2"] });
-
-    fireEvent.click(screen.getByLabelText(/Google Calendar/));
-
-    expect(onChange).toHaveBeenCalledWith(["slack_v2", "google_calendar"]);
+describe("reading an attachment", () => {
+  it("reads a bare slug as mid-call only", () => {
+    // The pre-ADR-0021 shape. Reading it as anything else would turn on an
+    // end-of-call trigger for an agent whose owner never asked for one.
+    expect(readAttachment("slack_v2")).toEqual({
+      app: "slack_v2",
+      midCall: true,
+      callEnded: null,
+    });
   });
 
-  it("detaches an app", () => {
+  it("reads the object form", () => {
+    const parsed = readAttachment(SUMMARY);
+    expect(parsed.midCall).toBe(false);
+    expect(parsed.callEnded?.action).toBe("slack_v2-post-message");
+  });
+
+  it("drops an end-of-call half with no action", () => {
+    const parsed = readAttachment({ app: "slack_v2", mid_call: true, call_ended: undefined });
+    expect(parsed.callEnded).toBeNull();
+  });
+
+  it("writes nothing at all when neither trigger is set", () => {
+    // An entry with no trigger reads as attached while doing nothing, and the
+    // API refuses it.
+    expect(writeAttachment({ app: "slack_v2", midCall: false, callEnded: null })).toBeNull();
+  });
+});
+
+describe("choosing when an app runs", () => {
+  it("turns on mid-call without disturbing the others", () => {
+    const onChange = show({ apps: ["slack_v2"] });
+
+    fireEvent.click(duringCalls("Google Calendar"));
+
+    expect(onChange).toHaveBeenCalledWith([
+      "slack_v2",
+      { app: "google_calendar", mid_call: true },
+    ]);
+  });
+
+  it("turns off mid-call, removing an app that has no other trigger", () => {
     const onChange = show({ apps: ["slack_v2", "google_calendar"] });
 
-    fireEvent.click(screen.getByLabelText(/^Slack/));
+    fireEvent.click(duringCalls("Slack"));
 
     expect(onChange).toHaveBeenCalledWith(["google_calendar"]);
   });
 
-  it("shows what an attached app gives the agent", () => {
+  it("keeps an app attached when mid-call goes off but an Automation stays", () => {
+    const onChange = show({ apps: [{ ...SUMMARY, mid_call: true }] });
+
+    fireEvent.click(duringCalls("Slack"));
+
+    expect(onChange).toHaveBeenCalledWith([SUMMARY]);
+  });
+
+  it("fills in the summary input from the catalog when an Action is picked", () => {
+    const onChange = show({ apps: [] });
+
+    fireEvent.change(whenEnds("Slack"), { target: { value: "slack_v2-post-message" } });
+
+    expect(onChange).toHaveBeenCalledWith([
+      {
+        app: "slack_v2",
+        call_ended: { action: "slack_v2-post-message", args: {}, summary_arg: "text" },
+      },
+    ]);
+  });
+
+  it("choosing 'Do nothing' clears the Automation but keeps mid-call", () => {
+    const onChange = show({ apps: [{ ...SUMMARY, mid_call: true }] });
+
+    fireEvent.change(whenEnds("Slack"), { target: { value: "" } });
+
+    expect(onChange).toHaveBeenCalledWith([{ app: "slack_v2", mid_call: true }]);
+  });
+
+  it("never asks where the summary goes — the catalog already knows", () => {
+    // It is the same string for every Workspace that picks this Action. Asking
+    // a person to type a constant is not configuration.
+    show({ apps: [SUMMARY] });
+
+    expect(screen.queryByLabelText(/summary goes into/i)).toBeNull();
+    expect(screen.queryByText(/summary_arg/)).toBeNull();
+  });
+
+  it("asks for the action's inputs by their real names", () => {
+    const onChange = show({ apps: [SUMMARY] });
+
+    fireEvent.change(screen.getByLabelText("Slack: Channel"), { target: { value: "#ops" } });
+
+    expect(onChange).toHaveBeenCalledWith([
+      {
+        app: "slack_v2",
+        call_ended: { ...SUMMARY.call_ended, args: { channel: "#ops" } },
+      },
+    ]);
+  });
+
+  it("offers Actions by label, not by tool name", () => {
+    show({ apps: [] });
+
+    expect(screen.getByText("Post the call summary")).toBeTruthy();
+    // list-channels is a mid-call tool and meaningless after a call.
+    expect(screen.queryByText("list-channels")).toBeNull();
+  });
+
+  it("says so when an app has nothing worth running at the end of a call", () => {
+    show({ apps: [] });
+
+    expect(screen.getByText(/no Action that a\s+finished call has the information for/)).toBeTruthy();
+    expect(screen.queryByLabelText("Google Calendar: when a call ends")).toBeNull();
+  });
+});
+
+describe("what an editor is told", () => {
+  it("shows what a mid-call app lets the agent do", () => {
     show({ apps: ["slack_v2"] });
 
     // Named without the app prefix, which is noise to a reader.
     expect(screen.getByText(/post-message, list-channels/)).toBeTruthy();
-    // Not for an app that is merely available.
-    expect(screen.queryByText(/create-event/)).toBeNull();
   });
 
-  it("says so when an attached app is no longer connected", () => {
+  it("does not claim an end-of-call-only app gives the agent tools", () => {
+    // The whole point of the split: this attachment exposes nothing to the model.
+    show({ apps: [SUMMARY] });
+
+    expect(screen.queryByText(/The agent may call/)).toBeNull();
+  });
+
+  it("marks an attached app whose grant is gone as a fault, not a state", () => {
+    // Its tools are still advertised to the model and answer nothing.
     show({ apps: ["slack_v2"], connected: [{ id: "apn_2", app: "google_calendar" }] });
 
-    expect(screen.getByText(/no longer connected/)).toBeTruthy();
+    expect(screen.getByText("Disconnected").className).toMatch(/\blost\b/);
+    expect(screen.getByText(/tools that will not answer/)).toBeTruthy();
+  });
+
+  it("marks a connected app connected", () => {
+    show({ apps: ["slack_v2"] });
+
+    expect(screen.getAllByText("Connected")[0].className).toMatch(/\bconnected\b/);
   });
 
   it("renders without error when nothing is connected", () => {
@@ -107,20 +258,61 @@ describe("the picker", () => {
 });
 
 describe("a viewer", () => {
-  it("sees the list with no control they can use", () => {
-    show({ apps: ["slack_v2"], editable: false });
+  it("sees every control disabled", () => {
+    show({ apps: [SUMMARY], editable: false });
 
-    expect(screen.getByText(/Slack/)).toBeTruthy();
     for (const box of screen.getAllByRole("checkbox")) {
       expect((box as HTMLInputElement).disabled).toBe(true);
     }
+    expect((whenEnds("Slack") as HTMLSelectElement).disabled).toBe(true);
+    expect((screen.getByLabelText("Slack: Channel") as HTMLInputElement).disabled).toBe(true);
   });
 
-  it("cannot change an attachment", () => {
-    const onChange = show({ apps: [], editable: false });
+  it("cannot change an attachment even if the event does not come from a browser", () => {
+    const apps: AttachmentValue[] = [];
+    const onChange = show({ apps, editable: false });
 
-    fireEvent.click(screen.getByLabelText(/^Slack/));
+    fireEvent.click(duringCalls("Slack"));
 
     expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("an app the builder said this agent needs", () => {
+  // The builder cannot attach one (ADR-0021), so it records the requirement.
+  // Before this, that record existed and nothing ever showed it to anyone.
+
+  it("says so when the app is connected but not attached", () => {
+    show({ apps: [], needs: ["google_calendar"] });
+
+    expect(screen.getByText(/This agent needs Google Calendar/)).toBeTruthy();
+    expect(screen.getByText(/available during calls/)).toBeTruthy();
+  });
+
+  it("sends you to Integrations when nobody has connected it", () => {
+    show({ apps: [], needs: ["google_calendar"], connected: [] });
+
+    expect(screen.getByText(/Nobody has connected it yet/)).toBeTruthy();
+    expect(screen.getByText("connect Google Calendar").getAttribute("href")).toBe("/integrations");
+  });
+
+  it("goes quiet once the app is attached", () => {
+    show({ apps: ["google_calendar"], needs: ["google_calendar"] });
+
+    expect(screen.queryByText(/This agent needs/)).toBeNull();
+  });
+
+  it("counts an end-of-call-only attachment as met", () => {
+    // Which trigger it runs on is an ordinary choice, not unfinished setup.
+    show({ apps: [SUMMARY], needs: ["slack_v2"] });
+
+    expect(screen.queryByText(/This agent needs/)).toBeNull();
+  });
+
+  it("names an app the catalog has never heard of by its slug", () => {
+    show({ apps: [], needs: ["notion"] });
+
+    expect(screen.getByText(/This agent needs notion/)).toBeTruthy();
   });
 });

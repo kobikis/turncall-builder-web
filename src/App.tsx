@@ -19,6 +19,7 @@ import TakeawaysTab from "./pages/agent/TakeawaysTab";
 import CodeTab from "./pages/agent/CodeTab";
 import GitHubSettings from "./pages/GitHubSettings";
 import Skills from "./pages/Skills";
+import Integrations from "./pages/Integrations";
 import PhoneNumbersList from "./pages/PhoneNumbersList";
 import AddPhoneNumber from "./pages/AddPhoneNumber";
 import EditPhoneNumber from "./pages/EditPhoneNumber";
@@ -118,6 +119,7 @@ export default function App() {
           <Route path="code" element={<CodeTab />} />
         </Route>
         {/* Per-user, not workspace-scoped: you can only connect your own. */}
+        <Route path="integrations" element={<Integrations />} />
         <Route path="settings/github" element={<GitHubSettings />} />
         <Route
           path="skills"

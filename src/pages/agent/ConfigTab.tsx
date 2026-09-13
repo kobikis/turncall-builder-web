@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { McpServers } from "./McpServers";
 import {
   ConnectedApps,
+  type AttachmentValue,
   type CatalogApp,
   type ConnectedAccount,
 } from "./ConnectedApps";
@@ -114,6 +115,10 @@ export default function ConfigTab() {
   const [jsonError, setJsonError] = useState("");
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
+  // A refusal is not a status line. Save failures say what to fix, and reading
+  // them as grey body text running the width of the page is how a sentence like
+  // "Post the call summary needs a Channel" gets missed.
+  const [err, setErr] = useState("");
   const [providers, setProviders] = useState<Providers>(FALLBACK_PROVIDERS);
   const [sttModels, setSttModels] = useState<string[]>([]); // live, for the selected STT provider
   const [models, setModels] = useState<string[]>([]); // live, for the selected LLM provider
@@ -236,6 +241,7 @@ export default function ConfigTab() {
     )
       return;
     setSaving(true);
+    setErr("");
     try {
       const r = await api(`/agents/${agentId}`, { method: "PUT", body: JSON.stringify({ config: cfg }) });
       updateConfig(cfg);
@@ -245,7 +251,8 @@ export default function ConfigTab() {
           : "Saved."
       );
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Save failed.");
+      setMsg("");
+      setErr(e instanceof Error ? e.message : "Save failed.");
     } finally {
       setSaving(false);
     }
@@ -499,7 +506,8 @@ export default function ConfigTab() {
             </p>
           </div>
           <ConnectedApps
-            apps={Array.isArray(cfg.integrations) ? cfg.integrations : []}
+            apps={Array.isArray(cfg.integrations) ? (cfg.integrations as AttachmentValue[]) : []}
+            needs={Array.isArray(cfg.needs_integrations) ? (cfg.needs_integrations as string[]) : []}
             catalog={catalog}
             connected={connected}
             editable={editable}
@@ -554,6 +562,11 @@ export default function ConfigTab() {
           {editable ? msg : "Read-only — viewers can't edit agents."}
         </span>
       </div>
+      {err && (
+        <div className="callout error" role="alert" style={{ marginTop: 10 }}>
+          <strong>Not saved.</strong> {err}
+        </div>
+      )}
     </div>
   );
 }

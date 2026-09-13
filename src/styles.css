@@ -509,3 +509,96 @@ table.list .num { font-variant-numeric: tabular-nums; }
 .invite-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .invite-form .input { max-width: 260px; }
 .invite-form select.input { max-width: 130px; }
+
+/* Integration cards — a browsable grid rather than a list of rows. Structure
+   borrowed from the category/tile/description pattern these pages tend to use;
+   the surfaces are this console's own tokens, so it reads in both themes. */
+.integration-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(238px, 1fr));
+  gap: 12px;
+  margin: 14px 0 18px;
+}
+.integration-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.integration-card:hover { border-color: var(--primary); background: var(--row-hover); }
+.integration-card .head { display: flex; align-items: center; gap: 8px; }
+/* The status sits at the far edge of the header, so a column of cards can be
+   scanned down one line rather than read card by card. */
+.integration-card .head .badge { margin-left: auto; flex: none; }
+.integration-card .name { font-weight: 600; line-height: 1.25; }
+/* Descriptions vary in length; the grid stays even and the buttons stay aligned. */
+.integration-card .desc {
+  flex: 1;
+  min-height: 32px;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.integration-card .desc.danger { color: var(--danger); }
+/* Pinned to the bottom edge whatever the description above it did, so the
+   buttons line up across a row of cards. */
+.integration-card .foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  min-height: 26px;
+}
+.integration-card .foot .btn { padding: 4px 10px; font-size: 12.5px; flex: none; }
+
+/* A connected account is usually an email address, which is longer than any
+   card. It takes the room that is left and truncates; the button never moves. */
+.integration-card .account-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+/* With no account name the button still belongs on the right. */
+.integration-card .foot .btn:first-child { margin-left: auto; }
+
+.app-status.connected { background: var(--ok-soft); border-color: var(--ok-border); color: var(--ok); }
+.app-status.lost { background: var(--danger-soft); border-color: var(--danger-border); color: var(--danger); }
+
+.app-tile {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 12.5px;
+  line-height: 1;
+}
+.kicker {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* The agent's picker uses the same cards, but each one holds controls rather
+   than a single button — so the columns are wider and the card grows. */
+.integration-grid.wide { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.integration-grid.wide .integration-card:hover { border-color: var(--border); background: var(--bg); }
+/* The controls are the point of these cards; the description should not push
+   them apart the way it does on a card whose only control is one button. */
+.integration-grid.wide .integration-card .desc { flex: none; min-height: 0; }
+.integration-card .desc + label { margin-top: 2px; }
+.integration-card select.input { max-width: 100%; }
