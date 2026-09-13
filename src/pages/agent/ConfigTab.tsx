@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { McpServers } from "./McpServers";
 import {
   ConnectedApps,
+  type AttachmentValue,
   type CatalogApp,
   type ConnectedAccount,
 } from "./ConnectedApps";
@@ -499,7 +500,7 @@ export default function ConfigTab() {
             </p>
           </div>
           <ConnectedApps
-            apps={Array.isArray(cfg.integrations) ? cfg.integrations : []}
+            apps={Array.isArray(cfg.integrations) ? (cfg.integrations as AttachmentValue[]) : []}
             catalog={catalog}
             connected={connected}
             editable={editable}

@@ -24,6 +24,9 @@ export default function Layout() {
         <NavLink to="/agents" className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
           Agents
         </NavLink>
+        <NavLink to="/integrations" className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
+          Integrations
+        </NavLink>
         <NavLink to="/phone-numbers" className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
           Phone Numbers
         </NavLink>
