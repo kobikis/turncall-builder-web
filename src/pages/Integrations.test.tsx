@@ -28,6 +28,7 @@ let role = "admin";
 vi.mock("../auth", () => ({ useAuth: () => ({ activeWorkspace: { id: "ws-1", role } }) }));
 
 import Integrations from "./Integrations";
+import { describe as describeApp, tint } from "../apps";
 
 const at = (search: string) =>
   render(
@@ -113,4 +114,39 @@ it("shows a non-admin what is connected but no way to change it", async () => {
   expect(screen.queryByText("Connect")).toBeNull();
   expect(screen.queryByText("Disconnect")).toBeNull();
   expect(screen.getByText(/admin action/)).toBeDefined();
+});
+
+it("says at a glance which apps are connected", async () => {
+  // A coloured dot on the card header, so a grid is scannable down one edge
+  // rather than readable card by card.
+  connectedAccounts = [{ id: "apn_1", app: "slack_v2", account_name: "acme" }];
+  at("");
+  await waitFor(() => expect(screen.getByText("Slack")).toBeDefined());
+
+  expect(screen.getByText("Connected").className).toMatch(/\bconnected\b/);
+  expect(screen.getByText("Not connected").className).toMatch(/\bdisconnected\b/);
+});
+
+it("gives every app a stable colour, and never the same one to two unknowns", () => {
+  // Two unlisted apps sharing a grey would read as the same app on a card grid.
+  expect(tint("slack_v2")).toBe(tint("slack_v2"));
+  expect(tint("notion")).not.toBe(tint("linear"));
+});
+
+it("falls back to naming an app's tools when there is no blurb for it", () => {
+  expect(describeApp({ app: "notion", name: "Notion", tools: ["notion-create-page"] })).toMatch(
+    /create-page/,
+  );
+});
+
+it("does not offer Connect for an app the catalog no longer carries", async () => {
+  // There is nothing to authorize against — only the existing grant to revoke.
+  connectedAccounts = [{ id: "apn_9", app: "notion" }];
+  at("");
+  await waitFor(() => expect(screen.getByText("notion")).toBeDefined());
+
+  expect(screen.getByText("Unlisted")).toBeDefined();
+  // Only the two catalog apps offer it — the unlisted one gets no third button.
+  expect(screen.getAllByText("Connect")).toHaveLength(2);
+  expect(screen.getByText("Disconnect")).toBeDefined();
 });

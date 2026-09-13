@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { atLeast } from "../roles";
+import { AppHead, describe, type CatalogApp } from "../apps";
 
 // Connecting an app for the Workspace (ADR-0018, ADR-0021). Authorizing one had
 // no Console surface at all before this page: the Connect Link had to be minted
@@ -13,7 +14,6 @@ import { atLeast } from "../roles";
 // ConnectedApps on the agent's Configuration tab. Connecting is a Workspace act;
 // attaching is an agent one, and putting both here would need an agent picker.
 
-export type CatalogApp = { app: string; name: string; tools: string[] };
 export type ConnectedAccount = {
   id: string;
   app: string;
@@ -111,75 +111,81 @@ export default function Integrations() {
 
   if (!loaded) return null;
 
-  return (
-    <div className="page">
-      <h1>Integrations</h1>
-      <p className="muted" style={{ maxWidth: 620 }}>
-        Apps this workspace has authorized. Connecting one here makes it
-        available to every agent; each agent chooses whether to use it during a
-        call, after one, or both — on its Configuration tab.
-      </p>
+  const all = rows(catalog, connected);
 
-      {notice && <p role="status">{notice}</p>}
-      {error && <p role="alert" className="error">{error}</p>}
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <h2>Integrations</h2>
+          <p>
+            Apps this workspace has authorized. Connect one here and every agent
+            can use it — each agent chooses whether it runs during a call, after
+            one, or both, on its Configuration tab.
+          </p>
+        </div>
+      </div>
+
+      {notice && <div className="callout info" role="status">{notice}</div>}
+      {error && <div className="callout error" role="alert">{error}</div>}
 
       {!isAdmin && (
-        <p className="muted" style={{ fontSize: 12.5 }}>
+        <p className="muted">
           Connecting and disconnecting is an admin action. You can see what is
           connected and attach it to an agent.
         </p>
       )}
 
-      {rows(catalog, connected).map((row) => {
-        const account = connected.find((c) => c.app === row.app);
-        return (
-          <div
-            key={row.app}
-            style={{ border: "1px solid var(--border, #ddd)", padding: 12, marginBottom: 10 }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <strong style={{ flex: 1 }}>{row.name}</strong>
-              {account ? (
-                <>
-                  <span className="muted" style={{ fontSize: 12.5 }}>
-                    {account.account_name || account.name || "connected"}
+      <div className="integration-grid">
+        {all.map((row) => {
+          const account = connected.find((c) => c.app === row.app);
+          const unlisted = row.tools.length === 0;
+          return (
+            <div className="integration-card" key={row.app}>
+              {/* The status is the header's job now. Repeating it in the footer
+                  cost the row that a long account name needed. */}
+              <AppHead row={row} status={account ? "connected" : "disconnected"} />
+              <div className="name">{row.name}</div>
+              <p className="desc">{describe(row)}</p>
+              <div className="foot">
+                {account && (
+                  <span className="account-name" title={account.account_name || account.name || ""}>
+                    {account.account_name || account.name || ""}
                   </span>
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      disabled={busy === row.app}
-                      onClick={() => void disconnect(account)}
-                    >
-                      Disconnect
-                    </button>
-                  )}
-                </>
-              ) : (
-                isAdmin && (
-                  <button
-                    type="button"
-                    disabled={busy === row.app}
-                    onClick={() => void connect(row.app)}
-                  >
-                    {busy === row.app ? "Opening…" : "Connect"}
-                  </button>
-                )
-              )}
+                )}
+                {account
+                  ? isAdmin && (
+                      <button
+                        type="button"
+                        className="btn btn-danger"
+                        disabled={busy === row.app}
+                        onClick={() => void disconnect(account)}
+                      >
+                        Disconnect
+                      </button>
+                    )
+                  : isAdmin &&
+                    !unlisted && (
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={busy === row.app}
+                        onClick={() => void connect(row.app)}
+                      >
+                        {busy === row.app ? "Opening…" : "Connect"}
+                      </button>
+                    )}
+              </div>
             </div>
-            <p className="muted" style={{ fontSize: 12.5, margin: "6px 0 0" }}>
-              {row.tools.length > 0
-                ? row.tools.map((t) => t.replace(`${row.app}-`, "")).join(", ")
-                : "No longer in the catalog — it can be disconnected, not attached."}
-            </p>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
 
-      <p className="muted" style={{ fontSize: 12.5, marginTop: 16 }}>
+      <p className="muted" style={{ fontSize: 12.5 }}>
         Credentials stay at Pipedream. This console never sees them, and an
-        agent's configuration never carries one — they are minted per call and
-        expire within the hour.
+        agent's configuration never carries one — they are minted for each call
+        and expire within the hour.
       </p>
-    </div>
+    </>
   );
 }

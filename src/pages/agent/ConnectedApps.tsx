@@ -6,7 +6,11 @@
 // action and its arguments are chosen here. Connecting an app is a Workspace
 // act and lives on /integrations; this is the per-agent half.
 
-export type CatalogApp = { app: string; name: string; tools: string[] };
+import { Link } from "react-router-dom";
+
+import { AppHead, describe, shortTool, type CatalogAction, type CatalogApp } from "../../apps";
+
+export type { CatalogApp };
 
 export type ConnectedAccount = {
   id: string;
@@ -67,6 +71,29 @@ export function writeAttachment(parsed: Parsed): Attachment | null {
   return out;
 }
 
+/**
+ * Turn a chosen Action id into the stored shape.
+ *
+ * `summary_arg` comes from the catalog, never from a person: it is the same
+ * string for every Workspace that ever picks this Action, and asking someone to
+ * type a constant is not configuration (ADR-0021). Arguments survive a change of
+ * Action only where the new one has an input of the same name — carrying over a
+ * channel into an Action that has no channel would store a value nothing reads.
+ */
+export function pick(
+  actions: CatalogAction[],
+  id: string,
+  current: CallEnded | null,
+): CallEnded | null {
+  const action = actions.find((a) => a.id === id);
+  if (!action) return null;
+  const keep = new Set(action.inputs.map((i) => i.name));
+  const args = Object.fromEntries(
+    Object.entries(current?.args || {}).filter(([k]) => keep.has(k)),
+  );
+  return { action: action.id, args, summary_arg: action.summary_arg };
+}
+
 /** Attached apps first, then anything connected but not attached. */
 export function pickable(
   apps: AttachmentValue[],
@@ -94,16 +121,26 @@ type Props = {
   catalog: CatalogApp[];
   /** What the Workspace has actually authorized. */
   connected: ConnectedAccount[];
+  /** App slugs the builder said this agent needs (ADR-0021). Advisory: it
+   *  attaches nothing, so an unmet one is worth saying out loud. */
+  needs?: string[];
   editable: boolean;
   onChange: (apps: AttachmentValue[]) => void;
 };
 
-const shortName = (app: string, tool: string) => tool.replace(`${app}-`, "");
-
-export function ConnectedApps({ apps, catalog, connected, editable, onChange }: Props) {
+export function ConnectedApps({ apps, catalog, connected, needs = [], editable, onChange }: Props) {
   const rows = pickable(apps, catalog, connected);
   const authorized = new Set(connected.map((c) => c.app));
   const parsed = new Map(apps.map((a) => [readAttachment(a).app, readAttachment(a)]));
+  // A need is met once the app is attached at all — after that, which triggers
+  // it runs on is an ordinary choice, not an unfinished setup step.
+  const unmet = needs
+    .filter((slug) => !parsed.has(slug))
+    .map((slug) => ({
+      slug,
+      name: catalog.find((a) => a.app === slug)?.name || slug,
+      authorized: authorized.has(slug),
+    }));
 
   const update = (slug: string, next: Partial<Parsed>) => {
     // `disabled` is what a browser enforces; this is what enforces it when the
@@ -124,6 +161,23 @@ export function ConnectedApps({ apps, catalog, connected, editable, onChange }: 
         call, so the agent can use it — or when a call ends, to post a summary.
       </p>
 
+      {/* The builder cannot attach an app, so when it decided the agent needs
+          one it could only write it down. Saying nothing here would leave the
+          agent quietly missing the capability it was built around. */}
+      {unmet.map(({ slug, name, authorized }) => (
+        <div className="callout warn" key={slug} style={{ marginBottom: 10 }}>
+          <strong>This agent needs {name}.</strong>{" "}
+          {authorized ? (
+            <>Turn on &ldquo;available during calls&rdquo; for it below.</>
+          ) : (
+            <>
+              Nobody has connected it yet — <Link to="/integrations">connect {name}</Link>,
+              then turn it on below.
+            </>
+          )}
+        </div>
+      ))}
+
       {rows.length === 0 ? (
         <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>
           No apps connected yet. A workspace admin connects Slack or Google
@@ -131,28 +185,34 @@ export function ConnectedApps({ apps, catalog, connected, editable, onChange }: 
           use them.
         </p>
       ) : (
-        rows.map((row) => {
+        <div className="integration-grid wide">
+        {rows.map((row) => {
           const state = parsed.get(row.app) || {
             app: row.app,
             midCall: false,
             callEnded: null,
           };
           const ce = state.callEnded;
+          const actions = row.actions || [];
+          const chosen = actions.find((a) => a.id === ce?.action);
           return (
-            <div
-              key={row.app}
-              style={{ border: "1px solid var(--border, #ddd)", padding: 12, marginBottom: 10 }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <strong>{row.name}</strong>
-                {!authorized.has(row.app) && (
-                  <span className="muted" style={{ fontSize: 12.5 }}>
-                    — no longer connected
-                  </span>
-                )}
-              </div>
+            <div className="integration-card" key={row.app}>
+              {/* An attached app whose grant is gone reads as `lost`: its tools
+                  are still advertised to the model and answer nothing, which is
+                  a fault to fix rather than a neutral state. */}
+              <AppHead row={row} status={authorized.has(row.app) ? "connected" : "lost"} />
+              <div className="name">{row.name}</div>
+              {authorized.has(row.app) ? (
+                <p className="desc">{describe(row)}</p>
+              ) : (
+                <p className="desc danger">
+                  The workspace revoked this app. It is still attached here, so the
+                  agent is offered tools that will not answer — take it off, or
+                  reconnect it on Integrations.
+                </p>
+              )}
 
-              <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <input
                   type="checkbox"
                   checked={state.midCall}
@@ -169,7 +229,7 @@ export function ConnectedApps({ apps, catalog, connected, editable, onChange }: 
                   {row.tools.length > 0 ? (
                     <>
                       The agent may call:{" "}
-                      {row.tools.map((t) => shortName(row.app, t)).join(", ")} — it
+                      {row.tools.map((t) => shortTool(row.app, t)).join(", ")} — it
                       decides whether to, like any other tool.
                     </>
                   ) : (
@@ -178,35 +238,33 @@ export function ConnectedApps({ apps, catalog, connected, editable, onChange }: 
                 </p>
               )}
 
-              <label style={{ display: "block", marginTop: 10 }}>
-                When a call ends
-                <select
-                  value={ce?.action || ""}
-                  disabled={!editable || row.tools.length === 0}
-                  aria-label={`${row.name}: when a call ends`}
-                  style={{ display: "block", marginTop: 4 }}
-                  onChange={(e) =>
-                    update(row.app, {
-                      callEnded: e.target.value
-                        ? {
-                            action: e.target.value,
-                            args: ce?.args || {},
-                            summary_arg: ce?.summary_arg || "",
-                          }
-                        : null,
-                    })
-                  }
-                >
-                  <option value="">Do nothing</option>
-                  {row.tools.map((t) => (
-                    <option key={t} value={t}>
-                      {shortName(row.app, t)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {actions.length > 0 ? (
+                <label style={{ display: "block", marginTop: 10 }}>
+                  When a call ends
+                  <select
+                    className="input"
+                    value={ce?.action || ""}
+                    disabled={!editable}
+                    aria-label={`${row.name}: when a call ends`}
+                    style={{ display: "block", marginTop: 4 }}
+                    onChange={(e) => update(row.app, { callEnded: pick(actions, e.target.value, ce) })}
+                  >
+                    <option value="">Do nothing</option>
+                    {actions.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <p className="muted" style={{ fontSize: 12.5, margin: "10px 0 0" }}>
+                  Nothing to run when a call ends — this app has no Action that a
+                  finished call has the information for.
+                </p>
+              )}
 
-              {ce && (
+              {ce && chosen && (
                 <div
                   style={{
                     marginTop: 8,
@@ -215,35 +273,33 @@ export function ConnectedApps({ apps, catalog, connected, editable, onChange }: 
                   }}
                 >
                   <p className="muted" style={{ fontSize: 12.5, margin: "0 0 6px" }}>
-                    This runs because the call ended, not because the agent chose
-                    it. The summary is written for you — name the input it goes
-                    into, and fill in whatever else the action needs.
+                    Runs because the call ended, not because the agent chose to.
+                    The agent's own summary of the call is included automatically.
                   </p>
-                  <label style={{ display: "block", fontSize: 12.5 }}>
-                    Summary goes into
-                    <input
-                      value={ce.summary_arg}
-                      disabled={!editable}
-                      aria-label={`${row.name}: summary goes into`}
-                      placeholder="e.g. text"
-                      style={{ display: "block", marginTop: 4 }}
-                      onChange={(e) =>
-                        update(row.app, {
-                          callEnded: { ...ce, summary_arg: e.target.value },
-                        })
-                      }
-                    />
-                  </label>
-                  <ArgsEditor
-                    args={ce.args}
-                    editable={editable}
-                    onChange={(args) => update(row.app, { callEnded: { ...ce, args } })}
-                  />
+                  {chosen.inputs.map((input) => (
+                    <label key={input.name} style={{ display: "block", fontSize: 12.5, marginTop: 6 }}>
+                      {input.label}
+                      <input
+                        className="input"
+                        value={ce.args[input.name] || ""}
+                        disabled={!editable}
+                        placeholder={input.placeholder}
+                        aria-label={`${row.name}: ${input.label}`}
+                        style={{ display: "block", marginTop: 4 }}
+                        onChange={(e) =>
+                          update(row.app, {
+                            callEnded: { ...ce, args: { ...ce.args, [input.name]: e.target.value } },
+                          })
+                        }
+                      />
+                    </label>
+                  ))}
                 </div>
               )}
             </div>
           );
-        })
+        })}
+        </div>
       )}
 
       <p className="muted" style={{ fontSize: 12.5, margin: "8px 0 0" }}>
@@ -251,68 +307,5 @@ export function ConnectedApps({ apps, catalog, connected, editable, onChange }: 
         call and expire within the hour.
       </p>
     </fieldset>
-  );
-}
-
-/**
- * The action's other inputs, as name/value pairs.
- *
- * Free-form because nothing here knows an action's schema: the builder runs
- * Pipedream actions but never asks what arguments they take (ADR-0021,
- * "Generality"). Until it does, the honest control is a pair of text boxes.
- */
-function ArgsEditor({
-  args,
-  editable,
-  onChange,
-}: {
-  args: Record<string, string>;
-  editable: boolean;
-  onChange: (args: Record<string, string>) => void;
-}) {
-  const entries = Object.entries(args);
-  const set = (index: number, key: string, value: string) => {
-    const next = entries.map((e, i) => (i === index ? [key, value] : e));
-    onChange(Object.fromEntries(next));
-  };
-  return (
-    <div style={{ marginTop: 8 }}>
-      <span className="muted" style={{ fontSize: 12.5 }}>
-        Other inputs
-      </span>
-      {entries.map(([key, value], i) => (
-        <div key={i} style={{ display: "flex", gap: 6, marginTop: 4 }}>
-          <input
-            value={key}
-            disabled={!editable}
-            aria-label="Input name"
-            placeholder="e.g. channel"
-            onChange={(e) => set(i, e.target.value, value)}
-          />
-          <input
-            value={value}
-            disabled={!editable}
-            aria-label={`Value for ${key || "input"}`}
-            placeholder="e.g. #sales-calls"
-            onChange={(e) => set(i, key, e.target.value)}
-          />
-          <button
-            type="button"
-            disabled={!editable}
-            onClick={() => onChange(Object.fromEntries(entries.filter((_, j) => j !== i)))}
-          >
-            Remove
-          </button>
-        </div>
-      ))}
-      <button
-        type="button"
-        disabled={!editable}
-        style={{ marginTop: 4 }}
-        onClick={() => onChange({ ...args, "": "" })}
-      >
-        Add input
-      </button>
-    </div>
   );
 }
