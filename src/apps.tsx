@@ -3,7 +3,13 @@
 // Configuration tab to choose when it runs — and they should not disagree about
 // what Slack is called or what colour it is.
 
-export type CatalogInput = { name: string; label: string; placeholder?: string };
+export type CatalogInput = {
+  name: string;
+  label: string;
+  placeholder?: string;
+  /** Chosen from a list the API fetches per connected account, not typed. */
+  options?: boolean;
+};
 
 /** An Action the catalog says is worth running when a call ends. */
 export type CatalogAction = {

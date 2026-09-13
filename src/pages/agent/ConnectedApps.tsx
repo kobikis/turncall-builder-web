@@ -9,6 +9,7 @@
 import { Link } from "react-router-dom";
 
 import { AppHead, describe, shortTool, type CatalogAction, type CatalogApp } from "../../apps";
+import { ArgumentField } from "./ArgumentField";
 
 export type { CatalogApp };
 
@@ -277,22 +278,19 @@ export function ConnectedApps({ apps, catalog, connected, needs = [], editable, 
                     The agent's own summary of the call is included automatically.
                   </p>
                   {chosen.inputs.map((input) => (
-                    <label key={input.name} style={{ display: "block", fontSize: 12.5, marginTop: 6 }}>
-                      {input.label}
-                      <input
-                        className="input"
-                        value={ce.args[input.name] || ""}
-                        disabled={!editable}
-                        placeholder={input.placeholder}
-                        aria-label={`${row.name}: ${input.label}`}
-                        style={{ display: "block", marginTop: 4 }}
-                        onChange={(e) =>
-                          update(row.app, {
-                            callEnded: { ...ce, args: { ...ce.args, [input.name]: e.target.value } },
-                          })
-                        }
-                      />
-                    </label>
+                    <ArgumentField
+                      key={input.name}
+                      app={row.app}
+                      appName={row.name}
+                      input={input}
+                      value={ce.args[input.name] || ""}
+                      editable={editable}
+                      onChange={(next) =>
+                        update(row.app, {
+                          callEnded: { ...ce, args: { ...ce.args, [input.name]: next } },
+                        })
+                      }
+                    />
                   ))}
                 </div>
               )}
