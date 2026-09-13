@@ -53,6 +53,18 @@
 └───────────────────────────────────────────────────────┘
 ```
 
+Once an agent exists, its Configuration tab is the form above in long form —
+prompt, providers, tools, guardrails, connected apps, MCP servers — in sections
+that collapse and stay collapsed. Most of a settled agent is something nobody
+looks at twice.
+
+`/integrations` is the other page: a workspace admin authorizes Slack or Google
+Calendar there, through the provider's own consent screen. Each agent then
+chooses when an app runs — during a call, or when a call ends — on its own
+Configuration tab, because that is per agent while connecting is per workspace.
+Values a person cannot check by eye are picked from a list rather than typed: a
+channel is chosen by name and stored by id.
+
 Backend, glossary and decisions live in
 [`turncall-builder-api`](https://github.com/kobikis/turncall-builder-api).
 The voice runtime is the MIT-licensed
