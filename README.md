@@ -58,6 +58,11 @@ prompt, providers, tools, guardrails, connected apps, MCP servers — in section
 that collapse and stay collapsed. Most of a settled agent is something nobody
 looks at twice.
 
+An agent's own page carries the rest as tabs: Configuration, a Test tab for
+talking to it, Calls, Knowledge, Takeaways and **Evals** — saved behavioural
+scenarios with a one-click run and an inline verdict. A call that went wrong, or
+a text test you just ran, becomes a scenario draft with one button.
+
 `/integrations` is the other page: a workspace admin authorizes Slack or Google
 Calendar there, through the provider's own consent screen. Each agent then
 chooses when an app runs — during a call, or when a call ends — on its own
