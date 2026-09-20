@@ -3,6 +3,7 @@ import { api } from "../../api";
 import { useAuth } from "../../auth";
 import { canEdit } from "../../roles";
 import { usePoll } from "../../usePoll";
+import ScenarioEditor from "./ScenarioEditor";
 import { useAgent } from "./AgentPage";
 
 // The agent's eval scenarios, and what happened last time they ran
@@ -25,6 +26,9 @@ type Scenario = {
   kind: string;
   tags: string[];
   description: string | null;
+  // Carried so editing needs no second fetch — the list already returns them.
+  definition: Record<string, unknown>;
+  tool_mocks?: Record<string, unknown>;
 };
 
 type Run = {
@@ -154,6 +158,7 @@ export default function EvalsTab() {
   const [scenarios, setScenarios] = useState<Scenario[] | null>(null);
   const [runs, setRuns] = useState<Run[]>([]);
   const [open, setOpen] = useState<Run | null>(null);
+  const [editing, setEditing] = useState<Scenario | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -222,6 +227,18 @@ export default function EvalsTab() {
 
       {error && <p role="alert" className="error-text">{error}</p>}
 
+      {editing && (
+        <ScenarioEditor
+          agentId={agentId}
+          scenario={editing}
+          onCancel={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            loadScenarios();
+          }}
+        />
+      )}
+
       {scenarios !== null && scenarios.length === 0 && (
         <div className="card" style={{ padding: 16 }}>
           <p style={{ margin: 0 }}>No scenarios yet.</p>
@@ -282,6 +299,15 @@ export default function EvalsTab() {
                       {last && (
                         <button className="btn btn-sm" style={{ marginLeft: 6 }} onClick={() => setOpen(last)}>
                           Details
+                        </button>
+                      )}
+                      {editable && (
+                        <button
+                          className="btn btn-sm"
+                          style={{ marginLeft: 6 }}
+                          onClick={() => setEditing(s)}
+                        >
+                          Edit
                         </button>
                       )}
                     </td>
