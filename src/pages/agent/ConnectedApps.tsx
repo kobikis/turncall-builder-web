@@ -27,6 +27,52 @@ export type CallEnded = {
   summary_arg: string;
 };
 
+/** One row of the generated backend's `GET /automations` (#47). */
+export type AutomationRun = {
+  at: string;
+  action: string;
+  ok: boolean;
+  reason: string;
+  detail: string;
+};
+
+/**
+ * The most recent run of one Action, or null if it has never run.
+ *
+ * Never-run and every-run-failed are different answers and the card says which,
+ * so this returns null rather than a synthesised failure.
+ */
+export function lastRun(runs: AutomationRun[], action: string): AutomationRun | null {
+  // The backend answers newest first; don't re-sort on a field we'd have to
+  // trust, just take the first match.
+  return runs.find((r) => r.action === action) || null;
+}
+
+/**
+ * What the card says about a run, and who can do something about it.
+ *
+ * The four failures are kept apart all the way from the handler to here.
+ * `not_connected` is an admin's problem, `refused` an editor's, `unfilled` means
+ * the call had nothing to put in a required field, and `error` is the network.
+ * Collapsing them into "failed" is what makes a status line worth ignoring.
+ */
+export function explain(run: AutomationRun, appName: string): { tone: string; text: string } {
+  if (run.ok) return { tone: "muted", text: "Ran when the last call ended." };
+  switch (run.reason) {
+    case "not_connected":
+      return {
+        tone: "danger",
+        text: `Did not run — nobody has ${appName} connected. Connect it on Integrations.`,
+      };
+    case "refused":
+      return { tone: "danger", text: `${appName} refused it: ${run.detail}. Check the settings below.` };
+    case "unfilled":
+      return { tone: "warn", text: `Did not run — ${run.detail}.` };
+    default:
+      return { tone: "danger", text: `Failed: ${run.detail || "the action did not complete"}.` };
+  }
+}
+
 export type Attachment = {
   app: string;
   mid_call?: boolean;
@@ -126,11 +172,35 @@ type Props = {
   /** App slugs the builder said this agent needs (ADR-0021). Advisory: it
    *  attaches nothing, so an unmet one is worth saying out loud. */
   needs?: string[];
+  /** What this agent's Automations actually did, newest first. Empty while the
+   *  backend is unreachable — the card then says nothing rather than lying. */
+  runs?: AutomationRun[];
   editable: boolean;
   onChange: (apps: AttachmentValue[]) => void;
 };
 
-export function ConnectedApps({ apps, catalog, connected, needs = [], editable, onChange }: Props) {
+/** The last thing this Automation did, or that it has not run yet. */
+function AutomationStatus({ run, appName }: { run: AutomationRun | null; appName: string }) {
+  if (!run) {
+    return (
+      <p className="muted" style={{ fontSize: 12.5, margin: "0 0 6px" }}>
+        Hasn&rsquo;t run yet &mdash; it runs when this agent&rsquo;s next call ends.
+      </p>
+    );
+  }
+  const { tone, text } = explain(run, appName);
+  return (
+    <p
+      className={tone === "muted" ? "muted" : `desc ${tone}`}
+      style={{ fontSize: 12.5, margin: "0 0 6px" }}
+    >
+      {text}{" "}
+      <span className="muted">{new Date(run.at).toLocaleString()}</span>
+    </p>
+  );
+}
+
+export function ConnectedApps({ apps, catalog, connected, needs = [], runs = [], editable, onChange }: Props) {
   const rows = pickable(apps, catalog, connected);
   const authorized = new Set(connected.map((c) => c.app));
   const parsed = new Map(apps.map((a) => [readAttachment(a).app, readAttachment(a)]));
@@ -285,6 +355,11 @@ export function ConnectedApps({ apps, catalog, connected, needs = [], editable, 
                     Runs because the call ended, not because the agent chose to.
                     The agent's own summary of the call is included automatically.
                   </p>
+                  {/* Configuring something in a UI and never hearing from it
+                      again is how a Slack post that stopped arriving reads as a
+                      quiet week (#47). Silence here means it has not run yet —
+                      which is not the same as having failed, and says so. */}
+                  <AutomationStatus run={lastRun(runs, ce.action)} appName={row.name} />
                   {chosen.inputs.map((input) => (
                     <ArgumentField
                       key={input.name}

@@ -5,6 +5,7 @@ import {
   type AttachmentValue,
   type CatalogApp,
   type ConnectedAccount,
+  type AutomationRun,
 } from "./ConnectedApps";
 import { Section } from "./Section";
 import { api } from "../../api";
@@ -128,6 +129,7 @@ export default function ConfigTab() {
   const [s2sVoices, setS2sVoices] = useState<Opt[]>([]);
   const [catalog, setCatalog] = useState<CatalogApp[]>([]);
   const [connected, setConnected] = useState<ConnectedAccount[]>([]);
+  const [runs, setRuns] = useState<AutomationRun[]>([]);
 
   useEffect(() => {
     api("/providers").then((r) => setProviders(r.data)).catch(() => {});
@@ -139,6 +141,24 @@ export default function ConfigTab() {
     api("/integrations/catalog").then((r) => setCatalog(r.data)).catch(() => {});
     api("/integrations").then((r) => setConnected(r.data)).catch(() => {});
   }, []);
+
+  // What this agent's Automations actually did (#47). Straight from the
+  // generated backend, the way the Calls tab reads its `/events` — the builder
+  // is not in the event path, so nothing here knows but that container.
+  //
+  // Unreachable stays empty rather than becoming an error: this is a status line
+  // beside a setting, and a backend that is merely stopped must not make the
+  // whole configuration page look broken.
+  const browserUrl = data.backend?.browser_url;
+  useEffect(() => {
+    if (!browserUrl) return;
+    let live = true;
+    fetch(`${browserUrl}/automations`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => { if (live && b) setRuns(b.data.runs); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [browserUrl]);
 
   const isS2S = (cfg.pipeline_mode || "cascade") === "s2s";
   // Placeholder hints per S2S provider — OpenAI's would be actively misleading
@@ -528,6 +548,7 @@ export default function ConfigTab() {
             needs={Array.isArray(cfg.needs_integrations) ? (cfg.needs_integrations as string[]) : []}
             catalog={catalog}
             connected={connected}
+            runs={runs}
             editable={editable}
             onChange={(apps) =>
               patch((c) => {

@@ -5,10 +5,12 @@ import { MemoryRouter } from "react-router-dom";
 
 import {
   ConnectedApps,
+  lastRun,
   pickable,
   readAttachment,
   writeAttachment,
   type AttachmentValue,
+  type AutomationRun,
 } from "./ConnectedApps";
 
 afterEach(cleanup);
@@ -314,5 +316,72 @@ describe("an app the builder said this agent needs", () => {
     show({ apps: [], needs: ["notion"] });
 
     expect(screen.getByText(/This agent needs notion/)).toBeTruthy();
+  });
+});
+
+// What an Automation actually did (#47). ADR-0021 made it something a person
+// configures here; configuring it and never hearing back is how a Slack post
+// that stopped arriving reads as a quiet week.
+
+const run = (over: Partial<AutomationRun> = {}): AutomationRun => ({
+  at: "2026-09-20T09:00:00Z",
+  action: "slack_v2-post-message",
+  ok: true,
+  reason: "ok",
+  detail: "",
+  ...over,
+});
+
+describe("what the automation did", () => {
+  it("says it has not run yet rather than showing nothing", () => {
+    // Silence is the bug this feature exists to fix; an empty list is a real
+    // state and is not the same as every run having failed.
+    show({ apps: [SUMMARY], runs: [] });
+    expect(screen.getByText(/Hasn\u2019t run yet/)).toBeTruthy();
+  });
+
+  it("reports a refusal with what the provider said", () => {
+    show({
+      apps: [SUMMARY],
+      runs: [run({ ok: false, reason: "refused", detail: "channel_not_found" })],
+    });
+    expect(screen.getByText(/Slack refused it: channel_not_found/)).toBeTruthy();
+  });
+
+  it("sends a missing grant to the person who can fix it", () => {
+    // An admin connects the app; an editor cannot. Saying "failed" here would
+    // point the wrong person at the wrong page.
+    show({ apps: [SUMMARY], runs: [run({ ok: false, reason: "not_connected", detail: "" })] });
+    expect(screen.getByText(/nobody has Slack connected/i)).toBeTruthy();
+    expect(screen.getByText(/Connect it on Integrations/)).toBeTruthy();
+  });
+
+  it("distinguishes a call that could not fill a field from a failure", () => {
+    show({
+      apps: [SUMMARY],
+      runs: [run({ ok: false, reason: "unfilled", detail: "the call cannot fill calendarId" })],
+    });
+    expect(screen.getByText(/Did not run — the call cannot fill calendarId/)).toBeTruthy();
+  });
+
+  it("confirms a run that worked", () => {
+    show({ apps: [SUMMARY], runs: [run()] });
+    expect(screen.getByText(/Ran when the last call ended/)).toBeTruthy();
+  });
+
+  it("reads the newest run for this action and ignores other actions", () => {
+    const runs = [
+      run({ action: "google_calendar-create-event", ok: false, reason: "error", detail: "x" }),
+      run({ ok: false, reason: "refused", detail: "newest slack" }),
+      run({ ok: true, reason: "ok" }),
+    ];
+    expect(lastRun(runs, "slack_v2-post-message")?.detail).toBe("newest slack");
+  });
+
+  it("says nothing at all when no automation is configured", () => {
+    // A mid-call-only attachment has no Automation, so there is no outcome to
+    // report and a "hasn't run yet" line would read as something being broken.
+    show({ apps: [{ app: "slack_v2", mid_call: true }] });
+    expect(screen.queryByText(/Hasn\u2019t run yet/)).toBeNull();
   });
 });
