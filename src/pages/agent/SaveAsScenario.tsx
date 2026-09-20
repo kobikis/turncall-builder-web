@@ -31,10 +31,18 @@ type Draft = {
 export default function SaveAsScenario({
   agentId,
   callId,
+  sessionId,
+  label = "Save as scenario",
   onSaved,
 }: {
   agentId: string;
-  callId: string;
+  // Exactly one source. A voice call keeps its conversation as call events; a
+  // text conversation — which is what the manual test view produces — keeps it
+  // as session messages. TurnCall converts either (turncall#87), through two
+  // endpoints, because they read different tables.
+  callId?: string;
+  sessionId?: string;
+  label?: string;
   onSaved?: () => void;
 }) {
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -48,9 +56,13 @@ export default function SaveAsScenario({
     setError("");
     setBusy(true);
     try {
-      const r = await api(`/agents/${agentId}/eval-scenarios/from-call`, {
+      const path = sessionId
+        ? `/agents/${agentId}/eval-scenarios/from-session`
+        : `/agents/${agentId}/eval-scenarios/from-call`;
+      const source = sessionId ? { session_id: sessionId } : { call_id: callId };
+      const r = await api(path, {
         method: "POST",
-        body: JSON.stringify({ call_id: callId, save: false }),
+        body: JSON.stringify({ ...source, save: false }),
       });
       setDraft(r.data);
       setName(r.data.name);
@@ -107,7 +119,7 @@ export default function SaveAsScenario({
     return (
       <div style={{ margin: "8px 0" }}>
         <button className="btn btn-sm" onClick={derive} disabled={busy}>
-          {busy ? "Reading the call…" : "Save as scenario"}
+          {busy ? "Reading the conversation…" : label}
         </button>
         {error && (
           <p role="alert" className="error-text" style={{ margin: "6px 0 0" }}>
