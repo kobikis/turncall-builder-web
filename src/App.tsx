@@ -16,6 +16,7 @@ import TestTab from "./pages/agent/TestTab";
 import CallsTab from "./pages/agent/CallsTab";
 import KnowledgeTab from "./pages/agent/KnowledgeTab";
 import TakeawaysTab from "./pages/agent/TakeawaysTab";
+import EvalsTab from "./pages/agent/EvalsTab";
 import CodeTab from "./pages/agent/CodeTab";
 import GitHubSettings from "./pages/GitHubSettings";
 import Skills from "./pages/Skills";
@@ -116,6 +117,7 @@ export default function App() {
           <Route path="calls" element={<CallsTab />} />
           <Route path="knowledge" element={<KnowledgeTab />} />
           <Route path="takeaways" element={<TakeawaysTab />} />
+          <Route path="evals" element={<EvalsTab />} />
           <Route path="code" element={<CodeTab />} />
         </Route>
         {/* Per-user, not workspace-scoped: you can only connect your own. */}
