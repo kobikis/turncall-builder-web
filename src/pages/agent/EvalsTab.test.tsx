@@ -37,6 +37,8 @@ const scenario = (over = {}) => ({
   kind: "script",
   tags: ["pre-publish"],
   description: null,
+  definition: { turns: [{ user: "hi", expect: [] }] },
+  tool_mocks: {},
   ...over,
 });
 
@@ -176,4 +178,19 @@ it("an audio run shows what the judge heard and what the model said", async () =
   // where a text run passed.
   await waitFor(() => expect(screen.getByText(/Paris\?/)).toBeDefined());
   expect(screen.getByText(/model said: Paris/)).toBeDefined();
+});
+
+it("an editor can open a saved scenario to fix it (#20)", async () => {
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("asks-for-the-reference")).toBeDefined());
+  fireEvent.click(screen.getByText("Edit"));
+  // The editor opens on what is stored — no second fetch, the list carries it.
+  await waitFor(() => expect(screen.getByText(/^Edit asks-for-the-reference/)).toBeDefined());
+});
+
+it("a viewer is offered no way to change a scenario", async () => {
+  role = "viewer";
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("asks-for-the-reference")).toBeDefined());
+  expect(screen.queryByText("Edit")).toBeNull();
 });
