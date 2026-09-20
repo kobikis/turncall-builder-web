@@ -35,7 +35,10 @@ const DRAFT = {
 vi.mock("../../api", () => ({
   api: vi.fn(async (path: string, init?: RequestInit) => {
     calls.push({ path, method: init?.method, body: init?.body });
-    if (path.endsWith("/from-call")) {
+    // Both derive endpoints answer with the same draft shape: a voice call and
+    // a text conversation differ in where they are read from, not in what
+    // comes back (turncall#87).
+    if (path.endsWith("/from-call") || path.endsWith("/from-session")) {
       if (deriveFails) throw new Error(deriveFails);
       return { data: DRAFT };
     }
@@ -134,4 +137,25 @@ it("tells you where it went and what to do next", async () => {
   fireEvent.click(screen.getByText("Save scenario"));
   await waitFor(() => expect(screen.getByText(/appears on the Evals tab/)).toBeDefined());
   expect(screen.getByText(/trim the expectations/)).toBeDefined();
+});
+
+it("derives from a session when given one, not from a call", async () => {
+  // A manual test in the Console is a chat session; TurnCall reads session
+  // messages rather than call events, through its own endpoint (turncall#87).
+  render(<SaveAsScenario agentId="a1" sessionId="sess-9" />);
+  fireEvent.click(screen.getByText("Save as scenario"));
+  await waitFor(() => expect(screen.getByText("Review before saving")).toBeDefined());
+
+  const derive = calls.find((c) => c.path.endsWith("/from-session"))!;
+  expect(derive).toBeDefined();
+  expect(String(derive.body)).toContain("sess-9");
+  expect(String(derive.body)).toContain('"save":false');
+  expect(calls.some((c) => c.path.endsWith("/from-call"))).toBe(false);
+});
+
+it("keeps the caller's own label", async () => {
+  render(
+    <SaveAsScenario agentId="a1" sessionId="sess-9" label="Save this conversation" />
+  );
+  expect(screen.getByText("Save this conversation")).toBeDefined();
 });

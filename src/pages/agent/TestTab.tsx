@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import { useAgent } from "./AgentPage";
+import SaveAsScenario from "./SaveAsScenario";
 
 // Voice pulls in the (heavy) pipecat WebRTC client — code-split so it only loads
 // when the Voice tab is actually opened.
@@ -41,7 +42,9 @@ function ChatTest({ agentId }: { agentId: string }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const sessionId = useRef<string | null>(null);
+  // State rather than a ref: whether a conversation exists to save decides
+  // whether the button is shown, so React has to re-render when it appears.
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const customer = useRef(freshCustomer());
   const chatRef = useRef<HTMLDivElement>(null);
 
@@ -59,9 +62,9 @@ function ChatTest({ agentId }: { agentId: string }) {
     try {
       const r = await api(`/agents/${agentId}/chat`, {
         method: "POST",
-        body: JSON.stringify({ message: text, session_id: sessionId.current, customer_number: customer.current }),
+        body: JSON.stringify({ message: text, session_id: sessionId, customer_number: customer.current }),
       });
-      sessionId.current = r.data.session_id;
+      setSessionId(r.data.session_id);
       setMsgs((m) => [...m, { role: "assistant", text: r.data.reply }]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Chat failed — is the agent published?");
@@ -73,7 +76,7 @@ function ChatTest({ agentId }: { agentId: string }) {
   function reset() {
     setMsgs([]);
     setError("");
-    sessionId.current = null;
+    setSessionId(null);
     customer.current = freshCustomer();
   }
 
@@ -107,6 +110,15 @@ function ChatTest({ agentId }: { agentId: string }) {
         <button className="btn btn-primary" onClick={send} disabled={busy}>Send</button>
         <button className="btn" onClick={reset} disabled={busy || msgs.length === 0}>Reset</button>
       </div>
+      {/* The conversation you just had by hand becomes a check that runs
+          forever (turncall#87). Only once there is one to save. */}
+      {sessionId && (
+        <SaveAsScenario
+          agentId={agentId}
+          sessionId={sessionId}
+          label="Save this conversation as a scenario"
+        />
+      )}
     </>
   );
 }
