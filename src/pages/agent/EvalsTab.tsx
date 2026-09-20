@@ -1,0 +1,320 @@
+import { useEffect, useState } from "react";
+import { api } from "../../api";
+import { useAuth } from "../../auth";
+import { canEdit } from "../../roles";
+import { usePoll } from "../../usePoll";
+import { useAgent } from "./AgentPage";
+
+// The agent's eval scenarios, and what happened last time they ran
+// (builder-api #41/#42, turncall#68). TurnCall owns every bit of the engine —
+// scenarios, runs, batches, mocks, verdicts and the worker that executes them.
+// This tab reads it back and starts runs; nothing eval-shaped is stored here.
+//
+// Two rules the UI has to respect, both load-bearing:
+//
+//   * `errored` is NOT `failed`. A failure is a claim about the agent; an error
+//     means nobody could tell — a judge outage, a pipeline that died. Rendering
+//     them alike teaches people to distrust the suite, so they get different
+//     words and different colours.
+//   * There is no score. A run reports passed/failed out of iterations, and a
+//     scripted 1/1 and a simulation 7/10 are one representation read twice.
+
+type Scenario = {
+  id: string;
+  name: string;
+  kind: string;
+  tags: string[];
+  description: string | null;
+};
+
+type Run = {
+  id: string;
+  scenario_id: string | null;
+  scenario_name: string;
+  status: "queued" | "running" | "passed" | "failed" | "errored" | "cancelled";
+  passed_count: number;
+  failed_count: number;
+  iterations: number;
+  error: string | null;
+  batch_id: string | null;
+  results?: ResultEntry[];
+};
+
+type ResultEntry = {
+  iteration: number;
+  passed: boolean | null;
+  error: string | null;
+  transcript: { role: string; content: string; text?: string }[];
+  failures: { turn_index?: number; event_name?: string; reason?: string; kind?: string; name?: string }[];
+};
+
+const TERMINAL = ["passed", "failed", "errored", "cancelled"];
+const isTerminal = (s: string) => TERMINAL.includes(s);
+
+// Wording matters more than colour here: "could not check" is the difference
+// between a regression and an outage, and a reader should not have to know our
+// palette to tell them apart.
+const STATUS: Record<string, { label: string; cls: string; hint?: string }> = {
+  queued: { label: "Queued", cls: "muted" },
+  running: { label: "Running…", cls: "muted" },
+  passed: { label: "Passed", cls: "ok" },
+  failed: { label: "Failed", cls: "error-text" },
+  errored: {
+    label: "Could not check",
+    cls: "warn",
+    hint: "The run did not complete — a judge or provider was unreachable. This says nothing about the agent.",
+  },
+  cancelled: { label: "Cancelled", cls: "muted" },
+};
+
+function StatusBadge({ status }: { status: string }) {
+  const s = STATUS[status] || { label: status, cls: "muted" };
+  return (
+    <span className={s.cls} title={s.hint} data-testid={`status-${status}`}>
+      {s.label}
+    </span>
+  );
+}
+
+function RunRow({ run, onOpen }: { run: Run; onOpen: (r: Run) => void }) {
+  return (
+    <tr>
+      <td>{run.scenario_name}</td>
+      <td>
+        <StatusBadge status={run.status} />
+      </td>
+      <td className="muted">
+        {isTerminal(run.status) && run.status !== "errored"
+          ? `${run.passed_count}/${run.iterations}`
+          : "—"}
+      </td>
+      <td>
+        <button className="btn btn-sm" onClick={() => onOpen(run)}>
+          Details
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+function RunDetail({ run, onClose }: { run: Run; onClose: () => void }) {
+  return (
+    <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h3 style={{ margin: 0 }}>
+          {run.scenario_name} — <StatusBadge status={run.status} />
+        </h3>
+        <button className="btn btn-sm" onClick={onClose}>
+          Close
+        </button>
+      </div>
+      {run.error && (
+        <p role="alert" className="error-text" style={{ marginTop: 8 }}>
+          {run.error}
+        </p>
+      )}
+      {(run.results || []).map((entry) => (
+        <div key={entry.iteration} style={{ marginTop: 12 }}>
+          <p className="muted" style={{ margin: "0 0 4px" }}>
+            Iteration {entry.iteration}
+            {entry.error
+              ? " — could not check"
+              : entry.passed === null
+                ? " — no verdict"
+                : entry.passed
+                  ? " — passed"
+                  : " — failed"}
+          </p>
+          {entry.transcript.map((turn, i) => (
+            <div key={i} style={{ paddingLeft: 12 }}>
+              <strong>{turn.role === "user" ? "Caller" : "Agent"}:</strong> {turn.content}
+              {/* Audio runs carry both: what the judge heard, and what the
+                  agent's model actually wrote. When an audio run fails where a
+                  text run passed, that difference is the whole explanation. */}
+              {turn.text && turn.text !== turn.content && (
+                <span className="muted"> (model said: {turn.text})</span>
+              )}
+            </div>
+          ))}
+          {entry.failures.map((f, i) => (
+            <p key={i} className="error-text" style={{ paddingLeft: 12, margin: "4px 0 0" }}>
+              ✗ {f.event_name || f.name || f.kind}: {f.reason}
+            </p>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function EvalsTab() {
+  const { agentId } = useAgent();
+  const { activeWorkspace } = useAuth();
+  const editable = canEdit(activeWorkspace?.role); // viewers read; running costs model time
+  const [scenarios, setScenarios] = useState<Scenario[] | null>(null);
+  const [runs, setRuns] = useState<Run[]>([]);
+  const [open, setOpen] = useState<Run | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const loadScenarios = () =>
+    api(`/agents/${agentId}/eval-scenarios`)
+      .then((r) => setScenarios(r.data || []))
+      .catch((e) => setError(e.message));
+
+  const loadRuns = () =>
+    api(`/agents/${agentId}/eval-runs`)
+      .then((r) => setRuns(r.data || []))
+      .catch((e) => setError(e.message));
+
+  useEffect(() => {
+    loadScenarios();
+    loadRuns();
+  }, [agentId]);
+
+  // A worker executes runs, so results arrive after the request returns. Poll
+  // while anything is in flight and stop when everything is terminal — a tab
+  // that keeps hitting the API after the work is done is just noise.
+  const inFlight = runs.some((r) => !isTerminal(r.status));
+  usePoll(async () => {
+    await loadRuns();
+    if (open && !isTerminal(open.status)) {
+      const fresh = await api(`/agents/${agentId}/eval-runs/${open.id}`).catch(() => null);
+      if (fresh) setOpen(fresh.data);
+    }
+  }, 2000, inFlight);
+
+  async function run(body: Record<string, unknown>) {
+    setError("");
+    setBusy(true);
+    try {
+      await api(`/agents/${agentId}/eval-runs`, { method: "POST", body: JSON.stringify(body) });
+      await loadRuns();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Every scenario at once: one batch, one verdict. The tag has to exist on the
+  // scenarios for TurnCall to fan out, so this runs them by id instead — the
+  // batch grouping is TurnCall's, and #17 will add tag-based sets.
+  const runAll = async () => {
+    for (const s of scenarios || []) await run({ scenario_id: s.id });
+  };
+
+  const latestFor = (scenarioId: string) =>
+    runs.find((r) => r.scenario_id === scenarioId);
+
+  if (error && scenarios === null)
+    return <p role="alert" className="error-text">{error}</p>;
+
+  return (
+    <div>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Scenarios check that this agent still behaves — a fixed conversation with
+        expectations, run against the real pipeline.{" "}
+        <a href="https://github.com/kobikis/turncall/blob/main/docs/guides/evals.mdx" target="_blank" rel="noreferrer">
+          How evals work
+        </a>
+      </p>
+
+      {error && <p role="alert" className="error-text">{error}</p>}
+
+      {scenarios !== null && scenarios.length === 0 && (
+        <div className="card" style={{ padding: 16 }}>
+          <p style={{ margin: 0 }}>No scenarios yet.</p>
+          <p className="muted" style={{ marginBottom: 0 }}>
+            The quickest way to get one: open a call on the Calls tab and save it
+            as a scenario. Writing them from scratch is rarely worth it.
+          </p>
+        </div>
+      )}
+
+      {scenarios !== null && scenarios.length > 0 && (
+        <>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+            {editable && (
+              <button className="btn btn-primary" onClick={runAll} disabled={busy}>
+                {busy ? "Starting…" : `Run all (${scenarios.length})`}
+              </button>
+            )}
+            {inFlight && <span className="muted">Runs in progress…</span>}
+          </div>
+
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Scenario</th>
+                <th>Last run</th>
+                <th>Passed</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {scenarios.map((s) => {
+                const last = latestFor(s.id);
+                return (
+                  <tr key={s.id}>
+                    <td>
+                      {s.name}
+                      {s.tags.map((t) => (
+                        <span key={t} className="chip" style={{ marginLeft: 6 }}>{t}</span>
+                      ))}
+                    </td>
+                    <td>{last ? <StatusBadge status={last.status} /> : <span className="muted">never</span>}</td>
+                    <td className="muted">
+                      {last && isTerminal(last.status) && last.status !== "errored"
+                        ? `${last.passed_count}/${last.iterations}`
+                        : "—"}
+                    </td>
+                    <td>
+                      {editable && (
+                        <button
+                          className="btn btn-sm"
+                          onClick={() => run({ scenario_id: s.id })}
+                          disabled={busy}
+                        >
+                          Run
+                        </button>
+                      )}
+                      {last && (
+                        <button className="btn btn-sm" style={{ marginLeft: 6 }} onClick={() => setOpen(last)}>
+                          Details
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      {open && <div style={{ marginTop: 16 }}><RunDetail run={open} onClose={() => setOpen(null)} /></div>}
+
+      {runs.length > 0 && (
+        <>
+          <h3 style={{ marginTop: 24 }}>Recent runs</h3>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Scenario</th>
+                <th>Status</th>
+                <th>Passed</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {runs.slice(0, 20).map((r) => (
+                <RunRow key={r.id} run={r} onOpen={setOpen} />
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </div>
+  );
+}
