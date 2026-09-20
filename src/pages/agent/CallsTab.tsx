@@ -4,6 +4,7 @@ import Uid from "../../components/Uid";
 import { usePoll } from "../../usePoll";
 import { useAgent } from "./AgentPage";
 import { Call } from "../../types";
+import SaveAsScenario from "./SaveAsScenario";
 
 type TranscriptEntry = { role: string | null; text: string; timestamp?: string };
 
@@ -95,6 +96,10 @@ function CallDrawer({ agentId, call }: { agentId: string; call: Call }) {
           })}
         </div>
       )}
+      {/* The loop the Evals tab's empty state points at: a call that went
+          wrong becomes a scenario that checks it never does again (#17). */}
+      <SaveAsScenario agentId={agentId} callId={call.id} />
+
       <h3>Analysis</h3>
       {!analysis && <p className="muted">No analysis for this call.</p>}
       {analysis && (
