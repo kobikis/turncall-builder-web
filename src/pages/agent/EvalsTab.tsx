@@ -4,7 +4,7 @@ import { useAuth } from "../../auth";
 import { canEdit } from "../../roles";
 import { usePoll } from "../../usePoll";
 import ScenarioEditor from "./ScenarioEditor";
-import { heardThrough, judgeLabel, judgedBy, type JudgeBlock } from "./judge";
+import { effectiveJudge, heardThrough, judgedBy, type JudgeBlock } from "./judge";
 import { SortHeader, useSort } from "./sorting";
 import { useAgent } from "./AgentPage";
 
@@ -311,7 +311,7 @@ export default function EvalsTab() {
     (scenarios || []).filter((s) => matches(filter, s.name, s.tags.join(" "))),
     (s, key) => {
       const last = latestFor(s.id);
-      if (key === "judge") return judgeLabel(s.judge) || "";
+      if (key === "judge") return effectiveJudge(s.judge, last?.harness_config).label;
       if (key === "status") return last?.status || "";
       if (key === "passed") return last ? last.passed_count / Math.max(last.iterations, 1) : -1;
       if (key === "when") return last?.completed_at || last?.queued_at || "";
@@ -469,14 +469,34 @@ export default function EvalsTab() {
                         <span key={t} className="chip" style={{ marginLeft: 6 }}>{t}</span>
                       ))}
                     </td>
-                    <td>
-                      {judgeLabel(s.judge) ? (
-                        <span title="Set on this scenario">{judgeLabel(s.judge)}</span>
-                      ) : (
-                        <span className="muted" title="Whatever this TurnCall is configured to judge with — a local Ollama unless EVAL_JUDGE_PROVIDER is set">
-                          Platform default
-                        </span>
-                      )}
+                    <td data-testid="scenario-judge">
+                      {(() => {
+                        // The judge this scenario names, or — when it names
+                        // none — the one its last run was actually decided by.
+                        // "Platform default" alone names no model, which is
+                        // precisely what a reader is looking at this column to
+                        // find out.
+                        const j = effectiveJudge(s.judge, last?.harness_config);
+                        if (j.source === "scenario")
+                          return <span title="Set on this scenario">{j.label}</span>;
+                        if (j.source === "last-run")
+                          return (
+                            <span
+                              className="muted"
+                              title="Inherited from the platform — this is what decided the last run, and it changes if the platform default does"
+                            >
+                              {j.label} <em>(inherited)</em>
+                            </span>
+                          );
+                        return (
+                          <span
+                            className="muted"
+                            title="Whatever this TurnCall is configured to judge with — a local Ollama unless EVAL_JUDGE_PROVIDER is set. Run it once and this names the model."
+                          >
+                            {j.label}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td>{last ? <StatusBadge status={last.status} /> : <span className="muted">never</span>}</td>
                     <td className="muted">

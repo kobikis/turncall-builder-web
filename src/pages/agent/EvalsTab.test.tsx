@@ -544,3 +544,50 @@ it("marks the column actually in force, and only that one", async () => {
   expect(sorted.length).toBeGreaterThan(0);
   expect(sorted.every((th) => th.getAttribute("aria-sort") !== "none")).toBe(true);
 });
+
+// --- naming the judge a scenario actually ran with ---------------------------
+//
+// "Platform default" names no model, which is the thing the column exists to
+// answer. The last run's snapshot holds it.
+
+it("names the model a scenario was actually judged by, not just 'the default'", async () => {
+  scenarios = [scenario({ judge: null })];
+  runs = [
+    run({
+      harness_config: { judge_used: true, judge_provider: "ollama", judge_model: "gemma3" },
+    }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByTestId("scenario-judge")).toBeTruthy());
+  const cell = screen.getByTestId("scenario-judge").textContent || "";
+  expect(cell).toContain("Ollama · gemma3");
+  // Marked as inherited: it is what ran, not what this scenario chose, and it
+  // moves if the platform default moves.
+  expect(cell).toContain("inherited");
+});
+
+it("a scenario's own judge still wins over what the last run used", async () => {
+  // The scenario's block is what the *next* run will use; a stale snapshot
+  // must not read as the current setting.
+  scenarios = [scenario({ judge: { provider: "openai", model: "gpt-4o" } })];
+  runs = [
+    run({
+      harness_config: { judge_used: true, judge_provider: "ollama", judge_model: "gemma3" },
+    }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByTestId("scenario-judge")).toBeTruthy());
+  const cell = screen.getByTestId("scenario-judge").textContent || "";
+  expect(cell).toContain("OpenAI · gpt-4o");
+  expect(cell).not.toContain("gemma3");
+});
+
+it("a scenario that has never run says only that it inherits", async () => {
+  // Honest: the default lives in TurnCall's environment, which the Console
+  // cannot read. Naming a model here would be a guess.
+  scenarios = [scenario({ judge: null })];
+  runs = [];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByTestId("scenario-judge")).toBeTruthy());
+  expect(screen.getByTestId("scenario-judge").textContent).toContain("Platform default");
+});

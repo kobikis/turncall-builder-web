@@ -105,3 +105,23 @@ export function heardThrough(harness?: Record<string, unknown> | null): string |
   const said = speech ? [speech.service, speech.voice].filter(Boolean).join(" ") : "—";
   return `Caller spoken by ${said}, agent transcribed by ${stt?.service || "—"}`;
 }
+
+/** What a scenario's Judge cell should say: the judge it names, or — failing
+ *  that — the one its last run was actually decided by.
+ *
+ * "Platform default" on its own names no model, which is the thing a reader
+ * wanted to know. The last run's snapshot holds the answer, so a scenario that
+ * has run once can say `Ollama · gemma3` and mark it as inherited rather than
+ * chosen. Before the first run there is genuinely nothing to report: the
+ * default lives in TurnCall's environment, which the Console cannot read.
+ */
+export function effectiveJudge(
+  judge: JudgeBlock | null | undefined,
+  lastRunHarness?: Record<string, unknown> | null
+): { label: string; source: "scenario" | "last-run" | "unknown" } {
+  const own = judgeLabel(judge);
+  if (own) return { label: own, source: "scenario" };
+  const ran = judgedBy(lastRunHarness);
+  if (ran) return { label: ran, source: "last-run" };
+  return { label: "Platform default", source: "unknown" };
+}
