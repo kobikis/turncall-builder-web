@@ -140,6 +140,10 @@ function FragmentRow({ k, v }: { k: string; v: unknown }) {
   );
 }
 
+// Long enough for a busy container, short enough that a stuck one is reported
+// before the next tick rather than never.
+const POLL_TIMEOUT_MS = 5000;
+
 function EventsFeed({ browserUrl }: { browserUrl: string }) {
   const [events, setEvents] = useState<any[]>([]);
   const [pollError, setPollError] = useState(false);
@@ -147,7 +151,15 @@ function EventsFeed({ browserUrl }: { browserUrl: string }) {
 
   const poll = useCallback(async () => {
     try {
-      const r = await fetch(`${browserUrl}/events`);
+      // A timeout, because this one goes straight to the agent's container
+      // rather than through the proxy. A container that accepts the connection
+      // and never answers — one starting, wedged, or paused — leaves the
+      // promise pending forever, `usePoll` never starts another (its in-flight
+      // guard is doing its job), and the feed stops for good: no new events,
+      // no error, because the catch below never runs.
+      const r = await fetch(`${browserUrl}/events`, {
+        signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
+      });
       if (!r.ok) throw new Error(`events ${r.status}`);
       const body = await r.json();
       setEvents(body.data.events);

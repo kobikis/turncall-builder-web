@@ -153,7 +153,9 @@ export default function ConfigTab() {
   useEffect(() => {
     if (!browserUrl) return;
     let live = true;
-    fetch(`${browserUrl}/automations`)
+    // Same trap as the Calls tab's event feed: a direct hop to the agent's
+    // container, which can accept a connection and never answer.
+    fetch(`${browserUrl}/automations`, { signal: AbortSignal.timeout(5000) })
       .then((r) => (r.ok ? r.json() : null))
       .then((b) => { if (live && b) setRuns(b.data.runs); })
       .catch(() => {});
