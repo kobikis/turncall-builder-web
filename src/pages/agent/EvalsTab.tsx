@@ -41,6 +41,8 @@ type Run = {
   iterations: number;
   error: string | null;
   batch_id: string | null;
+  queued_at?: string;
+  completed_at?: string | null;
   results?: ResultEntry[];
 };
 
@@ -71,6 +73,26 @@ const STATUS: Record<string, { label: string; cls: string; hint?: string }> = {
   cancelled: { label: "Cancelled", cls: "muted" },
 };
 
+// A run's age is half of what "last run: passed" means — green from ten minutes
+// ago and green from before the last three deploys are different claims. Short
+// form in the cell, full ISO in the tooltip, because a date nobody can hover is
+// still ambiguous about the year.
+function when(iso?: string | null) {
+  if (!iso) return { short: "—", full: "" };
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return { short: "—", full: iso };
+  return { short: d.toLocaleString(), full: d.toISOString() };
+}
+
+function RunWhen({ run }: { run: Run }) {
+  const t = when(run.completed_at || run.queued_at);
+  return (
+    <span className="muted" title={t.full} data-testid="run-when">
+      {t.short}
+    </span>
+  );
+}
+
 function StatusBadge({ status }: { status: string }) {
   const s = STATUS[status] || { label: status, cls: "muted" };
   return (
@@ -91,6 +113,9 @@ function RunRow({ run, onOpen }: { run: Run; onOpen: (r: Run) => void }) {
         {isTerminal(run.status) && run.status !== "errored"
           ? `${run.passed_count}/${run.iterations}`
           : "—"}
+      </td>
+      <td>
+        <RunWhen run={run} />
       </td>
       <td>
         <button className="btn btn-sm" onClick={() => onOpen(run)}>
@@ -161,6 +186,10 @@ export default function EvalsTab() {
   const [editing, setEditing] = useState<Scenario | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Which scenarios the next run covers. Ids, not indexes: the list reorders
+  // when a scenario is edited, and a selection that silently shifts rows would
+  // run something nobody picked.
+  const [picked, setPicked] = useState<Set<string>>(new Set());
 
   const loadScenarios = () =>
     api(`/agents/${agentId}/eval-scenarios`)
@@ -202,12 +231,24 @@ export default function EvalsTab() {
     }
   }
 
-  // Every scenario at once: one batch, one verdict. The tag has to exist on the
-  // scenarios for TurnCall to fan out, so this runs them by id instead — the
-  // batch grouping is TurnCall's, and #17 will add tag-based sets.
-  const runAll = async () => {
-    for (const s of scenarios || []) await run({ scenario_id: s.id });
+  // The checked scenarios, one request each. They do not share a batch id: a
+  // fan-out is TurnCall's and needs a tag every scenario carries, and an ad-hoc
+  // selection is not a tag. `GET /eval-runs/batches/{id}` still answers for a
+  // tag run; a picked set is read row by row, which is what picking rows means.
+  const runPicked = async () => {
+    for (const s of scenarios || []) if (picked.has(s.id)) await run({ scenario_id: s.id });
   };
+
+  const toggle = (id: string) =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+
+  const allPicked = (scenarios || []).length > 0 && picked.size === (scenarios || []).length;
+  const toggleAll = () =>
+    setPicked(allPicked ? new Set() : new Set((scenarios || []).map((s) => s.id)));
 
   const latestFor = (scenarioId: string) =>
     runs.find((r) => r.scenario_id === scenarioId);
@@ -253,8 +294,17 @@ export default function EvalsTab() {
         <>
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
             {editable && (
-              <button className="btn btn-primary" onClick={runAll} disabled={busy}>
-                {busy ? "Starting…" : `Run all (${scenarios.length})`}
+              <button
+                className="btn btn-primary"
+                onClick={runPicked}
+                disabled={busy || picked.size === 0}
+                title={
+                  picked.size === 0
+                    ? "Tick the scenarios to run"
+                    : `Run the ${picked.size} ticked scenario(s)`
+                }
+              >
+                {busy ? "Starting…" : `Run selected (${picked.size})`}
               </button>
             )}
             {inFlight && <span className="muted">Runs in progress…</span>}
@@ -263,9 +313,20 @@ export default function EvalsTab() {
           <table className="table">
             <thead>
               <tr>
+                <th>
+                  {editable && (
+                    <input
+                      type="checkbox"
+                      checked={allPicked}
+                      onChange={toggleAll}
+                      aria-label="Select every scenario"
+                    />
+                  )}
+                </th>
                 <th>Scenario</th>
                 <th>Last run</th>
                 <th>Passed</th>
+                <th>When</th>
                 <th />
               </tr>
             </thead>
@@ -274,6 +335,16 @@ export default function EvalsTab() {
                 const last = latestFor(s.id);
                 return (
                   <tr key={s.id}>
+                    <td>
+                      {editable && (
+                        <input
+                          type="checkbox"
+                          checked={picked.has(s.id)}
+                          onChange={() => toggle(s.id)}
+                          aria-label={`Select ${s.name}`}
+                        />
+                      )}
+                    </td>
                     <td>
                       {s.name}
                       {s.tags.map((t) => (
@@ -286,18 +357,10 @@ export default function EvalsTab() {
                         ? `${last.passed_count}/${last.iterations}`
                         : "—"}
                     </td>
+                    <td>{last ? <RunWhen run={last} /> : <span className="muted">—</span>}</td>
                     <td>
-                      {editable && (
-                        <button
-                          className="btn btn-sm"
-                          onClick={() => run({ scenario_id: s.id })}
-                          disabled={busy}
-                        >
-                          Run
-                        </button>
-                      )}
                       {last && (
-                        <button className="btn btn-sm" style={{ marginLeft: 6 }} onClick={() => setOpen(last)}>
+                        <button className="btn btn-sm" onClick={() => setOpen(last)}>
                           Details
                         </button>
                       )}
@@ -330,6 +393,7 @@ export default function EvalsTab() {
                 <th>Scenario</th>
                 <th>Status</th>
                 <th>Passed</th>
+                <th>When</th>
                 <th />
               </tr>
             </thead>

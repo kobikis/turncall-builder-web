@@ -99,10 +99,11 @@ it("a failed run is counted out of its iterations, with no score", async () => {
   expect(screen.getAllByText("7/10").length).toBeGreaterThan(0);
 });
 
-it("an editor can run one scenario", async () => {
+it("an editor runs the scenarios they ticked", async () => {
   render(<EvalsTab />);
   await waitFor(() => expect(screen.getByText("asks-for-the-reference")).toBeDefined());
-  fireEvent.click(screen.getByText("Run"));
+  fireEvent.click(screen.getByLabelText("Select asks-for-the-reference"));
+  fireEvent.click(screen.getByText(/Run selected \(1\)/));
   await waitFor(() =>
     expect(calls.some((c) => c.method === "POST" && String(c.body).includes("s1"))).toBe(true)
   );
@@ -116,8 +117,8 @@ it("a viewer sees the scenarios and is offered no way to run them", async () => 
   await waitFor(() =>
     expect(screen.getAllByText("asks-for-the-reference").length).toBeGreaterThan(0)
   );
-  expect(screen.queryByText("Run")).toBeNull();
-  expect(screen.queryByText(/^Run all/)).toBeNull();
+  expect(screen.queryByText(/^Run selected/)).toBeNull();
+  expect(screen.queryByLabelText(/^Select /)).toBeNull();
   // Reading is still fine — the point is the gate, not a blank page.
   expect(screen.getAllByText("Passed").length).toBeGreaterThan(0);
 });
@@ -193,4 +194,85 @@ it("a viewer is offered no way to change a scenario", async () => {
   render(<EvalsTab />);
   await waitFor(() => expect(screen.getByText("asks-for-the-reference")).toBeDefined());
   expect(screen.queryByText("Edit")).toBeNull();
+});
+
+// Dates and tag groups (turncall#68's batch fan-out, surfaced here).
+//
+// The date is not decoration: "last run: passed" means something different
+// depending on whether it was ten minutes ago or before the last three
+// deploys. The tag group is not a convenience either — it is the one path that
+// produces a *batch*, which is how a group gets a single verdict.
+
+it("shows when a run happened, not only that it did", async () => {
+  runs = [run({ completed_at: "2026-09-20T13:10:29Z", queued_at: "2026-09-20T13:09:00Z" })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getAllByTestId("run-when").length).toBeGreaterThan(0));
+  const cell = screen.getAllByTestId("run-when")[0];
+  expect(cell.textContent).not.toBe("—");
+  // The tooltip is unambiguous even where the short form is not.
+  expect(cell.getAttribute("title")).toBe("2026-09-20T13:10:29.000Z");
+});
+
+it("prefers when the run finished over when it was queued", async () => {
+  runs = [run({ queued_at: "2026-09-20T13:00:00Z", completed_at: "2026-09-20T13:10:00Z" })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getAllByTestId("run-when").length).toBeGreaterThan(0));
+  expect(screen.getAllByTestId("run-when")[0].getAttribute("title")).toBe(
+    "2026-09-20T13:10:00.000Z",
+  );
+});
+
+it("a run still going shows when it was queued", async () => {
+  runs = [run({ status: "running", completed_at: null, queued_at: "2026-09-20T13:00:00Z" })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getAllByTestId("run-when").length).toBeGreaterThan(0));
+  expect(screen.getAllByTestId("run-when")[0].getAttribute("title")).toBe(
+    "2026-09-20T13:00:00.000Z",
+  );
+});
+
+it("an older run without timestamps renders a dash, not 'Invalid Date'", async () => {
+  runs = [run({ queued_at: undefined, completed_at: undefined })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getAllByTestId("run-when").length).toBeGreaterThan(0));
+  expect(screen.getAllByTestId("run-when")[0].textContent).toBe("—");
+});
+
+it("runs nothing until something is ticked", async () => {
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText(/Run selected \(0\)/)).toBeDefined());
+  const button = screen.getByText(/Run selected \(0\)/) as HTMLButtonElement;
+  expect(button.disabled).toBe(true);
+});
+
+it("ticks every scenario from the header, and unticks them again", async () => {
+  scenarios = [scenario({ id: "s1", name: "one" }), scenario({ id: "s2", name: "two" })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("one")).toBeDefined());
+  fireEvent.click(screen.getByLabelText("Select every scenario"));
+  expect(screen.getByText(/Run selected \(2\)/)).toBeDefined();
+  fireEvent.click(screen.getByLabelText("Select every scenario"));
+  expect(screen.getByText(/Run selected \(0\)/)).toBeDefined();
+});
+
+it("runs one request per ticked scenario, and none for the rest", async () => {
+  scenarios = [scenario({ id: "s1", name: "one" }), scenario({ id: "s2", name: "two" })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("two")).toBeDefined());
+  fireEvent.click(screen.getByLabelText("Select two"));
+  calls.length = 0;
+  fireEvent.click(screen.getByText(/Run selected \(1\)/));
+  await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
+  const posts = calls.filter((c) => c.method === "POST");
+  expect(posts.length).toBe(1);
+  expect(JSON.parse(String(posts[0].body))).toEqual({ scenario_id: "s2" });
+});
+
+it("no longer offers a per-tag run button", async () => {
+  scenarios = [scenario({ tags: ["pre-publish"] })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("asks-for-the-reference")).toBeDefined());
+  // The tag still shows as a chip; it is not an action any more.
+  expect(screen.getByText("pre-publish")).toBeDefined();
+  expect(screen.queryByText(/Run pre-publish/)).toBeNull();
 });
