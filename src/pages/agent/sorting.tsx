@@ -55,18 +55,30 @@ export function SortHeader({
   sort: { key: string; dir: Dir; toggle: (k: string) => void };
 }) {
   const active = sort.key === column;
+  // The word the reader sees, not the key behind it — the Agent column sorts
+  // on "model", and "Sort by model" is a label for a different control.
+  const label = typeof children === "string" ? children : column;
   return (
     <th aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}>
+      {/* `row-toggle` and a muted `caret` are what the Calls and Takeaways
+          tables already use for exactly this. A second look for the same
+          control is the kind of difference nobody reports and everybody
+          notices — and inline styles are how that happens. */}
       <button
         type="button"
-        className="btn-link"
+        className="row-toggle"
         onClick={() => sort.toggle(column)}
-        style={{ background: "none", border: 0, padding: 0, font: "inherit", cursor: "pointer" }}
+        aria-label={`Sort by ${label}, ${sort.dir === "asc" ? "ascending" : "descending"} — click to reverse`}
       >
         {children}
-        {/* The arrow only on the column actually in force: an indicator on
-            every header says nothing about which one is sorting. */}
-        {active && <span aria-hidden="true">{sort.dir === "asc" ? " ▲" : " ▼"}</span>}
+        {/* The caret only on the column actually in force: these tables sort by
+            several, and an arrow on every header says nothing about which one
+            is sorting. */}
+        {active && (
+          <span className="caret" aria-hidden="true">
+            {sort.dir === "asc" ? "▴" : "▾"}
+          </span>
+        )}
       </button>
     </th>
   );
