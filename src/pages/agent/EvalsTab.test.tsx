@@ -99,10 +99,11 @@ it("a failed run is counted out of its iterations, with no score", async () => {
   expect(screen.getAllByText("7/10").length).toBeGreaterThan(0);
 });
 
-it("an editor can run one scenario", async () => {
+it("an editor runs the scenarios they ticked", async () => {
   render(<EvalsTab />);
   await waitFor(() => expect(screen.getByText("asks-for-the-reference")).toBeDefined());
-  fireEvent.click(screen.getByText("Run"));
+  fireEvent.click(screen.getByLabelText("Select asks-for-the-reference"));
+  fireEvent.click(screen.getByText(/Run selected \(1\)/));
   await waitFor(() =>
     expect(calls.some((c) => c.method === "POST" && String(c.body).includes("s1"))).toBe(true)
   );
@@ -116,8 +117,8 @@ it("a viewer sees the scenarios and is offered no way to run them", async () => 
   await waitFor(() =>
     expect(screen.getAllByText("asks-for-the-reference").length).toBeGreaterThan(0)
   );
-  expect(screen.queryByText("Run")).toBeNull();
-  expect(screen.queryByText(/^Run all/)).toBeNull();
+  expect(screen.queryByText(/^Run selected/)).toBeNull();
+  expect(screen.queryByLabelText(/^Select /)).toBeNull();
   // Reading is still fine — the point is the gate, not a blank page.
   expect(screen.getAllByText("Passed").length).toBeGreaterThan(0);
 });
@@ -237,42 +238,41 @@ it("an older run without timestamps renders a dash, not 'Invalid Date'", async (
   expect(screen.getAllByTestId("run-when")[0].textContent).toBe("—");
 });
 
-it("offers a run button per tag, counting what it would run", async () => {
-  scenarios = [
-    scenario({ id: "s1", name: "one", tags: ["pre-publish"] }),
-    scenario({ id: "s2", name: "two", tags: ["pre-publish", "nightly"] }),
-  ];
+it("runs nothing until something is ticked", async () => {
   render(<EvalsTab />);
-  await waitFor(() => expect(screen.getByText(/Run pre-publish \(2\)/)).toBeDefined());
-  expect(screen.getByText(/Run nightly \(1\)/)).toBeDefined();
+  await waitFor(() => expect(screen.getByText(/Run selected \(0\)/)).toBeDefined());
+  const button = screen.getByText(/Run selected \(0\)/) as HTMLButtonElement;
+  expect(button.disabled).toBe(true);
 });
 
-it("a tag group is one request, so TurnCall fans it out under one batch", async () => {
-  scenarios = [
-    scenario({ id: "s1", name: "one", tags: ["pre-publish"] }),
-    scenario({ id: "s2", name: "two", tags: ["pre-publish"] }),
-  ];
+it("ticks every scenario from the header, and unticks them again", async () => {
+  scenarios = [scenario({ id: "s1", name: "one" }), scenario({ id: "s2", name: "two" })];
   render(<EvalsTab />);
-  await waitFor(() => expect(screen.getByText(/Run pre-publish \(2\)/)).toBeDefined());
+  await waitFor(() => expect(screen.getByText("one")).toBeDefined());
+  fireEvent.click(screen.getByLabelText("Select every scenario"));
+  expect(screen.getByText(/Run selected \(2\)/)).toBeDefined();
+  fireEvent.click(screen.getByLabelText("Select every scenario"));
+  expect(screen.getByText(/Run selected \(0\)/)).toBeDefined();
+});
+
+it("runs one request per ticked scenario, and none for the rest", async () => {
+  scenarios = [scenario({ id: "s1", name: "one" }), scenario({ id: "s2", name: "two" })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("two")).toBeDefined());
+  fireEvent.click(screen.getByLabelText("Select two"));
   calls.length = 0;
-  fireEvent.click(screen.getByText(/Run pre-publish \(2\)/));
+  fireEvent.click(screen.getByText(/Run selected \(1\)/));
   await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
   const posts = calls.filter((c) => c.method === "POST");
   expect(posts.length).toBe(1);
-  expect(JSON.parse(String(posts[0].body))).toEqual({ tag: "pre-publish" });
+  expect(JSON.parse(String(posts[0].body))).toEqual({ scenario_id: "s2" });
 });
 
-it("a viewer is offered no tag buttons either", async () => {
-  role = "viewer";
+it("no longer offers a per-tag run button", async () => {
   scenarios = [scenario({ tags: ["pre-publish"] })];
   render(<EvalsTab />);
   await waitFor(() => expect(screen.getByText("asks-for-the-reference")).toBeDefined());
+  // The tag still shows as a chip; it is not an action any more.
+  expect(screen.getByText("pre-publish")).toBeDefined();
   expect(screen.queryByText(/Run pre-publish/)).toBeNull();
-});
-
-it("scenarios with no tags offer no group buttons, rather than an empty one", async () => {
-  scenarios = [scenario({ tags: [] })];
-  render(<EvalsTab />);
-  await waitFor(() => expect(screen.getByText("asks-for-the-reference")).toBeDefined());
-  expect(screen.queryByText(/^Run \(/)).toBeNull();
 });

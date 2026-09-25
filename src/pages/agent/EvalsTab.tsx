@@ -186,6 +186,10 @@ export default function EvalsTab() {
   const [editing, setEditing] = useState<Scenario | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Which scenarios the next run covers. Ids, not indexes: the list reorders
+  // when a scenario is edited, and a selection that silently shifts rows would
+  // run something nobody picked.
+  const [picked, setPicked] = useState<Set<string>>(new Set());
 
   const loadScenarios = () =>
     api(`/agents/${agentId}/eval-scenarios`)
@@ -227,28 +231,24 @@ export default function EvalsTab() {
     }
   }
 
-  // Every scenario at once. One request per scenario, because a fan-out needs a
-  // tag every scenario carries and "all of them" is not a tag — so these are N
-  // runs that do not share a batch id.
-  const runAll = async () => {
-    for (const s of scenarios || []) await run({ scenario_id: s.id });
+  // The checked scenarios, one request each. They do not share a batch id: a
+  // fan-out is TurnCall's and needs a tag every scenario carries, and an ad-hoc
+  // selection is not a tag. `GET /eval-runs/batches/{id}` still answers for a
+  // tag run; a picked set is read row by row, which is what picking rows means.
+  const runPicked = async () => {
+    for (const s of scenarios || []) if (picked.has(s.id)) await run({ scenario_id: s.id });
   };
 
-  // A subset, by tag. This one *is* a fan-out: TurnCall queues a run per
-  // matching scenario under a single batch id, so the group has one verdict the
-  // way a CI job does — which is the whole reason to group rather than click
-  // several rows. Refused server-side if the tag matches nothing, or more
-  // scenarios than one request may queue.
-  const runTag = (tag: string) => run({ tag });
+  const toggle = (id: string) =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
 
-  // Tags as the scenarios define them, each with how many it would run. Sorted
-  // so the row does not reshuffle when a scenario is edited.
-  const tagGroups = Object.entries(
-    (scenarios || []).reduce<Record<string, number>>((acc, s) => {
-      for (const t of s.tags) acc[t] = (acc[t] || 0) + 1;
-      return acc;
-    }, {}),
-  ).sort(([a], [b]) => a.localeCompare(b));
+  const allPicked = (scenarios || []).length > 0 && picked.size === (scenarios || []).length;
+  const toggleAll = () =>
+    setPicked(allPicked ? new Set() : new Set((scenarios || []).map((s) => s.id)));
 
   const latestFor = (scenarioId: string) =>
     runs.find((r) => r.scenario_id === scenarioId);
@@ -294,28 +294,35 @@ export default function EvalsTab() {
         <>
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
             {editable && (
-              <button className="btn btn-primary" onClick={runAll} disabled={busy}>
-                {busy ? "Starting…" : `Run all (${scenarios.length})`}
+              <button
+                className="btn btn-primary"
+                onClick={runPicked}
+                disabled={busy || picked.size === 0}
+                title={
+                  picked.size === 0
+                    ? "Tick the scenarios to run"
+                    : `Run the ${picked.size} ticked scenario(s)`
+                }
+              >
+                {busy ? "Starting…" : `Run selected (${picked.size})`}
               </button>
             )}
-            {editable &&
-              tagGroups.map(([tag, count]) => (
-                <button
-                  key={tag}
-                  className="btn btn-sm"
-                  onClick={() => runTag(tag)}
-                  disabled={busy}
-                  title={`Run the ${count} scenario(s) tagged ${tag}, as one batch`}
-                >
-                  Run {tag} ({count})
-                </button>
-              ))}
             {inFlight && <span className="muted">Runs in progress…</span>}
           </div>
 
           <table className="table">
             <thead>
               <tr>
+                <th>
+                  {editable && (
+                    <input
+                      type="checkbox"
+                      checked={allPicked}
+                      onChange={toggleAll}
+                      aria-label="Select every scenario"
+                    />
+                  )}
+                </th>
                 <th>Scenario</th>
                 <th>Last run</th>
                 <th>Passed</th>
@@ -328,6 +335,16 @@ export default function EvalsTab() {
                 const last = latestFor(s.id);
                 return (
                   <tr key={s.id}>
+                    <td>
+                      {editable && (
+                        <input
+                          type="checkbox"
+                          checked={picked.has(s.id)}
+                          onChange={() => toggle(s.id)}
+                          aria-label={`Select ${s.name}`}
+                        />
+                      )}
+                    </td>
                     <td>
                       {s.name}
                       {s.tags.map((t) => (
@@ -342,17 +359,8 @@ export default function EvalsTab() {
                     </td>
                     <td>{last ? <RunWhen run={last} /> : <span className="muted">—</span>}</td>
                     <td>
-                      {editable && (
-                        <button
-                          className="btn btn-sm"
-                          onClick={() => run({ scenario_id: s.id })}
-                          disabled={busy}
-                        >
-                          Run
-                        </button>
-                      )}
                       {last && (
-                        <button className="btn btn-sm" style={{ marginLeft: 6 }} onClick={() => setOpen(last)}>
+                        <button className="btn btn-sm" onClick={() => setOpen(last)}>
                           Details
                         </button>
                       )}
