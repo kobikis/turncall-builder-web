@@ -119,17 +119,53 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// A judge swap is the first thing to check when a green scenario turns red, and
-// it is emphatically not a failure — so it reads as a note on the row, in the
-// warning colour rather than the error one (turncall#119).
-function JudgeChanged({ run }: { run: Run }) {
-  const w = (run.warnings || []).find((x) => x.code === "judge_changed");
-  if (!w) return null;
+// What a run needs to say about itself that is not a verdict. Each reads as a
+// note beside the status, in the warning colour rather than the error one: a
+// judge swap is the first thing to check when a green scenario turns red, and
+// a stale worker means the result was produced by code older than the scenario
+// it ran — both change how the verdict should be read without being one.
+//
+// Unlabelled codes still show. A warning TurnCall adds later is worth seeing
+// as "something to read" long before this file hears its name.
+const WARNINGS: Record<string, string> = {
+  judge_changed: "Judge changed",
+  worker_stale: "Stale worker",
+  scenario_cannot_fail: "Cannot fail",
+  content_free_expectations: "Weak expectations",
+  live_tools_allowed: "Live tools",
+  mcp_tools_unavailable: "MCP not connected",
+};
+
+function RunWarnings({ run }: { run: Run }) {
   return (
-    <span className="chip warn" style={{ marginLeft: 6 }} title={w.message} data-testid="judge-changed">
-      Judge changed
-    </span>
+    <>
+      {(run.warnings || []).map((w) => (
+        <span
+          key={w.code}
+          className="chip warn"
+          style={{ marginLeft: 6 }}
+          title={w.message}
+          data-testid={w.code.replace(/_/g, "-")}
+        >
+          {WARNINGS[w.code] || "Warning"}
+        </span>
+      ))}
+    </>
   );
+}
+
+// Passed out of iterations, when that is a fact and not a restatement.
+//
+// TurnCall has no score column on purpose: a run reports passed/failed out of
+// its iterations, and a scripted 1/1 and a simulation 7/10 are one
+// representation read twice. But at one iteration the fraction says exactly
+// what the status beside it already says, so the column is only noise on the
+// runs most people do. It earns its place the moment a persona is run ten
+// times and 7/10 is the entire result.
+function passedOf(run: Run | undefined): string {
+  if (!run || !isTerminal(run.status) || run.status === "errored") return "—";
+  if (run.iterations <= 1) return "—";
+  return `${run.passed_count}/${run.iterations}`;
 }
 
 function RunRow({ run, onOpen }: { run: Run; onOpen: (r: Run) => void }) {
@@ -138,13 +174,9 @@ function RunRow({ run, onOpen }: { run: Run; onOpen: (r: Run) => void }) {
       <td>{run.scenario_name}</td>
       <td>
         <StatusBadge status={run.status} />
-        <JudgeChanged run={run} />
+        <RunWarnings run={run} />
       </td>
-      <td className="muted">
-        {isTerminal(run.status) && run.status !== "errored"
-          ? `${run.passed_count}/${run.iterations}`
-          : "—"}
-      </td>
+      <td className="muted">{passedOf(run)}</td>
       <td>
         <RunWhen run={run} />
       </td>
@@ -514,11 +546,7 @@ export default function EvalsTab() {
                       })()}
                     </td>
                     <td>{last ? <StatusBadge status={last.status} /> : <span className="muted">never</span>}</td>
-                    <td className="muted">
-                      {last && isTerminal(last.status) && last.status !== "errored"
-                        ? `${last.passed_count}/${last.iterations}`
-                        : "—"}
-                    </td>
+                    <td className="muted">{passedOf(last)}</td>
                     <td>{last ? <RunWhen run={last} /> : <span className="muted">—</span>}</td>
                     <td>
                       {last && (
