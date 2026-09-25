@@ -218,13 +218,13 @@ function RunDetail({ run, onClose }: { run: Run; onClose: () => void }) {
       </div>
       {agentModel(run.resolved_config) && (
         <p className="muted" style={{ margin: "6px 0 0" }} data-testid="ran-against">
-          Ran against {agentModel(run.resolved_config)?.full}
+          Agent: {agentModel(run.resolved_config)?.full}
           {run.agent_version ? ` (agent v${run.agent_version})` : ""}
         </p>
       )}
       {judgedBy(run.harness_config) && (
         <p className="muted" style={{ margin: "6px 0 0" }} data-testid="judged-by">
-          Judged by {judgedBy(run.harness_config)}
+          Judge: {judgedBy(run.harness_config)}
         </p>
       )}
       {heardThrough(run.harness_config) && (
@@ -627,15 +627,18 @@ export default function EvalsTab() {
                 <SortHeader column="scenario" sort={runSort}>Scenario</SortHeader>
                 <SortHeader column="status" sort={runSort}>Status</SortHeader>
                 <SortHeader column="when" sort={runSort}>When</SortHeader>
-                {/* The model under test. A verdict is about one model
-                    answering one way; two rows produced by different ones are
-                    not comparable, and nothing else on the row says so. */}
-                <SortHeader column="model" sort={runSort}>Model</SortHeader>
+                {/* Two models, and the headers have to say which is which:
+                    `Agent` is the one under test, `Judge` the one marking it.
+                    "Model" and "Judged by" read as the same kind of thing, and
+                    the difference is the whole diagnosis when a scenario flips
+                    colour — a changed agent is a regression, a changed judge
+                    is a different examiner. */}
+                <SortHeader column="model" sort={runSort}>Agent</SortHeader>
                 {/* Which model decided it. A verdict is not comparable with
                     the one above it without this — a provider-side model
                     update moves the whole baseline and nothing else on the row
                     would say so (turncall#119). */}
-                <SortHeader column="judge" sort={runSort}>Judged by</SortHeader>
+                <SortHeader column="judge" sort={runSort}>Judge</SortHeader>
                 <th />
               </tr>
             </thead>
