@@ -41,6 +41,8 @@ type Run = {
   iterations: number;
   error: string | null;
   batch_id: string | null;
+  queued_at?: string;
+  completed_at?: string | null;
   results?: ResultEntry[];
 };
 
@@ -71,6 +73,26 @@ const STATUS: Record<string, { label: string; cls: string; hint?: string }> = {
   cancelled: { label: "Cancelled", cls: "muted" },
 };
 
+// A run's age is half of what "last run: passed" means — green from ten minutes
+// ago and green from before the last three deploys are different claims. Short
+// form in the cell, full ISO in the tooltip, because a date nobody can hover is
+// still ambiguous about the year.
+function when(iso?: string | null) {
+  if (!iso) return { short: "—", full: "" };
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return { short: "—", full: iso };
+  return { short: d.toLocaleString(), full: d.toISOString() };
+}
+
+function RunWhen({ run }: { run: Run }) {
+  const t = when(run.completed_at || run.queued_at);
+  return (
+    <span className="muted" title={t.full} data-testid="run-when">
+      {t.short}
+    </span>
+  );
+}
+
 function StatusBadge({ status }: { status: string }) {
   const s = STATUS[status] || { label: status, cls: "muted" };
   return (
@@ -91,6 +113,9 @@ function RunRow({ run, onOpen }: { run: Run; onOpen: (r: Run) => void }) {
         {isTerminal(run.status) && run.status !== "errored"
           ? `${run.passed_count}/${run.iterations}`
           : "—"}
+      </td>
+      <td>
+        <RunWhen run={run} />
       </td>
       <td>
         <button className="btn btn-sm" onClick={() => onOpen(run)}>
@@ -202,12 +227,28 @@ export default function EvalsTab() {
     }
   }
 
-  // Every scenario at once: one batch, one verdict. The tag has to exist on the
-  // scenarios for TurnCall to fan out, so this runs them by id instead — the
-  // batch grouping is TurnCall's, and #17 will add tag-based sets.
+  // Every scenario at once. One request per scenario, because a fan-out needs a
+  // tag every scenario carries and "all of them" is not a tag — so these are N
+  // runs that do not share a batch id.
   const runAll = async () => {
     for (const s of scenarios || []) await run({ scenario_id: s.id });
   };
+
+  // A subset, by tag. This one *is* a fan-out: TurnCall queues a run per
+  // matching scenario under a single batch id, so the group has one verdict the
+  // way a CI job does — which is the whole reason to group rather than click
+  // several rows. Refused server-side if the tag matches nothing, or more
+  // scenarios than one request may queue.
+  const runTag = (tag: string) => run({ tag });
+
+  // Tags as the scenarios define them, each with how many it would run. Sorted
+  // so the row does not reshuffle when a scenario is edited.
+  const tagGroups = Object.entries(
+    (scenarios || []).reduce<Record<string, number>>((acc, s) => {
+      for (const t of s.tags) acc[t] = (acc[t] || 0) + 1;
+      return acc;
+    }, {}),
+  ).sort(([a], [b]) => a.localeCompare(b));
 
   const latestFor = (scenarioId: string) =>
     runs.find((r) => r.scenario_id === scenarioId);
@@ -257,6 +298,18 @@ export default function EvalsTab() {
                 {busy ? "Starting…" : `Run all (${scenarios.length})`}
               </button>
             )}
+            {editable &&
+              tagGroups.map(([tag, count]) => (
+                <button
+                  key={tag}
+                  className="btn btn-sm"
+                  onClick={() => runTag(tag)}
+                  disabled={busy}
+                  title={`Run the ${count} scenario(s) tagged ${tag}, as one batch`}
+                >
+                  Run {tag} ({count})
+                </button>
+              ))}
             {inFlight && <span className="muted">Runs in progress…</span>}
           </div>
 
@@ -266,6 +319,7 @@ export default function EvalsTab() {
                 <th>Scenario</th>
                 <th>Last run</th>
                 <th>Passed</th>
+                <th>When</th>
                 <th />
               </tr>
             </thead>
@@ -286,6 +340,7 @@ export default function EvalsTab() {
                         ? `${last.passed_count}/${last.iterations}`
                         : "—"}
                     </td>
+                    <td>{last ? <RunWhen run={last} /> : <span className="muted">—</span>}</td>
                     <td>
                       {editable && (
                         <button
@@ -330,6 +385,7 @@ export default function EvalsTab() {
                 <th>Scenario</th>
                 <th>Status</th>
                 <th>Passed</th>
+                <th>When</th>
                 <th />
               </tr>
             </thead>

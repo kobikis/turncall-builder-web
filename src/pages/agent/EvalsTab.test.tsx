@@ -194,3 +194,85 @@ it("a viewer is offered no way to change a scenario", async () => {
   await waitFor(() => expect(screen.getByText("asks-for-the-reference")).toBeDefined());
   expect(screen.queryByText("Edit")).toBeNull();
 });
+
+// Dates and tag groups (turncall#68's batch fan-out, surfaced here).
+//
+// The date is not decoration: "last run: passed" means something different
+// depending on whether it was ten minutes ago or before the last three
+// deploys. The tag group is not a convenience either — it is the one path that
+// produces a *batch*, which is how a group gets a single verdict.
+
+it("shows when a run happened, not only that it did", async () => {
+  runs = [run({ completed_at: "2026-09-20T13:10:29Z", queued_at: "2026-09-20T13:09:00Z" })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getAllByTestId("run-when").length).toBeGreaterThan(0));
+  const cell = screen.getAllByTestId("run-when")[0];
+  expect(cell.textContent).not.toBe("—");
+  // The tooltip is unambiguous even where the short form is not.
+  expect(cell.getAttribute("title")).toBe("2026-09-20T13:10:29.000Z");
+});
+
+it("prefers when the run finished over when it was queued", async () => {
+  runs = [run({ queued_at: "2026-09-20T13:00:00Z", completed_at: "2026-09-20T13:10:00Z" })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getAllByTestId("run-when").length).toBeGreaterThan(0));
+  expect(screen.getAllByTestId("run-when")[0].getAttribute("title")).toBe(
+    "2026-09-20T13:10:00.000Z",
+  );
+});
+
+it("a run still going shows when it was queued", async () => {
+  runs = [run({ status: "running", completed_at: null, queued_at: "2026-09-20T13:00:00Z" })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getAllByTestId("run-when").length).toBeGreaterThan(0));
+  expect(screen.getAllByTestId("run-when")[0].getAttribute("title")).toBe(
+    "2026-09-20T13:00:00.000Z",
+  );
+});
+
+it("an older run without timestamps renders a dash, not 'Invalid Date'", async () => {
+  runs = [run({ queued_at: undefined, completed_at: undefined })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getAllByTestId("run-when").length).toBeGreaterThan(0));
+  expect(screen.getAllByTestId("run-when")[0].textContent).toBe("—");
+});
+
+it("offers a run button per tag, counting what it would run", async () => {
+  scenarios = [
+    scenario({ id: "s1", name: "one", tags: ["pre-publish"] }),
+    scenario({ id: "s2", name: "two", tags: ["pre-publish", "nightly"] }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText(/Run pre-publish \(2\)/)).toBeDefined());
+  expect(screen.getByText(/Run nightly \(1\)/)).toBeDefined();
+});
+
+it("a tag group is one request, so TurnCall fans it out under one batch", async () => {
+  scenarios = [
+    scenario({ id: "s1", name: "one", tags: ["pre-publish"] }),
+    scenario({ id: "s2", name: "two", tags: ["pre-publish"] }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText(/Run pre-publish \(2\)/)).toBeDefined());
+  calls.length = 0;
+  fireEvent.click(screen.getByText(/Run pre-publish \(2\)/));
+  await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
+  const posts = calls.filter((c) => c.method === "POST");
+  expect(posts.length).toBe(1);
+  expect(JSON.parse(String(posts[0].body))).toEqual({ tag: "pre-publish" });
+});
+
+it("a viewer is offered no tag buttons either", async () => {
+  role = "viewer";
+  scenarios = [scenario({ tags: ["pre-publish"] })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("asks-for-the-reference")).toBeDefined());
+  expect(screen.queryByText(/Run pre-publish/)).toBeNull();
+});
+
+it("scenarios with no tags offer no group buttons, rather than an empty one", async () => {
+  scenarios = [scenario({ tags: [] })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("asks-for-the-reference")).toBeDefined());
+  expect(screen.queryByText(/^Run \(/)).toBeNull();
+});
