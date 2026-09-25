@@ -591,3 +591,60 @@ it("a scenario that has never run says only that it inherits", async () => {
   await waitFor(() => expect(screen.getByTestId("scenario-judge")).toBeTruthy());
   expect(screen.getByTestId("scenario-judge").textContent).toContain("Platform default");
 });
+
+// --- the model under test ----------------------------------------------------
+//
+// The judge decides the verdict; the agent's own LLM is what the verdict is
+// *about*. A run naming neither cannot be compared with the next one.
+
+const CASCADE = {
+  pipeline_mode: "cascade",
+  llm: { provider: "openai", model: "gpt-4o-mini", temperature: 0.7 },
+};
+
+it("names the model the agent answered with, on the row", async () => {
+  runs = [run({ resolved_config: CASCADE })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByTestId("run-model")).toBeTruthy());
+  expect(screen.getByTestId("run-model").textContent).toBe("gpt-4o-mini");
+  expect(screen.getByTestId("run-model").getAttribute("title")).toContain("temperature 0.7");
+});
+
+it("spells the whole thing out in the details, with the agent version", async () => {
+  runs = [run({ resolved_config: CASCADE, agent_version: 3 })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getAllByText("Details").length).toBeGreaterThan(0));
+  fireEvent.click(screen.getAllByText("Details")[0]);
+  const line = screen.getByTestId("ran-against").textContent || "";
+  expect(line).toContain("OpenAI · gpt-4o-mini");
+  expect(line).toContain("agent v3");
+});
+
+it("reads an S2S agent's model from its s2s block, not from an llm it has none of", async () => {
+  runs = [
+    run({
+      resolved_config: {
+        pipeline_mode: "s2s",
+        s2s: { provider: "google", model: "gemini-3.8-live" },
+      },
+    }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByTestId("run-model")).toBeTruthy());
+  expect(screen.getByTestId("run-model").textContent).toBe("gemini-3.8-live");
+});
+
+it("an unnamed model reads as the provider's default, not as unknown", async () => {
+  // Empty is a real answer: TurnCall resolves the house model at build time.
+  runs = [run({ resolved_config: { pipeline_mode: "cascade", llm: { provider: "openai" } } })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByTestId("run-model")).toBeTruthy());
+  expect(screen.getByTestId("run-model").textContent).toContain("default model");
+});
+
+it("a run with no config snapshot shows a dash", async () => {
+  runs = [run()];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByTestId("run-model")).toBeTruthy());
+  expect(screen.getByTestId("run-model").textContent).toBe("—");
+});

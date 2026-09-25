@@ -4,7 +4,7 @@ import { useAuth } from "../../auth";
 import { canEdit } from "../../roles";
 import { usePoll } from "../../usePoll";
 import ScenarioEditor from "./ScenarioEditor";
-import { effectiveJudge, heardThrough, judgedBy, type JudgeBlock } from "./judge";
+import { agentModel, effectiveJudge, heardThrough, judgedBy, type JudgeBlock } from "./judge";
 import { SortHeader, useSort } from "./sorting";
 import { useAgent } from "./AgentPage";
 
@@ -53,6 +53,11 @@ type Run = {
   // comparable across time without it — a provider-side model update moves the
   // whole baseline silently.
   harness_config?: Record<string, unknown>;
+  // The agent exactly as it ran — which is not the agent's config today. The
+  // model under test lives here; the one that judged it lives in
+  // `harness_config`, and a result needs both to stay comparable.
+  resolved_config?: Record<string, unknown>;
+  agent_version?: number | null;
   // Things the author needs to know that are not verdicts: a mock keyed to a
   // tool this run cannot call, a judge that changed since the last verdict.
   warnings?: { code: string; message: string }[];
@@ -143,6 +148,9 @@ function RunRow({ run, onOpen }: { run: Run; onOpen: (r: Run) => void }) {
       <td>
         <RunWhen run={run} />
       </td>
+      <td className="muted" data-testid="run-model" title={agentModel(run.resolved_config)?.full}>
+        {agentModel(run.resolved_config)?.short || "—"}
+      </td>
       <td className="muted" data-testid="run-judge">
         {judgedBy(run.harness_config) || "—"}
       </td>
@@ -166,6 +174,12 @@ function RunDetail({ run, onClose }: { run: Run; onClose: () => void }) {
           Close
         </button>
       </div>
+      {agentModel(run.resolved_config) && (
+        <p className="muted" style={{ margin: "6px 0 0" }} data-testid="ran-against">
+          Ran against {agentModel(run.resolved_config)?.full}
+          {run.agent_version ? ` (agent v${run.agent_version})` : ""}
+        </p>
+      )}
       {judgedBy(run.harness_config) && (
         <p className="muted" style={{ margin: "6px 0 0" }} data-testid="judged-by">
           Judged by {judgedBy(run.harness_config)}
@@ -327,6 +341,7 @@ export default function EvalsTab() {
       if (key === "status") return r.status;
       if (key === "passed") return r.passed_count / Math.max(r.iterations, 1);
       if (key === "judge") return judgedBy(r.harness_config) || "";
+      if (key === "model") return agentModel(r.resolved_config)?.short || "";
       if (key === "scenario") return r.scenario_name;
       return r.completed_at || r.queued_at || "";
     }
@@ -577,6 +592,10 @@ export default function EvalsTab() {
                 <SortHeader column="status" sort={runSort}>Status</SortHeader>
                 <SortHeader column="passed" sort={runSort}>Passed</SortHeader>
                 <SortHeader column="when" sort={runSort}>When</SortHeader>
+                {/* The model under test. A verdict is about one model
+                    answering one way; two rows produced by different ones are
+                    not comparable, and nothing else on the row says so. */}
+                <SortHeader column="model" sort={runSort}>Model</SortHeader>
                 {/* Which model decided it. A verdict is not comparable with
                     the one above it without this — a provider-side model
                     update moves the whole baseline and nothing else on the row
