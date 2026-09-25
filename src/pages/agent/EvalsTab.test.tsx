@@ -363,3 +363,58 @@ it("an agent with no scenarios is not shown an empty judge section", async () =>
   await waitFor(() => expect(screen.getByText("No scenarios yet.")).toBeTruthy());
   expect(screen.queryByTestId("judge-note")).toBeNull();
 });
+
+it("puts the judge on the recent runs rows, not only in the details", async () => {
+  // Comparing a run with the one above it is the whole point of the list, and
+  // two rows decided by different models are not comparable.
+  runs = [
+    run({
+      harness_config: {
+        judge_used: true,
+        judge_provider: "openai",
+        judge_model: "gpt-4o",
+        judge_temperature: 0,
+      },
+    }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByTestId("run-judge")).toBeTruthy());
+  expect(screen.getByTestId("run-judge").textContent).toContain("gpt-4o");
+  expect(screen.getByTestId("run-judge").textContent).toContain("temperature 0");
+});
+
+it("an older run with no snapshot shows a dash, not a blank cell", async () => {
+  runs = [run({ harness_config: undefined })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByTestId("run-judge")).toBeTruthy());
+  expect(screen.getByTestId("run-judge").textContent).toBe("—");
+});
+
+it("an audio run's details name the voice and the STT that produced them", async () => {
+  // When an audio run fails where a text run passed, this pair is usually the
+  // whole explanation (turncall#72).
+  runs = [
+    run({
+      harness_config: {
+        judge_used: true,
+        judge_provider: "ollama",
+        user_speech: { service: "kokoro", voice: "af_heart" },
+        bot_transcription: { service: "moonshine" },
+      },
+    }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getAllByText("Details").length).toBeGreaterThan(0));
+  fireEvent.click(screen.getAllByText("Details")[0]);
+  const line = screen.getByTestId("heard-through").textContent || "";
+  expect(line).toContain("kokoro af_heart");
+  expect(line).toContain("moonshine");
+});
+
+it("a text run says nothing about voices, because it built none", async () => {
+  runs = [run({ harness_config: { judge_used: true, judge_provider: "ollama" } })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getAllByText("Details").length).toBeGreaterThan(0));
+  fireEvent.click(screen.getAllByText("Details")[0]);
+  expect(screen.queryByTestId("heard-through")).toBeNull();
+});

@@ -89,3 +89,19 @@ export function judgedBy(harness?: Record<string, unknown> | null): string | nul
     temperature: harness.judge_temperature as number | null,
   });
 }
+
+/** The services an audio run put either side of the agent (turncall#72).
+ *
+ * A different TTS says the caller's line differently and a different STT
+ * mishears the reply differently, so when an audio run fails where a text run
+ * passed, this pair is usually the whole explanation. Null in text mode, where
+ * neither is built.
+ */
+export function heardThrough(harness?: Record<string, unknown> | null): string | null {
+  if (!harness) return null;
+  const speech = harness.user_speech as { service?: string; voice?: string } | null;
+  const stt = harness.bot_transcription as { service?: string } | null;
+  if (!speech && !stt) return null;
+  const said = speech ? [speech.service, speech.voice].filter(Boolean).join(" ") : "—";
+  return `Caller spoken by ${said}, agent transcribed by ${stt?.service || "—"}`;
+}
