@@ -154,18 +154,29 @@ function RunWarnings({ run }: { run: Run }) {
   );
 }
 
-// Passed out of iterations, when that is a fact and not a restatement.
+// Passed out of iterations — a qualifier on the verdict, not a fact of its own.
 //
 // TurnCall has no score column on purpose: a run reports passed/failed out of
 // its iterations, and a scripted 1/1 and a simulation 7/10 are one
-// representation read twice. But at one iteration the fraction says exactly
-// what the status beside it already says, so the column is only noise on the
-// runs most people do. It earns its place the moment a persona is run ten
-// times and 7/10 is the entire result.
+// representation read twice. At a single iteration the fraction restates the
+// badge, so it is left out; from two up, "Failed 7/10" is the whole result and
+// belongs beside the word it qualifies rather than in a column that is empty
+// on every other row.
 function passedOf(run: Run | undefined): string {
-  if (!run || !isTerminal(run.status) || run.status === "errored") return "—";
-  if (run.iterations <= 1) return "—";
+  if (!run || !isTerminal(run.status) || run.status === "errored") return "";
+  if (run.iterations <= 1) return "";
   return `${run.passed_count}/${run.iterations}`;
+}
+
+function Verdict({ run }: { run: Run | undefined }) {
+  if (!run) return <span className="muted">never</span>;
+  const count = passedOf(run);
+  return (
+    <>
+      <StatusBadge status={run.status} />
+      {count && <span className="muted"> {count}</span>}
+    </>
+  );
 }
 
 function RunRow({ run, onOpen }: { run: Run; onOpen: (r: Run) => void }) {
@@ -173,10 +184,9 @@ function RunRow({ run, onOpen }: { run: Run; onOpen: (r: Run) => void }) {
     <tr>
       <td>{run.scenario_name}</td>
       <td>
-        <StatusBadge status={run.status} />
+        <Verdict run={run} />
         <RunWarnings run={run} />
       </td>
-      <td className="muted">{passedOf(run)}</td>
       <td>
         <RunWhen run={run} />
       </td>
@@ -359,7 +369,6 @@ export default function EvalsTab() {
       const last = latestFor(s.id);
       if (key === "judge") return effectiveJudge(s.judge, last?.harness_config).label;
       if (key === "status") return last?.status || "";
-      if (key === "passed") return last ? last.passed_count / Math.max(last.iterations, 1) : -1;
       if (key === "when") return last?.completed_at || last?.queued_at || "";
       return s.name;
     }
@@ -371,7 +380,6 @@ export default function EvalsTab() {
     ),
     (r, key) => {
       if (key === "status") return r.status;
-      if (key === "passed") return r.passed_count / Math.max(r.iterations, 1);
       if (key === "judge") return judgedBy(r.harness_config) || "";
       if (key === "model") return agentModel(r.resolved_config)?.short || "";
       if (key === "scenario") return r.scenario_name;
@@ -490,7 +498,6 @@ export default function EvalsTab() {
                 <SortHeader column="name" sort={scenarioSort}>Scenario</SortHeader>
                 <SortHeader column="judge" sort={scenarioSort}>Judge</SortHeader>
                 <SortHeader column="status" sort={scenarioSort}>Last run</SortHeader>
-                <SortHeader column="passed" sort={scenarioSort}>Passed</SortHeader>
                 <SortHeader column="when" sort={scenarioSort}>When</SortHeader>
                 <th />
               </tr>
@@ -545,8 +552,9 @@ export default function EvalsTab() {
                         );
                       })()}
                     </td>
-                    <td>{last ? <StatusBadge status={last.status} /> : <span className="muted">never</span>}</td>
-                    <td className="muted">{passedOf(last)}</td>
+                    <td>
+                      <Verdict run={last} />
+                    </td>
                     <td>{last ? <RunWhen run={last} /> : <span className="muted">—</span>}</td>
                     <td>
                       {last && (
@@ -618,7 +626,6 @@ export default function EvalsTab() {
               <tr>
                 <SortHeader column="scenario" sort={runSort}>Scenario</SortHeader>
                 <SortHeader column="status" sort={runSort}>Status</SortHeader>
-                <SortHeader column="passed" sort={runSort}>Passed</SortHeader>
                 <SortHeader column="when" sort={runSort}>When</SortHeader>
                 {/* The model under test. A verdict is about one model
                     answering one way; two rows produced by different ones are
