@@ -4,7 +4,7 @@ import { useAuth } from "../../auth";
 import { canEdit } from "../../roles";
 import { usePoll } from "../../usePoll";
 import ScenarioEditor from "./ScenarioEditor";
-import { judgeLabel, judgedBy, type JudgeBlock } from "./judge";
+import { heardThrough, judgeLabel, judgedBy, type JudgeBlock } from "./judge";
 import { useAgent } from "./AgentPage";
 
 // The agent's eval scenarios, and what happened last time they ran
@@ -142,6 +142,9 @@ function RunRow({ run, onOpen }: { run: Run; onOpen: (r: Run) => void }) {
       <td>
         <RunWhen run={run} />
       </td>
+      <td className="muted" data-testid="run-judge">
+        {judgedBy(run.harness_config) || "—"}
+      </td>
       <td>
         <button className="btn btn-sm" onClick={() => onOpen(run)}>
           Details
@@ -165,6 +168,11 @@ function RunDetail({ run, onClose }: { run: Run; onClose: () => void }) {
       {judgedBy(run.harness_config) && (
         <p className="muted" style={{ margin: "6px 0 0" }} data-testid="judged-by">
           Judged by {judgedBy(run.harness_config)}
+        </p>
+      )}
+      {heardThrough(run.harness_config) && (
+        <p className="muted" style={{ margin: "2px 0 0" }} data-testid="heard-through">
+          {heardThrough(run.harness_config)}
         </p>
       )}
       {(run.warnings || []).map((w) => (
@@ -447,6 +455,11 @@ export default function EvalsTab() {
                 <th>Status</th>
                 <th>Passed</th>
                 <th>When</th>
+                {/* Which model decided it. A verdict is not comparable with
+                    the one above it without this — a provider-side model
+                    update moves the whole baseline and nothing else on the row
+                    would say so (turncall#119). */}
+                <th>Judged by</th>
                 <th />
               </tr>
             </thead>
