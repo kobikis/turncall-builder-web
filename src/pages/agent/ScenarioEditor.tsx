@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "../../api";
+import { INHERIT, PROVIDERS, takesTemperature, type JudgeBlock } from "./judge";
 
 // Editing a saved scenario (#20).
 //
@@ -21,6 +22,10 @@ export type EditableScenario = {
   tags: string[];
   definition: Record<string, unknown>;
   tool_mocks?: Record<string, unknown>;
+  // Null (or absent) means this scenario names no judge and takes whatever the
+  // platform runs — which is a different statement from "ollama", and the form
+  // keeps the two apart.
+  judge?: JudgeBlock | null;
 };
 
 export default function ScenarioEditor({
@@ -44,6 +49,25 @@ export default function ScenarioEditor({
   );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [provider, setProvider] = useState(scenario.judge?.provider || INHERIT);
+  const [judgeModel, setJudgeModel] = useState(scenario.judge?.model || "");
+  const [temperature, setTemperature] = useState(
+    scenario.judge?.temperature === null || scenario.judge?.temperature === undefined
+      ? ""
+      : String(scenario.judge.temperature)
+  );
+  const warm = provider !== INHERIT && takesTemperature(provider, judgeModel);
+
+  function judgeBlock(): JudgeBlock | null {
+    if (provider === INHERIT) return null;
+    const block: JudgeBlock = { provider };
+    if (judgeModel.trim()) block.model = judgeModel.trim();
+    // Only when the model takes one. A number the provider rejects is dropped
+    // by TurnCall anyway; sending it would just make the saved scenario
+    // disagree with what runs.
+    if (warm && temperature.trim() !== "") block.temperature = Number(temperature);
+    return block;
+  }
 
   async function save() {
     setError("");
@@ -76,6 +100,10 @@ export default function ScenarioEditor({
             .split(",")
             .map((t) => t.trim())
             .filter(Boolean),
+          // Sent every save, null included: null is what takes a scenario back
+          // to the platform default, and omitting it would leave a judge
+          // permanent once one was picked (turncall#122).
+          judge: judgeBlock(),
         }),
       });
       onSaved();
@@ -150,6 +178,78 @@ export default function ScenarioEditor({
           What each tool returns on a rerun. A mock that has drifted from what
           the real tool now returns leaves the scenario passing while proving
           nothing.
+        </p>
+      </div>
+
+      <div className="field">
+        <label htmlFor="ed-judge">Judge</label>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <select
+            id="ed-judge"
+            className="input"
+            style={{ maxWidth: 220 }}
+            value={provider}
+            onChange={(e) => setProvider(e.target.value)}
+          >
+            <option value={INHERIT}>Platform default</option>
+            {PROVIDERS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+          {provider !== INHERIT && (
+            <input
+              className="input"
+              style={{ maxWidth: 240 }}
+              value={judgeModel}
+              autoComplete="off"
+              spellCheck={false}
+              aria-label="Judge model"
+              placeholder={PROVIDERS.find((p) => p.id === provider)?.defaultModel}
+              onChange={(e) => setJudgeModel(e.target.value)}
+            />
+          )}
+          {warm && (
+            <input
+              className="input"
+              style={{ maxWidth: 140 }}
+              value={temperature}
+              inputMode="decimal"
+              aria-label="Judge temperature"
+              placeholder="temperature"
+              onChange={(e) => setTemperature(e.target.value)}
+            />
+          )}
+        </div>
+        <p className="muted" style={{ fontSize: 12.5, margin: "4px 0 0" }}>
+          {provider === INHERIT ? (
+            <>
+              Whatever this TurnCall is configured to judge with — a local Ollama
+              unless someone set <code>EVAL_JUDGE_PROVIDER</code>. Pick a model here
+              to decide it for this scenario alone.
+            </>
+          ) : provider === "anthropic" ? (
+            <>
+              Claude rejects a temperature outright, so none is sent. Costs model
+              time on every <code>eval:</code> expectation and every simulation
+              turn scored.
+            </>
+          ) : !warm ? (
+            <>
+              OpenAI&apos;s reasoning models reject a temperature, so none is sent.
+              Costs model time on every <code>eval:</code> expectation and every
+              simulation turn scored.
+            </>
+          ) : (
+            <>
+              Decides <code>eval:</code> expectations and simulation verdicts —
+              <code>text_contains</code> is checked without a judge. A hosted one
+              costs model time on every such expectation and every simulation turn
+              scored. Leave the temperature empty for 0: a verdict that varies run
+              to run is not a verdict.
+            </>
+          )}
         </p>
       </div>
 

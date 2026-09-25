@@ -150,3 +150,83 @@ it("cancelling changes nothing", () => {
   expect(cancelled).toHaveBeenCalled();
   expect(calls.some((c) => c.method === "PUT")).toBe(false);
 });
+
+// --- the judge (turncall#118/#119, #26) -------------------------------------
+//
+// The judge decides `eval:` expectations and simulation verdicts. Two levels
+// exist — this scenario's block, or the platform default — and the form has to
+// keep them apart: a blank field that silently means "the default" is how the
+// wrong judge runs for a month.
+
+const openWith = (judge: unknown) =>
+  render(
+    <ScenarioEditor
+      agentId="a1"
+      scenario={{ ...SCENARIO, judge } as never}
+      onSaved={saved}
+      onCancel={cancelled}
+    />
+  );
+
+const body = () => JSON.parse(String(calls[calls.length - 1]?.body));
+
+it("a scenario naming no judge opens on the platform default, not on ollama", () => {
+  openWith(null);
+  expect((screen.getByLabelText("Judge") as HTMLSelectElement).value).toBe("");
+  expect(screen.getByText(/EVAL_JUDGE_PROVIDER/)).toBeTruthy();
+  // No model field to fill in: there is nothing to name until a provider is.
+  expect(screen.queryByLabelText("Judge model")).toBeNull();
+});
+
+it("opens on the judge the scenario actually names", () => {
+  openWith({ provider: "openai", model: "gpt-4o", temperature: 0 });
+  expect((screen.getByLabelText("Judge") as HTMLSelectElement).value).toBe("openai");
+  expect((screen.getByLabelText("Judge model") as HTMLInputElement).value).toBe("gpt-4o");
+  expect((screen.getByLabelText("Judge temperature") as HTMLInputElement).value).toBe("0");
+});
+
+it("saves the chosen judge as a typed block, never a dotted path", async () => {
+  openWith(null);
+  fireEvent.change(screen.getByLabelText("Judge"), { target: { value: "openai" } });
+  fireEvent.change(screen.getByLabelText("Judge model"), { target: { value: "gpt-4o" } });
+  fireEvent.change(screen.getByLabelText("Judge temperature"), { target: { value: "0.2" } });
+  fireEvent.click(screen.getByText("Save"));
+  await waitFor(() => expect(saved).toHaveBeenCalled());
+  expect(body().judge).toEqual({ provider: "openai", model: "gpt-4o", temperature: 0.2 });
+});
+
+it("sends an explicit null to go back to the platform default", async () => {
+  // Null is the instruction; omitting the field would leave the judge in place
+  // and the reader believing they had removed it (turncall#122).
+  openWith({ provider: "openai", model: "gpt-4o" });
+  fireEvent.change(screen.getByLabelText("Judge"), { target: { value: "" } });
+  fireEvent.click(screen.getByText("Save"));
+  await waitFor(() => expect(saved).toHaveBeenCalled());
+  expect(body().judge).toBeNull();
+});
+
+it("offers no temperature for a model that rejects one", () => {
+  // Claude answers 400 to a temperature, so TurnCall never sends one. A field
+  // accepting a number that goes nowhere is worse than no field.
+  openWith({ provider: "anthropic" });
+  expect(screen.queryByLabelText("Judge temperature")).toBeNull();
+  expect(screen.getByText(/Claude rejects a temperature/)).toBeTruthy();
+});
+
+it("drops the temperature for an OpenAI reasoning model too", () => {
+  openWith({ provider: "openai", model: "gpt-4o", temperature: 0.5 });
+  fireEvent.change(screen.getByLabelText("Judge model"), { target: { value: "o3-mini" } });
+  expect(screen.queryByLabelText("Judge temperature")).toBeNull();
+});
+
+it("says what a hosted judge costs where the choice is made", () => {
+  openWith({ provider: "openai" });
+  expect(screen.getByText(/costs model time/i)).toBeTruthy();
+});
+
+it("names the provider's own default model rather than inventing one", () => {
+  openWith({ provider: "openai" });
+  expect(
+    (screen.getByLabelText("Judge model") as HTMLInputElement).placeholder
+  ).toBe("gpt-4o-mini");
+});

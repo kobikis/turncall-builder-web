@@ -276,3 +276,90 @@ it("no longer offers a per-tag run button", async () => {
   expect(screen.getByText("pre-publish")).toBeDefined();
   expect(screen.queryByText(/Run pre-publish/)).toBeNull();
 });
+
+// --- who decided the verdict (turncall#118/#119, #26) -----------------------
+//
+// A verdict without its judge is not comparable across time: a provider-side
+// model update moves the whole baseline and nothing on the row says so. Two
+// things the tab has to show — which judge a scenario uses, and which one
+// actually decided a run.
+
+it("says which judge each scenario uses, and which inherit the default", async () => {
+  scenarios = [
+    scenario(),
+    scenario({ id: "s2", name: "books-a-table", judge: { provider: "openai", model: "gpt-4o" } }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("Platform default")).toBeTruthy());
+  expect(screen.getByText("OpenAI · gpt-4o")).toBeTruthy();
+});
+
+it("a viewer sees the judge and is offered no way to change it", async () => {
+  role = "viewer";
+  scenarios = [scenario({ judge: { provider: "openai", model: "gpt-4o" } })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("OpenAI · gpt-4o")).toBeTruthy());
+  expect(screen.queryByText("Edit")).toBeNull();
+});
+
+it("names the judge that decided a run, in its details", async () => {
+  runs = [
+    run({
+      harness_config: {
+        judge_used: true,
+        judge_provider: "openai",
+        judge_model: "gpt-4o",
+        judge_temperature: 0,
+      },
+    }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getAllByText("Details").length).toBeGreaterThan(0));
+  fireEvent.click(screen.getAllByText("Details")[0]);
+  expect(screen.getByTestId("judged-by").textContent).toContain("OpenAI · gpt-4o");
+  expect(screen.getByTestId("judged-by").textContent).toContain("temperature 0");
+});
+
+it("does not name a judge that was never asked anything", async () => {
+  // Pipecat fills its default judge in whether or not one is ever built, so a
+  // scenario of plain text_contains would otherwise credit a model that never
+  // ran — which is the same lie as a policy that was never enforced.
+  runs = [run({ harness_config: { judge_used: false, judge_service: "ollama" } })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getAllByText("Details").length).toBeGreaterThan(0));
+  fireEvent.click(screen.getAllByText("Details")[0]);
+  expect(screen.getByTestId("judged-by").textContent).toContain("No judge was asked");
+});
+
+it("flags a run whose judge changed, distinctly from a failure", async () => {
+  runs = [
+    run({
+      status: "failed",
+      warnings: [
+        {
+          code: "judge_changed",
+          message: "judge_model 'gemma3' -> 'gpt-4o'",
+        },
+      ],
+    }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByTestId("judge-changed")).toBeTruthy());
+  // A note, not a verdict: the failure still reads as a failure on its own.
+  expect(screen.getByTestId("judge-changed").className).not.toContain("error");
+  expect(screen.getByTestId("judge-changed").getAttribute("title")).toContain("gpt-4o");
+});
+
+it("a run with nothing to warn about shows no flag", async () => {
+  runs = [run()];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getAllByText("Details").length).toBeGreaterThan(0));
+  expect(screen.queryByTestId("judge-changed")).toBeNull();
+});
+
+it("an agent with no scenarios is not shown an empty judge section", async () => {
+  scenarios = [];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("No scenarios yet.")).toBeTruthy());
+  expect(screen.queryByTestId("judge-note")).toBeNull();
+});
