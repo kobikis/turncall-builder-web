@@ -690,19 +690,18 @@ it("shows every warning on a run, not only the first", async () => {
 });
 
 it("does not restate a one-iteration verdict as a fraction", async () => {
-  // "1/1" beside "Passed" says nothing the badge did not. The column exists
-  // for the case below, not for the runs most people do.
+  // "1/1" beside "Passed" says nothing the badge did not.
   runs = [run({ status: "passed", passed_count: 1, iterations: 1 })];
   render(<EvalsTab />);
-  await waitFor(() => expect(screen.getAllByText("Passed").length).toBeGreaterThan(0));
-  expect(names("tbody tr td:nth-child(3)")[0]).toBe("—");
+  await waitFor(() => expect(screen.getAllByText(/Passed/).length).toBeGreaterThan(0));
+  expect(names("tbody tr td:nth-child(2)")[0]).toBe("Passed");
 });
 
-it("counts a multi-iteration run, where the fraction is the whole result", async () => {
+it("counts a multi-iteration run beside the verdict it qualifies", async () => {
   // A persona does not say the same thing twice, so 7/10 is the result — and
   // TurnCall has no score column precisely because this is it.
   runs = [run({ status: "failed", passed_count: 7, iterations: 10 })];
   render(<EvalsTab />);
-  await waitFor(() => expect(screen.getAllByText("Failed").length).toBeGreaterThan(0));
-  expect(names("tbody tr td:nth-child(3)")[0]).toBe("7/10");
+  await waitFor(() => expect(screen.getAllByText(/Failed/).length).toBeGreaterThan(0));
+  expect(names("tbody tr td:nth-child(2)")[0]).toContain("7/10");
 });
