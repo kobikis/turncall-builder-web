@@ -382,8 +382,13 @@ it("puts the judge on the recent runs rows, not only in the details", async () =
   ];
   render(<EvalsTab />);
   await waitFor(() => expect(screen.getByTestId("run-judge")).toBeTruthy());
-  expect(screen.getByTestId("run-judge").textContent).toContain("gpt-4o");
-  expect(screen.getByTestId("run-judge").textContent).toContain("temperature 0");
+  // The model alone in the cell, as in the Agent column beside it; the
+  // provider and temperature are what the tooltip is for. Spelled out, this
+  // column wrapped every row of the table in two.
+  expect(screen.getByTestId("run-judge").textContent).toBe("gpt-4o");
+  const tip = screen.getByTestId("run-judge").getAttribute("title") || "";
+  expect(tip).toContain("OpenAI");
+  expect(tip).toContain("temperature 0");
 });
 
 it("an older run with no snapshot shows a dash, not a blank cell", async () => {
