@@ -230,3 +230,26 @@ it("names the provider's own default model rather than inventing one", () => {
     (screen.getByLabelText("Judge model") as HTMLInputElement).placeholder
   ).toBe("gpt-4o-mini");
 });
+
+it("offers the known models to pick from, and still takes a typed one", () => {
+  // A datalist rather than a select: the shortlist is a convenience, not a
+  // closed set. A provider ships a new model long before this list hears about
+  // it, and an Ollama model is whatever that box serves.
+  openWith({ provider: "openai" });
+  const field = screen.getByLabelText("Judge model") as HTMLInputElement;
+  const list = document.getElementById(field.getAttribute("list") as string);
+  expect([...(list as HTMLDataListElement).options].map((o) => o.value)).toContain(
+    "gpt-4o-mini"
+  );
+  fireEvent.change(field, { target: { value: "some-model-we-never-heard-of" } });
+  expect(field.value).toBe("some-model-we-never-heard-of");
+});
+
+it("offers Claude's models when the provider is Anthropic", () => {
+  openWith({ provider: "anthropic" });
+  const field = screen.getByLabelText("Judge model") as HTMLInputElement;
+  const list = document.getElementById(field.getAttribute("list") as string);
+  expect([...(list as HTMLDataListElement).options].map((o) => o.value)).toContain(
+    "claude-haiku-4-5-20251001"
+  );
+});

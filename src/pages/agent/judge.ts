@@ -18,10 +18,30 @@ export type JudgeBlock = {
 
 // Matches TurnCall's allowlist. Each name maps to a factory TurnCall ships;
 // there is no "other", by design.
+// `models` is a shortlist to pick from, not a closed set — the field stays
+// typeable, because a provider ships a new model long before this list hears
+// about it, and an Ollama model is whatever that box happens to serve. These
+// are the ones TurnCall itself names: its per-provider defaults, and the house
+// models its agent config already documents.
 export const PROVIDERS = [
-  { id: "ollama", label: "Ollama (local)", defaultModel: "the model your Ollama serves" },
-  { id: "openai", label: "OpenAI", defaultModel: "gpt-4o-mini" },
-  { id: "anthropic", label: "Anthropic", defaultModel: "claude-haiku-4-5-20251001" },
+  {
+    id: "ollama",
+    label: "Ollama (local)",
+    defaultModel: "the model your Ollama serves",
+    models: [],
+  },
+  {
+    id: "openai",
+    label: "OpenAI",
+    defaultModel: "gpt-4o-mini",
+    models: ["gpt-4o-mini", "gpt-4o"],
+  },
+  {
+    id: "anthropic",
+    label: "Anthropic",
+    defaultModel: "claude-haiku-4-5-20251001",
+    models: ["claude-haiku-4-5-20251001", "claude-sonnet-5"],
+  },
 ];
 
 export const INHERIT = "";

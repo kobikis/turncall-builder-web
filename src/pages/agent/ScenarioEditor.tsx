@@ -199,16 +199,28 @@ export default function ScenarioEditor({
             ))}
           </select>
           {provider !== INHERIT && (
-            <input
-              className="input"
-              style={{ maxWidth: 240 }}
-              value={judgeModel}
-              autoComplete="off"
-              spellCheck={false}
-              aria-label="Judge model"
-              placeholder={PROVIDERS.find((p) => p.id === provider)?.defaultModel}
-              onChange={(e) => setJudgeModel(e.target.value)}
-            />
+            <>
+              {/* A picker that is still a text field: `list` gives the known
+                  models one click, and typing still works — a provider ships a
+                  new model long before this list hears about it, and an Ollama
+                  model is whatever that box serves. */}
+              <input
+                className="input"
+                style={{ maxWidth: 260 }}
+                value={judgeModel}
+                autoComplete="off"
+                spellCheck={false}
+                aria-label="Judge model"
+                list={`ed-judge-models-${provider}`}
+                placeholder={PROVIDERS.find((p) => p.id === provider)?.defaultModel}
+                onChange={(e) => setJudgeModel(e.target.value)}
+              />
+              <datalist id={`ed-judge-models-${provider}`}>
+                {(PROVIDERS.find((p) => p.id === provider)?.models || []).map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
+            </>
           )}
           {warm && (
             <input
