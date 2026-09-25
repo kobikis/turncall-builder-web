@@ -4,7 +4,15 @@ import { useAuth } from "../../auth";
 import { canEdit } from "../../roles";
 import { usePoll } from "../../usePoll";
 import ScenarioEditor from "./ScenarioEditor";
-import { agentModel, effectiveJudge, heardThrough, judgedBy, type JudgeBlock } from "./judge";
+import {
+  agentModel,
+  effectiveJudge,
+  heardThrough,
+  judgedBy,
+  judgedByShort,
+  NOT_ASKED,
+  type JudgeBlock,
+} from "./judge";
 import { SortHeader, useSort } from "./sorting";
 import { useAgent } from "./AgentPage";
 
@@ -98,7 +106,18 @@ function when(iso?: string | null) {
   if (!iso) return { short: "—", full: "" };
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return { short: "—", full: iso };
-  return { short: d.toLocaleString(), full: d.toISOString() };
+  // No seconds and no year: a full locale string is the widest thing in the
+  // table and wraps every row in two. Seconds never decided anything here, and
+  // the tooltip is exact for when they do.
+  return {
+    short: d.toLocaleString(undefined, {
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }),
+    full: d.toISOString(),
+  };
 }
 
 function RunWhen({ run }: { run: Run }) {
@@ -187,16 +206,16 @@ function RunRow({ run, onOpen }: { run: Run; onOpen: (r: Run) => void }) {
         <Verdict run={run} />
         <RunWarnings run={run} />
       </td>
-      <td>
+      <td className="nowrap">
         <RunWhen run={run} />
       </td>
       <td className="muted" data-testid="run-model" title={agentModel(run.resolved_config)?.full}>
         {agentModel(run.resolved_config)?.short || "—"}
       </td>
-      <td className="muted" data-testid="run-judge">
-        {judgedBy(run.harness_config) || "—"}
+      <td className="muted" data-testid="run-judge" title={judgedBy(run.harness_config) || ""}>
+        {judgedByShort(run.harness_config) || "—"}
       </td>
-      <td>
+      <td className="nowrap">
         <button className="btn btn-sm" onClick={() => onOpen(run)}>
           Details
         </button>
@@ -482,7 +501,7 @@ export default function EvalsTab() {
             {inFlight && <span className="muted">Runs in progress…</span>}
           </div>
 
-          <table className="table" data-testid="scenarios-table">
+          <table className="list" data-testid="scenarios-table">
             <thead>
               <tr>
                 <th>
@@ -517,7 +536,7 @@ export default function EvalsTab() {
                         />
                       )}
                     </td>
-                    <td>
+                    <td className="nowrap">
                       {s.name}
                       {s.tags.map((t) => (
                         <span key={t} className="chip" style={{ marginLeft: 6 }}>{t}</span>
@@ -537,7 +556,10 @@ export default function EvalsTab() {
                           return (
                             <span
                               className="muted"
-                              title="Inherited from the platform — this is what decided the last run, and it changes if the platform default does"
+                              title={
+                                (j.label === "Not asked" ? NOT_ASKED + ". " : "") +
+                                "Inherited from the platform — this is what decided the last run, and it changes if the platform default does"
+                              }
                             >
                               {j.label} <em>(inherited)</em>
                             </span>
@@ -555,8 +577,10 @@ export default function EvalsTab() {
                     <td>
                       <Verdict run={last} />
                     </td>
-                    <td>{last ? <RunWhen run={last} /> : <span className="muted">—</span>}</td>
-                    <td>
+                    <td className="nowrap">
+                      {last ? <RunWhen run={last} /> : <span className="muted">—</span>}
+                    </td>
+                    <td className="nowrap">
                       {last && (
                         <button className="btn btn-sm" onClick={() => setOpen(last)}>
                           Details
@@ -621,7 +645,7 @@ export default function EvalsTab() {
               {visibleRuns.length} of {runs.length}
             </span>
           </div>
-          <table className="table" data-testid="runs-table">
+          <table className="list" data-testid="runs-table">
             <thead>
               <tr>
                 <SortHeader column="scenario" sort={runSort}>Scenario</SortHeader>

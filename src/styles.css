@@ -277,6 +277,10 @@ table.list th {
   border-bottom: 1px solid var(--border);
 }
 table.list td { padding: 11px 14px; border-bottom: 1px solid var(--border); }
+/* A header is two or three words; wrapping one buys nothing and costs the row
+   its second line. Cells opt in, because a cell can hold a sentence. */
+table.list th { white-space: nowrap; }
+table.list .nowrap { white-space: nowrap; }
 table.list tr:last-child td { border-bottom: none; }
 table.list tr:hover td { background: var(--row-hover); }
 td.muted, .muted { color: var(--text-muted); }

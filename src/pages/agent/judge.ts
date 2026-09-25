@@ -74,13 +74,13 @@ export function takesTemperature(provider: string, model: string): boolean {
   return !REASONING.some((prefix) => name.startsWith(prefix));
 }
 
-/** What decided a run, read back from its harness snapshot. */
-export function judgedBy(harness?: Record<string, unknown> | null): string | null {
-  if (!harness) return null;
-  // Pipecat fills its default judge in whether or not one is ever asked
-  // anything, so a scenario of plain `text_contains` would otherwise report a
-  // model that never ran. TurnCall records which of the two it was.
-  if (harness.judge_used === false) return "No judge was asked — every expectation was checked directly";
+// Pipecat fills its default judge in whether or not one is ever asked anything,
+// so a scenario of plain `text_contains` would otherwise report a model that
+// never ran — the same lie as a policy that was never enforced. TurnCall
+// records which of the two it was, and this is the sentence for it.
+export const NOT_ASKED = "No judge was asked — every expectation was checked directly";
+
+function judgeFromHarness(harness: Record<string, unknown>): string | null {
   const provider = (harness.judge_provider || harness.judge_service) as string | undefined;
   if (!provider) return null;
   return judgeLabel({
@@ -88,6 +88,22 @@ export function judgedBy(harness?: Record<string, unknown> | null): string | nul
     model: harness.judge_model as string | null,
     temperature: harness.judge_temperature as number | null,
   });
+}
+
+/** What decided a run, read back from its harness snapshot. For the details
+ *  panel, which has a line to spend on saying why there is no model. */
+export function judgedBy(harness?: Record<string, unknown> | null): string | null {
+  if (!harness) return null;
+  if (harness.judge_used === false) return NOT_ASKED;
+  return judgeFromHarness(harness);
+}
+
+/** The same answer for a table cell, which has no line to spend: a sentence in
+ *  a column widens it until every row wraps. */
+export function judgedByShort(harness?: Record<string, unknown> | null): string | null {
+  if (!harness) return null;
+  if (harness.judge_used === false) return "Not asked";
+  return judgeFromHarness(harness);
 }
 
 /** The services an audio run put either side of the agent (turncall#72).
@@ -121,7 +137,7 @@ export function effectiveJudge(
 ): { label: string; source: "scenario" | "last-run" | "unknown" } {
   const own = judgeLabel(judge);
   if (own) return { label: own, source: "scenario" };
-  const ran = judgedBy(lastRunHarness);
+  const ran = judgedByShort(lastRunHarness);
   if (ran) return { label: ran, source: "last-run" };
   return { label: "Platform default", source: "unknown" };
 }
