@@ -98,12 +98,23 @@ export function judgedBy(harness?: Record<string, unknown> | null): string | nul
   return judgeFromHarness(harness);
 }
 
-/** The same answer for a table cell, which has no line to spend: a sentence in
- *  a column widens it until every row wraps. */
-export function judgedByShort(harness?: Record<string, unknown> | null): string | null {
+/** The same answer for a column with room for a phrase: the sentence becomes
+ *  two words, and everything else is unchanged. */
+export function judgeOfRun(harness?: Record<string, unknown> | null): string | null {
   if (!harness) return null;
   if (harness.judge_used === false) return "Not asked";
   return judgeFromHarness(harness);
+}
+
+/** The model alone, for a narrow column — exactly as the Agent column beside
+ *  it names the model under test. Provider and temperature go to the tooltip:
+ *  "Anthropic · claude-haiku-4-5-20251001" does not fit the runs table, and
+ *  wrapped every row of it in two.
+ */
+export function judgedByShort(harness?: Record<string, unknown> | null): string | null {
+  if (!harness) return null;
+  if (harness.judge_used === false) return "Not asked";
+  return (harness.judge_model as string | undefined) || judgeFromHarness(harness);
 }
 
 /** The services an audio run put either side of the agent (turncall#72).
@@ -137,7 +148,7 @@ export function effectiveJudge(
 ): { label: string; source: "scenario" | "last-run" | "unknown" } {
   const own = judgeLabel(judge);
   if (own) return { label: own, source: "scenario" };
-  const ran = judgedByShort(lastRunHarness);
+  const ran = judgeOfRun(lastRunHarness);
   if (ran) return { label: ran, source: "last-run" };
   return { label: "Platform default", source: "unknown" };
 }

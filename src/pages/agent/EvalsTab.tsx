@@ -209,10 +209,10 @@ function RunRow({ run, onOpen }: { run: Run; onOpen: (r: Run) => void }) {
       <td className="nowrap">
         <RunWhen run={run} />
       </td>
-      <td className="muted" data-testid="run-model" title={agentModel(run.resolved_config)?.full}>
+      <td className="muted nowrap" data-testid="run-model" title={agentModel(run.resolved_config)?.full}>
         {agentModel(run.resolved_config)?.short || "—"}
       </td>
-      <td className="muted" data-testid="run-judge" title={judgedBy(run.harness_config) || ""}>
+      <td className="muted nowrap" data-testid="run-judge" title={judgedBy(run.harness_config) || ""}>
         {judgedByShort(run.harness_config) || "—"}
       </td>
       <td className="nowrap">
