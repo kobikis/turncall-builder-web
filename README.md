@@ -63,8 +63,12 @@ talking to it, Calls, Knowledge, Takeaways and **Evals** — saved behavioural
 scenarios with a one-click run and an inline verdict. A call that went wrong, or
 a text test you just ran, becomes a scenario draft with one button. Each
 scenario shows the model that judges it — its own, or the platform default it
-inherits — and each run names the judge that actually decided the verdict, so a
-scenario turning red can be told apart from a judge that changed underneath it.
+inherits — and each run names both models it involved: the **agent** that
+answered, and the **judge** that marked it. A scenario turning red is then a
+regression or a different examiner, and the row says which. Both tables sort and
+filter, and a run carries any warnings it earned — a judge that changed since
+the last verdict, a scenario nothing in which can fail, a worker older than the
+code it runs — as notes beside the status rather than as failures.
 
 `/integrations` is the other page: a workspace admin authorizes Slack or Google
 Calendar there, through the provider's own consent screen. Each agent then
