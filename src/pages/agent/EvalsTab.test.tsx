@@ -648,3 +648,61 @@ it("a run with no config snapshot shows a dash", async () => {
   await waitFor(() => expect(screen.getByTestId("run-model")).toBeTruthy());
   expect(screen.getByTestId("run-model").textContent).toBe("—");
 });
+
+it("shows a stale worker on the row, because the run itself looks ordinary", async () => {
+  // The case: a worker started before the feature a scenario depends on. The
+  // run succeeds and the verdict looks fine, while the thing being tested was
+  // never in the process (turncall#119).
+  runs = [
+    run({
+      warnings: [
+        { code: "worker_stale", message: "started at 05:59, code changed 08:36" },
+      ],
+    }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByTestId("worker-stale")).toBeTruthy());
+  expect(screen.getByTestId("worker-stale").textContent).toBe("Stale worker");
+  expect(screen.getByTestId("worker-stale").getAttribute("title")).toContain("08:36");
+});
+
+it("shows a warning it has never heard of rather than swallowing it", async () => {
+  // A code TurnCall adds later is worth seeing as "something to read" long
+  // before the Console learns its name.
+  runs = [run({ warnings: [{ code: "something_new", message: "read me" }] })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByTestId("something-new")).toBeTruthy());
+  expect(screen.getByTestId("something-new").textContent).toBe("Warning");
+});
+
+it("shows every warning on a run, not only the first", async () => {
+  runs = [
+    run({
+      warnings: [
+        { code: "judge_changed", message: "gemma3 -> gpt-4o" },
+        { code: "worker_stale", message: "restart it" },
+      ],
+    }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByTestId("judge-changed")).toBeTruthy());
+  expect(screen.getByTestId("worker-stale")).toBeTruthy();
+});
+
+it("does not restate a one-iteration verdict as a fraction", async () => {
+  // "1/1" beside "Passed" says nothing the badge did not. The column exists
+  // for the case below, not for the runs most people do.
+  runs = [run({ status: "passed", passed_count: 1, iterations: 1 })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getAllByText("Passed").length).toBeGreaterThan(0));
+  expect(names("tbody tr td:nth-child(3)")[0]).toBe("—");
+});
+
+it("counts a multi-iteration run, where the fraction is the whole result", async () => {
+  // A persona does not say the same thing twice, so 7/10 is the result — and
+  // TurnCall has no score column precisely because this is it.
+  runs = [run({ status: "failed", passed_count: 7, iterations: 10 })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getAllByText("Failed").length).toBeGreaterThan(0));
+  expect(names("tbody tr td:nth-child(3)")[0]).toBe("7/10");
+});
