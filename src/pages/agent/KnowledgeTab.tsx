@@ -216,7 +216,7 @@ export default function KnowledgeTab() {
 
       <div style={{ width: 320, display: "flex", flexDirection: "column" }}>
         <h3>Search documents</h3>
-        <p className="muted" style={{ fontSize: 12.5, marginTop: 0 }}>
+        <p className="hint" style={{ marginTop: 0 }}>
           Search the knowledge base to check a topic is covered and findable.
         </p>
         <div style={{ display: "flex", gap: 8 }}>

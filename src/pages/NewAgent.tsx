@@ -405,7 +405,7 @@ export default function NewAgent() {
             </div>
           ))}
           {busy && (
-            <div className="muted" style={{ fontSize: 12.5 }}>
+      <div className="hint">
               {progress.length === 0
                 ? "…"
                 : progress.map((line, i) => (
@@ -423,9 +423,10 @@ export default function NewAgent() {
             {stagedDocs.map((f) => (
               <span
                 key={f.name}
+                className="hint"
                 title={f.readable ? undefined : "Attached, but the builder can't read this one"}
                 style={{
-                  display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12.5,
+                  display: "inline-flex", alignItems: "center", gap: 4,
                   padding: "3px 6px 3px 10px", borderRadius: 14,
                   background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)",
                 }}
@@ -441,12 +442,12 @@ export default function NewAgent() {
                 </button>
               </span>
             ))}
-            {docMsg && <span aria-live="polite" className="muted" style={{ fontSize: 12.5 }}>{docMsg}</span>}
+      {docMsg && <span aria-live="polite" className="hint">{docMsg}</span>}
           </div>
         )}
         {builderProviders.length > 0 && (
           <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <label htmlFor="builder-provider" className="muted" style={{ fontSize: 12.5, flex: "0 0 auto" }}>
+            <label htmlFor="builder-provider" className="hint" style={{ flex: "0 0 auto" }}>
               Builder model
             </label>
             {/* .input is width:100% — override so the two selects share the row */}

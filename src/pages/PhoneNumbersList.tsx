@@ -96,7 +96,7 @@ export default function PhoneNumbersList() {
               <td className="num" style={{ fontWeight: 500 }}>{n.e164}</td>
               <td><Uid id={n.id} label="phone_number_id" /></td>
               <td>{ROUTING_LABELS[n.routing_type] || n.routing_type}</td>
-              <td style={{ fontSize: 12.5 }}>
+       <td className="hint">
                 {n.agent_id ? (
                   <Link to={`/agents/${n.agent_id}`}>
                     {names[n.agent_id] || `${n.agent_id.slice(0, 8)}…`}

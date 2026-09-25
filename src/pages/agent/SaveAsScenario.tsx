@@ -158,7 +158,7 @@ export default function SaveAsScenario({
           value={definition}
           onChange={(e) => setDefinition(e.target.value)}
         />
-        <p className="muted" style={{ fontSize: 12.5, margin: "4px 0 0" }}>
+        <p className="hint" style={{ margin: "4px 0 0" }}>
           Each <code>text_contains</code> currently holds everything the agent
           said. Cut it down to the part that actually matters, or the scenario
           will fail on any rewording.
@@ -174,12 +174,12 @@ export default function SaveAsScenario({
         )}
         {mocks.length > 0 && (
           <>
-            <p className="muted" style={{ fontSize: 12.5, margin: "0 0 4px" }}>
+            <p className="hint" style={{ margin: "0 0 4px" }}>
               What each tool returned on the call, and what it will return on a
               rerun — so running this scenario cannot repeat the call's side
               effects.
             </p>
-            <table className="table">
+            <table className="list">
               <tbody>
                 {mocks.map(([tool, response]) => (
                   <tr key={tool}>

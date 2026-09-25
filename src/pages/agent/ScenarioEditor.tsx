@@ -144,7 +144,7 @@ export default function ScenarioEditor({
           onChange={(e) => setTags(e.target.value)}
           placeholder="pre-publish, from-call"
         />
-        <p className="muted" style={{ fontSize: 12.5, margin: "4px 0 0" }}>
+        <p className="hint" style={{ margin: "4px 0 0" }}>
           Comma separated. Running a whole tag at once is how a pre-publish set
           gets one verdict.
         </p>
@@ -159,7 +159,7 @@ export default function ScenarioEditor({
           value={definition}
           onChange={(e) => setDefinition(e.target.value)}
         />
-        <p className="muted" style={{ fontSize: 12.5, margin: "4px 0 0" }}>
+        <p className="hint" style={{ margin: "4px 0 0" }}>
           Trim each <code>text_contains</code> to the part that actually
           matters — a scenario asserting a whole reply fails on any rewording.
         </p>
@@ -174,7 +174,7 @@ export default function ScenarioEditor({
           value={mocks}
           onChange={(e) => setMocks(e.target.value)}
         />
-        <p className="muted" style={{ fontSize: 12.5, margin: "4px 0 0" }}>
+        <p className="hint" style={{ margin: "4px 0 0" }}>
           What each tool returns on a rerun. A mock that has drifted from what
           the real tool now returns leaves the scenario passing while proving
           nothing.
@@ -234,7 +234,7 @@ export default function ScenarioEditor({
             />
           )}
         </div>
-        <p className="muted" style={{ fontSize: 12.5, margin: "4px 0 0" }}>
+        <p className="hint" style={{ margin: "4px 0 0" }}>
           {provider === INHERIT ? (
             <>
               Whatever this TurnCall is configured to judge with — a local Ollama

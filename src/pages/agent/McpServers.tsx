@@ -64,7 +64,7 @@ export function McpServers({ servers, editable, onChange }: Props) {
 
   return (
     <Section id="mcp" title="MCP servers" hint={servers.length || ""}>
-      <p className="muted" style={{ fontSize: 12.5, margin: "0 0 10px" }}>
+      <p className="hint" style={{ margin: "0 0 10px" }}>
         Tool servers the agent connects out to — Slack, a calendar, your own CRM.
         Their tools are discovered when a call starts and offered to the model
         alongside the agent's own.
@@ -134,7 +134,7 @@ export function McpServers({ servers, editable, onChange }: Props) {
                 update(i, { headers: parseHeaders(e.target.value) });
               }}
             />
-            <p className="muted" style={{ fontSize: 12.5, margin: "4px 0 0" }}>
+            <p className="hint" style={{ margin: "4px 0 0" }}>
               One per line, <code>Name: value</code>. Stored with the agent's
               configuration, which is not encrypted at rest — use a token scoped to
               what this agent needs.
@@ -155,7 +155,7 @@ export function McpServers({ servers, editable, onChange }: Props) {
         </button>
       )}
 
-      <p className="muted" style={{ fontSize: 12.5, margin: "8px 0 0" }}>
+      <p className="hint" style={{ margin: "8px 0 0" }}>
         A server the agent can't reach costs it those tools, not the call — discovery
         gives up after a few seconds and the agent starts without them.
       </p>

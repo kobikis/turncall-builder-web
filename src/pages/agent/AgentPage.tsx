@@ -101,7 +101,7 @@ export default function AgentPage() {
       <div className="page-head" style={{ marginBottom: 8 }}>
         <div>
           <h2>{name || "Agent"}</h2>
-          <p style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5 }}>
+          <p className="hint" style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <Uid id={id} label="agent_id" full />
             {backend && (
               <>

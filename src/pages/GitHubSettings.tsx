@@ -78,7 +78,7 @@ export default function GitHubSettings() {
           {expiry && (
             <p
               className={days !== null && days <= 14 ? "callout warn" : "muted"}
-              style={{ fontSize: 12.5, marginTop: 8 }}
+              style={{ marginTop: 8 }}
             >
               {days !== null && days < 0
                 ? "This token has expired — pushes are failing until you reconnect."
@@ -91,7 +91,7 @@ export default function GitHubSettings() {
           <button className="btn" disabled={busy} onClick={disconnect} style={{ marginTop: 10 }}>
             Disconnect
           </button>
-          <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>
+          <p className="hint" style={{ marginTop: 10 }}>
             Disconnecting stops pushes. Nothing is deleted on GitHub, and the
             repositories your agents are linked to stay exactly as they are.
           </p>
@@ -120,7 +120,7 @@ export default function GitHubSettings() {
             Connect
           </button>
 
-          <ol className="muted" style={{ fontSize: 12.5, marginTop: 14, paddingLeft: 18 }}>
+          <ol className="hint" style={{ marginTop: 14, paddingLeft: 18 }}>
             <li>
               <a href={TOKEN_URL} target="_blank" rel="noreferrer">
                 Create a fine-grained token
@@ -134,7 +134,7 @@ export default function GitHubSettings() {
             </li>
             <li>Generate it, copy it once, and paste it above.</li>
           </ol>
-          <p className="muted" style={{ fontSize: 12.5 }}>
+     <p className="hint">
             The token is stored encrypted and never shown again. If the
             repositories belong to an organisation, it may need approving under
             that organisation's third-party access settings before it works.

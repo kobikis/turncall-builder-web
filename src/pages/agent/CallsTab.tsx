@@ -327,7 +327,7 @@ function CallRows(props: { call: Call; open: boolean; onToggle: () => void; agen
         </td>
         <td onClick={(e) => e.stopPropagation()}><Uid id={c.id} label="call_id" /></td>
         <td>{c.direction}</td>
-        <td className="num" style={{ fontSize: 12.5 }}>
+    <td className="num hint">
           {c.from_number || c.to_number ? (
             <>{c.from_number || "—"} → {c.to_number || "—"}</>
           ) : c.provider_call_sid === "webrtc" ? (

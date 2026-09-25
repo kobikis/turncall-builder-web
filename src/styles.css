@@ -377,6 +377,12 @@ table.list .num { font-variant-numeric: tabular-nums; }
 
 .error-text { color: var(--danger); font-size: 13px; margin: 6px 0 0; }
 
+/* Helper text under a control, and the one-line explanations that carry most
+   of this app's reasoning. It was written inline 52 times at 12.5px, which is
+   how three of them drifted to 13, 12 and 11.5. Size and colour live here;
+   margins stay with the caller, because those really are per-context. */
+.hint { font-size: 12.5px; color: var(--text-muted); }
+
 /* Focusable row toggle — keyboard/SR access to expandable table rows. */
 .row-toggle {
   display: inline-flex;

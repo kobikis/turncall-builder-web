@@ -56,7 +56,7 @@ export function ArgumentField({ app, appName, input, value, editable, onChange }
 
   if (!input.options || failed || (options !== null && !usable)) {
     return (
-      <label style={{ display: "block", fontSize: 12.5, marginTop: 6 }}>
+      <label className="hint" style={{ display: "block", marginTop: 6 }}>
         {input.label}
         <input
           className="input"
@@ -68,7 +68,7 @@ export function ArgumentField({ app, appName, input, value, editable, onChange }
           onChange={(e) => onChange(e.target.value)}
         />
         {input.options && (
-          <span className="muted" style={{ fontSize: 11.5 }}>
+          <span className="hint">
             {failed || "Nothing to choose from — enter the ID."}
           </span>
         )}
@@ -78,7 +78,7 @@ export function ArgumentField({ app, appName, input, value, editable, onChange }
 
   if (!usable) {
     return (
-      <p className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>
+      <p className="hint" style={{ marginTop: 6 }}>
         Loading {input.label.toLowerCase()}…
       </p>
     );
@@ -91,7 +91,7 @@ export function ArgumentField({ app, appName, input, value, editable, onChange }
   const orphan = value && !usable.some((o) => o.value === value);
 
   return (
-    <label style={{ display: "block", fontSize: 12.5, marginTop: 6 }}>
+    <label className="hint" style={{ display: "block", marginTop: 6 }}>
       {input.label}
       <select
         className="input"

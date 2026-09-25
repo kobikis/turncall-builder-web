@@ -183,7 +183,7 @@ type Props = {
 function AutomationStatus({ run, appName }: { run: AutomationRun | null; appName: string }) {
   if (!run) {
     return (
-      <p className="muted" style={{ fontSize: 12.5, margin: "0 0 6px" }}>
+      <p className="hint" style={{ margin: "0 0 6px" }}>
         Hasn&rsquo;t run yet &mdash; it runs when this agent&rsquo;s next call ends.
       </p>
     );
@@ -192,7 +192,7 @@ function AutomationStatus({ run, appName }: { run: AutomationRun | null; appName
   return (
     <p
       className={tone === "muted" ? "muted" : `desc ${tone}`}
-      style={{ fontSize: 12.5, margin: "0 0 6px" }}
+      style={{ margin: "0 0 6px" }}
     >
       {text}{" "}
       <span className="muted">{new Date(run.at).toLocaleString()}</span>
@@ -252,13 +252,13 @@ export function ConnectedApps({ apps, catalog, connected, needs = [], runs = [],
       ))}
 
       <Section id="integrations" title="Connected apps" hint={inUse > 0 ? `${inUse} in use` : ""}>
-      <p className="muted" style={{ fontSize: 12.5, margin: "0 0 10px" }}>
+      <p className="hint" style={{ margin: "0 0 10px" }}>
         Apps your workspace has authorized. Choose when each one runs: during a
         call, so the agent can use it — or when a call ends, to post a summary.
       </p>
 
       {rows.length === 0 ? (
-        <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>
+        <p className="hint" style={{ margin: 0 }}>
           No apps connected yet. A workspace admin connects Slack or Google
           Calendar once on the Integrations page, and every agent here can then
           use them.
@@ -304,7 +304,7 @@ export function ConnectedApps({ apps, catalog, connected, needs = [], runs = [],
                 Available during calls
               </label>
               {state.midCall && (
-                <p className="muted" style={{ fontSize: 12.5, margin: "4px 0 0 26px" }}>
+                <p className="hint" style={{ margin: "4px 0 0 26px" }}>
                   {row.tools.length > 0 ? (
                     <>
                       The agent may call:{" "}
@@ -337,7 +337,7 @@ export function ConnectedApps({ apps, catalog, connected, needs = [], runs = [],
                   </select>
                 </label>
               ) : (
-                <p className="muted" style={{ fontSize: 12.5, margin: "10px 0 0" }}>
+                <p className="hint" style={{ margin: "10px 0 0" }}>
                   Nothing to run when a call ends — this app has no Action that a
                   finished call has the information for.
                 </p>
@@ -351,7 +351,7 @@ export function ConnectedApps({ apps, catalog, connected, needs = [], runs = [],
                     borderLeft: "2px solid var(--border, #ddd)",
                   }}
                 >
-                  <p className="muted" style={{ fontSize: 12.5, margin: "0 0 6px" }}>
+                  <p className="hint" style={{ margin: "0 0 6px" }}>
                     Runs because the call ended, not because the agent chose to.
                     The agent's own summary of the call is included automatically.
                   </p>
@@ -383,7 +383,7 @@ export function ConnectedApps({ apps, catalog, connected, needs = [], runs = [],
         </div>
       )}
 
-      <p className="muted" style={{ fontSize: 12.5, margin: "8px 0 0" }}>
+      <p className="hint" style={{ margin: "8px 0 0" }}>
         Credentials never live in this configuration — they are minted for each
         call and expire within the hour.
       </p>
