@@ -5,6 +5,7 @@ import { canEdit } from "../../roles";
 import { usePoll } from "../../usePoll";
 import ScenarioEditor from "./ScenarioEditor";
 import { heardThrough, judgeLabel, judgedBy, type JudgeBlock } from "./judge";
+import { SortHeader, useSort } from "./sorting";
 import { useAgent } from "./AgentPage";
 
 // The agent's eval scenarios, and what happened last time they ran
@@ -233,6 +234,13 @@ export default function EvalsTab() {
   // when a scenario is edited, and a selection that silently shifts rows would
   // run something nobody picked.
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  // Both tables grow without bound — a suite that runs per PR has hundreds of
+  // runs within a month — and the row someone wants is rarely the newest.
+  const [filter, setFilter] = useState("");
+  const [runFilter, setRunFilter] = useState("");
+  const [status, setStatus] = useState("");
+  const scenarioSort = useSort<Scenario>("name", "asc");
+  const runSort = useSort<Run>("when", "desc");
 
   const loadScenarios = () =>
     api(`/agents/${agentId}/eval-scenarios`)
@@ -289,12 +297,56 @@ export default function EvalsTab() {
       return next;
     });
 
-  const allPicked = (scenarios || []).length > 0 && picked.size === (scenarios || []).length;
-  const toggleAll = () =>
-    setPicked(allPicked ? new Set() : new Set((scenarios || []).map((s) => s.id)));
-
+  // `runs` itself stays in the API's order — newest first — because
+  // `latestFor` reads it that way. Sorting is a view of it, never the state.
   const latestFor = (scenarioId: string) =>
     runs.find((r) => r.scenario_id === scenarioId);
+
+  // One box over name and tags: a reader looking for "refund" does not know or
+  // care which of the two carries the word.
+  const matches = (text: string, ...fields: (string | undefined)[]) =>
+    fields.filter(Boolean).join(" ").toLowerCase().includes(text.trim().toLowerCase());
+
+  const visibleScenarios = scenarioSort.sort(
+    (scenarios || []).filter((s) => matches(filter, s.name, s.tags.join(" "))),
+    (s, key) => {
+      const last = latestFor(s.id);
+      if (key === "judge") return judgeLabel(s.judge) || "";
+      if (key === "status") return last?.status || "";
+      if (key === "passed") return last ? last.passed_count / Math.max(last.iterations, 1) : -1;
+      if (key === "when") return last?.completed_at || last?.queued_at || "";
+      return s.name;
+    }
+  );
+
+  const visibleRuns = runSort.sort(
+    runs.filter(
+      (r) => (!status || r.status === status) && matches(runFilter, r.scenario_name)
+    ),
+    (r, key) => {
+      if (key === "status") return r.status;
+      if (key === "passed") return r.passed_count / Math.max(r.iterations, 1);
+      if (key === "judge") return judgedBy(r.harness_config) || "";
+      if (key === "scenario") return r.scenario_name;
+      return r.completed_at || r.queued_at || "";
+    }
+  );
+
+  // Ticking the header box means "everything I can see", not "everything there
+  // is" — the second would run rows a filter is hiding.
+  const allPicked =
+    visibleScenarios.length > 0 && visibleScenarios.every((s) => picked.has(s.id));
+  const toggleAll = () =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      for (const s of visibleScenarios) if (allPicked) next.delete(s.id); else next.add(s.id);
+      return next;
+    });
+
+  // A scenario can stay ticked and then be filtered out of sight. It still
+  // runs, so the count has to admit it rather than reading as the rows on
+  // screen.
+  const hiddenPicked = picked.size - visibleScenarios.filter((s) => picked.has(s.id)).length;
 
   if (error && scenarios === null)
     return <p role="alert" className="error-text">{error}</p>;
@@ -358,10 +410,24 @@ export default function EvalsTab() {
                 {busy ? "Starting…" : `Run selected (${picked.size})`}
               </button>
             )}
+            <input
+              className="input"
+              style={{ maxWidth: 240 }}
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              aria-label="Filter scenarios"
+              placeholder="Filter by name or tag"
+              autoComplete="off"
+            />
+            {hiddenPicked > 0 && (
+              <span className="warn" data-testid="hidden-picked">
+                {hiddenPicked} ticked scenario(s) hidden by the filter — they still run
+              </span>
+            )}
             {inFlight && <span className="muted">Runs in progress…</span>}
           </div>
 
-          <table className="table">
+          <table className="table" data-testid="scenarios-table">
             <thead>
               <tr>
                 <th>
@@ -374,16 +440,16 @@ export default function EvalsTab() {
                     />
                   )}
                 </th>
-                <th>Scenario</th>
-                <th>Judge</th>
-                <th>Last run</th>
-                <th>Passed</th>
-                <th>When</th>
+                <SortHeader column="name" sort={scenarioSort}>Scenario</SortHeader>
+                <SortHeader column="judge" sort={scenarioSort}>Judge</SortHeader>
+                <SortHeader column="status" sort={scenarioSort}>Last run</SortHeader>
+                <SortHeader column="passed" sort={scenarioSort}>Passed</SortHeader>
+                <SortHeader column="when" sort={scenarioSort}>When</SortHeader>
                 <th />
               </tr>
             </thead>
             <tbody>
-              {scenarios.map((s) => {
+              {visibleScenarios.map((s) => {
                 const last = latestFor(s.id);
                 return (
                   <tr key={s.id}>
@@ -440,6 +506,11 @@ export default function EvalsTab() {
               })}
             </tbody>
           </table>
+          {visibleScenarios.length === 0 && (
+            <p className="muted" data-testid="no-scenario-match">
+              No scenario matches “{filter}”.
+            </p>
+          )}
         </>
       )}
 
@@ -448,27 +519,63 @@ export default function EvalsTab() {
       {runs.length > 0 && (
         <>
           <h3 style={{ marginTop: 24 }}>Recent runs</h3>
-          <table className="table">
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+            <input
+              className="input"
+              style={{ maxWidth: 240 }}
+              value={runFilter}
+              onChange={(e) => setRunFilter(e.target.value)}
+              aria-label="Filter runs"
+              placeholder="Filter by scenario"
+              autoComplete="off"
+            />
+            <select
+              className="input"
+              style={{ maxWidth: 200 }}
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              aria-label="Filter by status"
+            >
+              <option value="">Any status</option>
+              {/* The same words the rows use. "Could not check" is not a
+                  failure, and a filter calling it "errored" would undo the one
+                  distinction this tab works hardest to keep. */}
+              {Object.entries(STATUS).map(([value, meta]) => (
+                <option key={value} value={value}>
+                  {meta.label}
+                </option>
+              ))}
+            </select>
+            <span className="muted">
+              {visibleRuns.length} of {runs.length}
+            </span>
+          </div>
+          <table className="table" data-testid="runs-table">
             <thead>
               <tr>
-                <th>Scenario</th>
-                <th>Status</th>
-                <th>Passed</th>
-                <th>When</th>
+                <SortHeader column="scenario" sort={runSort}>Scenario</SortHeader>
+                <SortHeader column="status" sort={runSort}>Status</SortHeader>
+                <SortHeader column="passed" sort={runSort}>Passed</SortHeader>
+                <SortHeader column="when" sort={runSort}>When</SortHeader>
                 {/* Which model decided it. A verdict is not comparable with
                     the one above it without this — a provider-side model
                     update moves the whole baseline and nothing else on the row
                     would say so (turncall#119). */}
-                <th>Judged by</th>
+                <SortHeader column="judge" sort={runSort}>Judged by</SortHeader>
                 <th />
               </tr>
             </thead>
             <tbody>
-              {runs.slice(0, 20).map((r) => (
+              {visibleRuns.slice(0, 20).map((r) => (
                 <RunRow key={r.id} run={r} onOpen={setOpen} />
               ))}
             </tbody>
           </table>
+          {visibleRuns.length === 0 && (
+            <p className="muted" data-testid="no-run-match">
+              No run matches that filter.
+            </p>
+          )}
         </>
       )}
     </div>

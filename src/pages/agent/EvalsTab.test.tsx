@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 // The two rules this tab exists to respect, and the reason they are tested
 // rather than trusted:
@@ -82,7 +82,10 @@ it("an errored run reads as 'could not check', never as a failure", async () => 
   runs = [run({ status: "errored", passed_count: 0, error: "the judge was unreachable" })];
   render(<EvalsTab />);
   await waitFor(() => expect(screen.getAllByText("Could not check").length).toBeGreaterThan(0));
-  expect(screen.queryByText("Failed")).toBeNull();
+  // In the rows, not in the document: the status filter legitimately offers
+  // "Failed" as a choice, which is not a verdict about this run.
+  for (const cell of document.querySelectorAll("td"))
+    expect(cell.textContent).not.toBe("Failed");
 });
 
 it("an errored run shows no pass count, because there is nothing to count", async () => {
@@ -417,4 +420,127 @@ it("a text run says nothing about voices, because it built none", async () => {
   await waitFor(() => expect(screen.getAllByText("Details").length).toBeGreaterThan(0));
   fireEvent.click(screen.getAllByText("Details")[0]);
   expect(screen.queryByTestId("heard-through")).toBeNull();
+});
+
+// --- finding a row among many (#26 follow-up) -------------------------------
+//
+// Both tables grow without bound — a suite running per PR has hundreds of runs
+// inside a month — and the row someone wants is rarely the newest one.
+
+// The runs table specifically: the scenarios table is also on the page, and
+// its first column is a checkbox.
+const names = (selector: string) =>
+  [
+    ...(document.querySelector('[data-testid="runs-table"]')?.querySelectorAll(selector) ||
+      []),
+  ].map((el) => el.textContent);
+
+it("filters scenarios by name", async () => {
+  scenarios = [scenario(), scenario({ id: "s2", name: "books-a-table" })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("books-a-table")).toBeTruthy());
+  fireEvent.change(screen.getByLabelText("Filter scenarios"), { target: { value: "books" } });
+  expect(screen.queryByText("asks-for-the-reference")).toBeNull();
+  expect(screen.getByText("books-a-table")).toBeTruthy();
+});
+
+it("filters scenarios by tag, because a reader does not know which field holds the word", async () => {
+  scenarios = [scenario(), scenario({ id: "s2", name: "books-a-table", tags: ["nightly"] })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("books-a-table")).toBeTruthy());
+  fireEvent.change(screen.getByLabelText("Filter scenarios"), { target: { value: "nightly" } });
+  expect(screen.queryByText("asks-for-the-reference")).toBeNull();
+});
+
+it("says so when a filter matches nothing, instead of showing an empty table", async () => {
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("asks-for-the-reference")).toBeTruthy());
+  fireEvent.change(screen.getByLabelText("Filter scenarios"), { target: { value: "zzz" } });
+  expect(screen.getByTestId("no-scenario-match")).toBeTruthy();
+});
+
+it("sorts scenarios by name, and reverses on a second click", async () => {
+  scenarios = [scenario({ id: "s2", name: "books-a-table" }), scenario()];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("books-a-table")).toBeTruthy());
+  const first = () =>
+    screen.getByTestId("scenarios-table").querySelectorAll("tbody tr td:nth-child(2)")[0]
+      ?.textContent;
+  expect(first()).toContain("asks-for-the-reference");
+  fireEvent.click(within(screen.getByTestId("scenarios-table")).getByText("Scenario"));
+  expect(first()).toContain("books-a-table");
+});
+
+it("ticking the header box selects what is visible, not what is hidden", async () => {
+  // The alternative runs rows the reader cannot see, which is the one thing a
+  // filter must never do.
+  scenarios = [scenario(), scenario({ id: "s2", name: "books-a-table" })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("books-a-table")).toBeTruthy());
+  fireEvent.change(screen.getByLabelText("Filter scenarios"), { target: { value: "books" } });
+  fireEvent.click(screen.getByLabelText("Select every scenario"));
+  expect(screen.getByText("Run selected (1)")).toBeTruthy();
+});
+
+it("admits when a ticked scenario is hidden by the filter", async () => {
+  scenarios = [scenario(), scenario({ id: "s2", name: "books-a-table" })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("books-a-table")).toBeTruthy());
+  fireEvent.click(screen.getByLabelText("Select asks-for-the-reference"));
+  fireEvent.change(screen.getByLabelText("Filter scenarios"), { target: { value: "books" } });
+  // It still runs, so the count must not silently read as the rows on screen.
+  expect(screen.getByTestId("hidden-picked").textContent).toContain("1 ticked");
+});
+
+it("filters runs by status, in the words the rows use", async () => {
+  runs = [
+    run({ id: "r1", scenario_name: "one", status: "passed" }),
+    run({ id: "r2", scenario_name: "two", status: "errored" }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByLabelText("Filter by status")).toBeTruthy());
+  fireEvent.change(screen.getByLabelText("Filter by status"), { target: { value: "errored" } });
+  expect(names("tbody tr td:first-child")).toContain("two");
+  expect(names("tbody tr td:first-child")).not.toContain("one");
+});
+
+it("filters runs by scenario name", async () => {
+  runs = [
+    run({ id: "r1", scenario_name: "books-a-table" }),
+    run({ id: "r2", scenario_name: "cancels-a-booking" }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByLabelText("Filter runs")).toBeTruthy());
+  fireEvent.change(screen.getByLabelText("Filter runs"), { target: { value: "cancels" } });
+  expect(names("tbody tr td:first-child")).not.toContain("books-a-table");
+});
+
+it("counts what the filter left, against what there is", async () => {
+  runs = [run({ id: "r1", status: "passed" }), run({ id: "r2", status: "failed" })];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByLabelText("Filter by status")).toBeTruthy());
+  fireEvent.change(screen.getByLabelText("Filter by status"), { target: { value: "failed" } });
+  expect(screen.getByText("1 of 2")).toBeTruthy();
+});
+
+it("sorts runs newest first until told otherwise", async () => {
+  runs = [
+    run({ id: "r1", scenario_name: "older", completed_at: "2026-01-01T00:00:00Z" }),
+    run({ id: "r2", scenario_name: "newer", completed_at: "2026-06-01T00:00:00Z" }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByLabelText("Filter runs")).toBeTruthy());
+  expect(names("tbody tr td:first-child")[0]).toBe("newer");
+  fireEvent.click(within(screen.getByTestId("runs-table")).getByText("When"));
+  expect(names("tbody tr td:first-child")[0]).toBe("older");
+});
+
+it("marks the column actually in force, and only that one", async () => {
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("Scenario")).toBeTruthy());
+  const sorted = [...document.querySelectorAll("th[aria-sort]")].filter(
+    (th) => th.getAttribute("aria-sort") !== "none"
+  );
+  expect(sorted.length).toBeGreaterThan(0);
+  expect(sorted.every((th) => th.getAttribute("aria-sort") !== "none")).toBe(true);
 });
