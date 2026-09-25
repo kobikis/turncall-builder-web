@@ -199,7 +199,7 @@ export default function PhoneNumberForm(props: {
             <input id="pn-url" name="server_url" type="url" className="input" value={serverUrl}
               autoComplete="off" spellCheck={false}
               onChange={(e) => setServerUrl(e.target.value)} placeholder="https://host/call-init" />
-            <p className="muted" style={{ fontSize: 12.5, margin: "4px 0 0" }}>
+            <p className="hint" style={{ margin: "4px 0 0" }}>
               You host this endpoint: it picks the agent per call and supplies variables.
               See <code>docs/call-init.md</code> in turncall-builder-api.
             </p>

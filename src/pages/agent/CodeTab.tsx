@@ -120,14 +120,14 @@ export default function CodeTab() {
     return (
       <div className="card">
         <h3>Push this agent's code to GitHub</h3>
-        <p className="muted" style={{ fontSize: 13 }}>
+        <p className="hint">
           The generated backend — tool handlers, Dockerfile, compose file — plus
           <code>agent.json</code> with this agent's prompt, model, voice and
           tools, can be pushed to a repository you already own, so you can run it
           yourself instead of only through the builder. Nothing is ever created
           on your GitHub: you choose the repository, branch and folder.
         </p>
-        <p style={{ fontSize: 13 }}>
+        <p className="hint">
           <Link to="/settings/github">Connect your GitHub account</Link> to get
           started. It's per-person, so this connects yours and not the workspace's.
         </p>
@@ -143,7 +143,7 @@ export default function CodeTab() {
   return (
     <div className="card">
       <h3>GitHub</h3>
-      <p className="muted" style={{ fontSize: 12.5, margin: "0 0 14px" }}>
+      <p className="hint" style={{ margin: "0 0 14px" }}>
         Connected as <strong>{conn.github_login}</strong>
         {conn.expires_at && ` · token expires ${when(conn.expires_at)}`}
       </p>
@@ -195,7 +195,7 @@ export default function CodeTab() {
             ))}
           </select>
           {repos.length === 0 && (
-            <p className="muted" style={{ fontSize: 12.5, margin: "4px 0 0" }}>
+            <p className="hint" style={{ margin: "4px 0 0" }}>
               No repositories with write access. Your token needs
               “Contents: Read and write”, and an organisation may still need to
               approve it.
@@ -232,7 +232,7 @@ export default function CodeTab() {
           placeholder="agents/my-agent"
           onChange={(e) => setForm((f) => ({ ...f, path: e.target.value }))}
         />
-        <p className="muted" style={{ fontSize: 12.5, margin: "4px 0 0" }}>
+        <p className="hint" style={{ margin: "4px 0 0" }}>
           Leave empty to use the repository root. Set a folder to keep several
           agents in one repository — only that folder is ever written to.
         </p>
@@ -262,7 +262,7 @@ export default function CodeTab() {
       </div>
 
       {link && (
-        <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>
+        <p className="hint" style={{ marginTop: 10 }}>
           A push writes the backend code and <code>agent.json</code> — the
           prompt, model, voice and tools. Editing the prompt or model changes
           <code> agent.json</code> only; the code changes when tools do.
@@ -270,7 +270,7 @@ export default function CodeTab() {
       )}
 
       {link && (
-        <p className="muted" style={{ fontSize: 12.5, marginTop: 12 }}>
+        <p className="hint" style={{ marginTop: 12 }}>
           <a href={treeUrl} target="_blank" rel="noreferrer">
             {link.owner}/{link.repo}
             {link.path ? `/${link.path}` : ""}
@@ -281,7 +281,7 @@ export default function CodeTab() {
 
       {link && (
         <details style={{ marginTop: 14 }}>
-          <summary className="muted" style={{ fontSize: 12.5, cursor: "pointer" }}>
+          <summary className="hint" style={{ cursor: "pointer" }}>
             Run it yourself
           </summary>
           <pre style={{ fontSize: 12, marginTop: 8 }}>
@@ -290,7 +290,7 @@ cd ${link.repo}${link.path ? `/${link.path}` : ""}
 cp .env.example .env     # then fill it in
 docker compose up -d --build`}
           </pre>
-          <p className="muted" style={{ fontSize: 12.5 }}>
+     <p className="hint">
             Secrets are never pushed — <code>.env.example</code> lists what to
             fill in, and secrets inside <code>agent.json</code> are redacted.
           </p>

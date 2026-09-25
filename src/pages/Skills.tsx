@@ -102,7 +102,7 @@ export default function Skills() {
             disabled={busy || editing !== null}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
           />
-          <p className="muted" style={{ fontSize: 12.5, margin: "4px 0 0" }}>
+          <p className="hint" style={{ margin: "4px 0 0" }}>
             Lowercase words joined by hyphens. These names are taken by built-in
             skills: {reserved.join(", ") || "—"}.
           </p>
@@ -119,7 +119,7 @@ export default function Skills() {
             disabled={busy}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
           />
-          <p className="muted" style={{ fontSize: 12.5, margin: "4px 0 0" }}>
+          <p className="hint" style={{ margin: "4px 0 0" }}>
             The one part the builder always sees. Everything below is read only
             once this line matches what it is doing — so a vague line here means
             the skill is never opened, however good it is.
@@ -137,7 +137,7 @@ export default function Skills() {
             disabled={busy}
             onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
           />
-          <p className="muted" style={{ fontSize: 12.5, margin: "4px 0 0" }}>
+          <p className="hint" style={{ margin: "4px 0 0" }}>
             Markdown. Write it as instructions to the builder.
           </p>
         </div>
@@ -184,7 +184,7 @@ export default function Skills() {
                   </button>
                 </span>
               </div>
-              <p className="muted" style={{ fontSize: 12.5, margin: "6px 0 0" }}>
+              <p className="hint" style={{ margin: "6px 0 0" }}>
                 {s.description}
               </p>
             </div>

@@ -78,7 +78,7 @@ function TakeawayForm(props: {
           <label htmlFor="tk-name">Name</label>
           <input id="tk-name" className="input" value={f.name} autoComplete="off" spellCheck={false}
             onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="csat_score" />
-          <p className="muted" style={{ fontSize: 12.5, margin: "4px 0 0" }}>
+          <p className="hint" style={{ margin: "4px 0 0" }}>
             Keys the result in call payloads — immutable after creation.
           </p>
         </div>

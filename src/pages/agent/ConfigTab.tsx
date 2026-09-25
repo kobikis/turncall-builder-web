@@ -296,7 +296,7 @@ export default function ConfigTab() {
             <span key={name} className={`chip ${s}`}>{name} · {s}</span>
           ))}
           {stubs.length > 0 && (
-            <p className="muted" style={{ fontSize: 12.5, margin: "2px 0 0" }}>
+            <p className="hint" style={{ margin: "2px 0 0" }}>
               Stub tools return fake data — fill in real logic in the generated repo.
             </p>
           )}
@@ -328,7 +328,7 @@ export default function ConfigTab() {
             value={jsonText}
             onChange={(e) => onJson(e.target.value)}
           />
-          {jsonError && <p className="error-text" style={{ fontSize: 12.5 }}>Invalid JSON: {jsonError}</p>}
+     {jsonError && <p className="error-text">Invalid JSON: {jsonError}</p>}
         </>
       ) : (
         <div style={{ flex: 1, overflowY: "auto" }}>
@@ -487,7 +487,7 @@ export default function ConfigTab() {
                     })
                   }
                 />
-                <p className="muted" style={{ fontSize: 12.5, margin: "4px 0 0" }}>
+                <p className="hint" style={{ margin: "4px 0 0" }}>
                   Bedrock model availability is region-specific, and access is granted
                   per model per region. Leave blank to use the server's AWS_REGION.
                   Credentials are configured on the TurnCall server, never here.
@@ -537,7 +537,7 @@ export default function ConfigTab() {
               }
               placeholder="e.g. medical advice, competitor pricing"
             />
-            <p className="muted" style={{ fontSize: 12.5, margin: "4px 0 0" }}>
+            <p className="hint" style={{ margin: "4px 0 0" }}>
               Comma-separated — the agent refuses to discuss these.
             </p>
           </div>
@@ -586,11 +586,11 @@ export default function ConfigTab() {
               onChange={(e) => patch((c) => (c.server_url = e.target.value || null))}
               placeholder="https://your-server.example (blank = generated backend)"
             />
-            <p className="muted" style={{ fontSize: 12.5, margin: "4px 0 0" }}>
+            <p className="hint" style={{ margin: "4px 0 0" }}>
               Where the agent's custom tools POST. Leave blank to use the generated backend.
             </p>
           </div>
-          <p className="muted" style={{ fontSize: 12.5 }}>
+     <p className="hint">
             {customCount > 0 ? `${customCount} custom tool${customCount > 1 ? "s" : ""}. ` : ""}
             Custom tools, speech-to-speech, voicemail, and analysis live in{" "}
             <strong>Advanced (JSON)</strong>.

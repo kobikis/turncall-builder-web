@@ -461,7 +461,7 @@ export default function EvalsTab() {
 
       {scenarios !== null && scenarios.length > 0 && (
         <>
-          <p className="muted" style={{ fontSize: 12.5, margin: "0 0 12px" }} data-testid="judge-note">
+          <p className="hint" style={{ margin: "0 0 12px" }} data-testid="judge-note">
             A judge model decides <code>eval:</code> expectations and simulation
             verdicts; <code>text_contains</code> is checked without one. Scenarios
             below show the judge they name, or the platform default they inherit —

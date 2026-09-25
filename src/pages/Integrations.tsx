@@ -181,7 +181,7 @@ export default function Integrations() {
         })}
       </div>
 
-      <p className="muted" style={{ fontSize: 12.5 }}>
+   <p className="hint">
         Credentials stay at Pipedream. This console never sees them, and an
         agent's configuration never carries one — they are minted for each call
         and expire within the hour.
