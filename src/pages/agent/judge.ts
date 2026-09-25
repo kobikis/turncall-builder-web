@@ -125,3 +125,35 @@ export function effectiveJudge(
   if (ran) return { label: ran, source: "last-run" };
   return { label: "Platform default", source: "unknown" };
 }
+
+/** The model **under test** — the agent's own LLM, not the judge.
+ *
+ * A verdict is about a particular model answering a particular way, so a run
+ * that does not say which one cannot be compared with the next any more than
+ * one missing its judge can. It comes out of `resolved_config`, the snapshot
+ * of the agent exactly as it ran — which is not the agent's config today, and
+ * that difference is the point of snapshotting it.
+ *
+ * An S2S agent has no `llm:` block at all: the speech model *is* the LLM, so
+ * the answer lives under `s2s`.
+ */
+export function agentModel(
+  config?: Record<string, unknown> | null
+): { short: string; full: string } | null {
+  if (!config) return null;
+  const s2s = config.pipeline_mode === "s2s";
+  const block = (s2s ? config.s2s : config.llm) as {
+    provider?: string;
+    model?: string;
+    temperature?: number | null;
+  } | null;
+  if (!block || !block.provider) return null;
+  // Empty means the provider's own house model, which is a real answer and
+  // not the same as "unknown" — TurnCall resolves it at pipeline build time.
+  const model = block.model || "its default model";
+  const parts = [NAMES[block.provider] || block.provider, model];
+  if (block.temperature !== null && block.temperature !== undefined)
+    parts.push(`temperature ${block.temperature}`);
+  if (s2s) parts.push("speech-to-speech");
+  return { short: model, full: parts.join(" · ") };
+}
