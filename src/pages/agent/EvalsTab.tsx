@@ -4,6 +4,7 @@ import { useAuth } from "../../auth";
 import { canEdit } from "../../roles";
 import { usePoll } from "../../usePoll";
 import ScenarioEditor from "./ScenarioEditor";
+import { judgeLabel, judgedBy, type JudgeBlock } from "./judge";
 import { useAgent } from "./AgentPage";
 
 // The agent's eval scenarios, and what happened last time they ran
@@ -29,6 +30,9 @@ type Scenario = {
   // Carried so editing needs no second fetch — the list already returns them.
   definition: Record<string, unknown>;
   tool_mocks?: Record<string, unknown>;
+  // Absent means this scenario names no judge and takes the platform's
+  // (turncall#119) — not the same statement as naming ollama.
+  judge?: JudgeBlock | null;
 };
 
 type Run = {
@@ -44,6 +48,13 @@ type Run = {
   queued_at?: string;
   completed_at?: string | null;
   results?: ResultEntry[];
+  // Which judge decided this run, among other things. A verdict is not
+  // comparable across time without it — a provider-side model update moves the
+  // whole baseline silently.
+  harness_config?: Record<string, unknown>;
+  // Things the author needs to know that are not verdicts: a mock keyed to a
+  // tool this run cannot call, a judge that changed since the last verdict.
+  warnings?: { code: string; message: string }[];
 };
 
 type ResultEntry = {
@@ -102,12 +113,26 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// A judge swap is the first thing to check when a green scenario turns red, and
+// it is emphatically not a failure — so it reads as a note on the row, in the
+// warning colour rather than the error one (turncall#119).
+function JudgeChanged({ run }: { run: Run }) {
+  const w = (run.warnings || []).find((x) => x.code === "judge_changed");
+  if (!w) return null;
+  return (
+    <span className="chip warn" style={{ marginLeft: 6 }} title={w.message} data-testid="judge-changed">
+      Judge changed
+    </span>
+  );
+}
+
 function RunRow({ run, onOpen }: { run: Run; onOpen: (r: Run) => void }) {
   return (
     <tr>
       <td>{run.scenario_name}</td>
       <td>
         <StatusBadge status={run.status} />
+        <JudgeChanged run={run} />
       </td>
       <td className="muted">
         {isTerminal(run.status) && run.status !== "errored"
@@ -137,6 +162,16 @@ function RunDetail({ run, onClose }: { run: Run; onClose: () => void }) {
           Close
         </button>
       </div>
+      {judgedBy(run.harness_config) && (
+        <p className="muted" style={{ margin: "6px 0 0" }} data-testid="judged-by">
+          Judged by {judgedBy(run.harness_config)}
+        </p>
+      )}
+      {(run.warnings || []).map((w) => (
+        <p key={w.code} className="warn" style={{ margin: "6px 0 0" }}>
+          {w.message}
+        </p>
+      ))}
       {run.error && (
         <p role="alert" className="error-text" style={{ marginTop: 8 }}>
           {run.error}
@@ -292,6 +327,14 @@ export default function EvalsTab() {
 
       {scenarios !== null && scenarios.length > 0 && (
         <>
+          <p className="muted" style={{ fontSize: 12.5, margin: "0 0 12px" }} data-testid="judge-note">
+            A judge model decides <code>eval:</code> expectations and simulation
+            verdicts; <code>text_contains</code> is checked without one. Scenarios
+            below show the judge they name, or the platform default they inherit —
+            open one to change it. A hosted judge spends model time on every such
+            expectation and every simulation turn scored.
+          </p>
+
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
             {editable && (
               <button
@@ -324,6 +367,7 @@ export default function EvalsTab() {
                   )}
                 </th>
                 <th>Scenario</th>
+                <th>Judge</th>
                 <th>Last run</th>
                 <th>Passed</th>
                 <th>When</th>
@@ -350,6 +394,15 @@ export default function EvalsTab() {
                       {s.tags.map((t) => (
                         <span key={t} className="chip" style={{ marginLeft: 6 }}>{t}</span>
                       ))}
+                    </td>
+                    <td>
+                      {judgeLabel(s.judge) ? (
+                        <span title="Set on this scenario">{judgeLabel(s.judge)}</span>
+                      ) : (
+                        <span className="muted" title="Whatever this TurnCall is configured to judge with — a local Ollama unless EVAL_JUDGE_PROVIDER is set">
+                          Platform default
+                        </span>
+                      )}
                     </td>
                     <td>{last ? <StatusBadge status={last.status} /> : <span className="muted">never</span>}</td>
                     <td className="muted">
