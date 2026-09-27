@@ -230,6 +230,19 @@ it("offers Jev, with no temperature and no wrong explanation", () => {
   expect(screen.getByText(/calibrated probability/)).toBeTruthy();
 });
 
+it("offers Jev's own models, with the pinned version as the placeholder", () => {
+  // `/v1/models` advertises `jev-latest` and `jev-preview`; pipecat sends a
+  // pinned version when the field is empty, so the placeholder is that pin
+  // rather than either alias — it is what an empty field actually runs.
+  openWith({ provider: "jev" });
+  const field = screen.getByLabelText("Judge model") as HTMLInputElement;
+  expect(field.placeholder).toBe("jev-1.13.0");
+  const options = Array.from(
+    document.querySelectorAll(`#${field.getAttribute("list")} option`)
+  ).map((o) => o.getAttribute("value"));
+  expect(options).toEqual(["jev-latest", "jev-preview"]);
+});
+
 it("warns that a Jev verdict may arrive without written reasons", () => {
   // The one thing that reads as broken rather than as configured: a classifier
   // writes nothing, so the prose comes from the platform judge or not at all.

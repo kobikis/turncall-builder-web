@@ -49,17 +49,26 @@ export const PROVIDERS = [
   // linked into a pipeline to speak — so it must never appear in a simulator
   // picker if one is ever added here.
   //
-  // `models` is empty for the reason Ollama's is, inverted: pipecat pins the
-  // model (`jev-1.13.0`) so the thresholds tuned against it hold, and there is
-  // no shortlist to offer. Needs TYPESAFE_API_KEY and the `evals-jev` extra on
-  // the deployment; both are checked when a run builds the judge, never when a
-  // scenario is saved, so this option stays selectable on a platform that has
-  // not been provisioned yet.
+  // The two names TypeSafe's own `/v1/models` advertises, and the reason the
+  // placeholder is neither of them: pipecat sends a **pinned version**
+  // (`jev-1.13.0`) when no model is named, so that is what an empty field
+  // actually runs. The API takes a pinned id as well as these aliases.
+  //
+  // Both aliases are moving targets, which matters more for a judge than for an
+  // agent's LLM: a verdict is a baseline, and `jev-latest` can change under a
+  // scenario while the recorded `judge_model` still reads "jev-latest", so the
+  // judge-change warning has nothing to compare and stays quiet. That is the
+  // "silent provider-side model update" this Console already warns about
+  // elsewhere — pin a version for a suite you intend to trust over time.
+  //
+  // Needs TYPESAFE_API_KEY and the `evals-jev` extra on the deployment; both are
+  // checked when a run builds the judge, never when a scenario is saved, so this
+  // option stays selectable on a platform that has not been provisioned yet.
   {
     id: "jev",
     label: "Jev (TypeSafe)",
     defaultModel: "jev-1.13.0",
-    models: [],
+    models: ["jev-latest", "jev-preview"],
   },
 ];
 
