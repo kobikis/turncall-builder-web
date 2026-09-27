@@ -74,6 +74,11 @@ export const PROVIDERS = [
 
 export const INHERIT = "";
 
+// The escape hatch in the model select: a provider ships a new model long before
+// this list hears about it. A sentinel rather than an empty value, because empty
+// already means "the provider's own default".
+export const OTHER = "__other__";
+
 const NAMES: Record<string, string> = {
   ollama: "Ollama",
   openai: "OpenAI",

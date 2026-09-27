@@ -213,9 +213,15 @@ it("offers no temperature for a model that rejects one", () => {
   expect(screen.getByText(/Claude rejects a temperature/)).toBeTruthy();
 });
 
+/** Type a model the provider's shortlist does not name, through "Other…". */
+function typeModel(value: string) {
+  fireEvent.change(screen.getByLabelText("Judge model"), { target: { value: "__other__" } });
+  fireEvent.change(screen.getByLabelText("Judge model"), { target: { value } });
+}
+
 it("drops the temperature for an OpenAI reasoning model too", () => {
   openWith({ provider: "openai", model: "gpt-4o", temperature: 0.5 });
-  fireEvent.change(screen.getByLabelText("Judge model"), { target: { value: "o3-mini" } });
+  typeModel("o3-mini");
   expect(screen.queryByLabelText("Judge temperature")).toBeNull();
 });
 
@@ -230,17 +236,19 @@ it("offers Jev, with no temperature and no wrong explanation", () => {
   expect(screen.getByText(/calibrated probability/)).toBeTruthy();
 });
 
-it("offers Jev's own models, with the pinned version as the placeholder", () => {
+it("offers Jev's own models, with the pinned version as the unset choice", () => {
   // `/v1/models` advertises `jev-latest` and `jev-preview`; pipecat sends a
-  // pinned version when the field is empty, so the placeholder is that pin
-  // rather than either alias — it is what an empty field actually runs.
+  // pinned version when no model is named, so that pin is what the empty choice
+  // is labelled with — it is what an unset field actually runs.
   openWith({ provider: "jev" });
-  const field = screen.getByLabelText("Judge model") as HTMLInputElement;
-  expect(field.placeholder).toBe("jev-1.13.0");
-  const options = Array.from(
-    document.querySelectorAll(`#${field.getAttribute("list")} option`)
-  ).map((o) => o.getAttribute("value"));
-  expect(options).toEqual(["jev-latest", "jev-preview"]);
+  const field = screen.getByLabelText("Judge model") as HTMLSelectElement;
+  expect([...field.options].map((o) => o.value)).toEqual([
+    "",
+    "jev-latest",
+    "jev-preview",
+    "__other__",
+  ]);
+  expect([...field.options].find((o) => o.value === "")?.textContent).toBe("jev-1.13.0");
 });
 
 it("warns that a Jev verdict may arrive without written reasons", () => {
@@ -281,31 +289,56 @@ it("says what a hosted judge costs where the choice is made", () => {
 });
 
 it("names the provider's own default model rather than inventing one", () => {
+  // The empty choice, which is what an unset model runs. Named rather than
+  // blank: "the default" on its own is the thing the reader wanted to know.
   openWith({ provider: "openai" });
-  expect(
-    (screen.getByLabelText("Judge model") as HTMLInputElement).placeholder
-  ).toBe("gpt-4o-mini");
+  const field = screen.getByLabelText("Judge model") as HTMLSelectElement;
+  expect(field.value).toBe("");
+  expect([...field.options].find((o) => o.value === "")?.textContent).toBe("gpt-4o-mini");
 });
 
 it("offers the known models to pick from, and still takes a typed one", () => {
-  // A datalist rather than a select: the shortlist is a convenience, not a
-  // closed set. A provider ships a new model long before this list hears about
-  // it, and an Ollama model is whatever that box serves.
+  // A select, because a datalist filters its own options by the field's value
+  // and so could not be reopened once one was chosen. The shortlist is still a
+  // convenience and not a closed set: a provider ships a new model long before
+  // this list hears about it, and an Ollama model is whatever that box serves —
+  // which is what "Other…" is for.
   openWith({ provider: "openai" });
-  const field = screen.getByLabelText("Judge model") as HTMLInputElement;
-  const list = document.getElementById(field.getAttribute("list") as string);
-  expect([...(list as HTMLDataListElement).options].map((o) => o.value)).toContain(
-    "gpt-4o-mini"
+  const field = screen.getByLabelText("Judge model") as HTMLSelectElement;
+  expect([...field.options].map((o) => o.value)).toContain("gpt-4o-mini");
+
+  typeModel("some-model-we-never-heard-of");
+  expect((screen.getByLabelText("Judge model") as HTMLInputElement).value).toBe(
+    "some-model-we-never-heard-of"
   );
-  fireEvent.change(field, { target: { value: "some-model-we-never-heard-of" } });
-  expect(field.value).toBe("some-model-we-never-heard-of");
+  fireEvent.click(screen.getByText("Save"));
+  expect(body().judge.model).toBe("some-model-we-never-heard-of");
+});
+
+it("a chosen model can still be changed to another", () => {
+  // The bug this widget exists for: `<input list>` filters its options by the
+  // field's own value, so after picking `jev-latest` nothing else matched it and
+  // `jev-preview` was unreachable without emptying the field by hand.
+  openWith({ provider: "jev" });
+  const field = () => screen.getByLabelText("Judge model") as HTMLSelectElement;
+  fireEvent.change(field(), { target: { value: "jev-latest" } });
+  expect(field().value).toBe("jev-latest");
+  expect([...field().options].map((o) => o.value)).toContain("jev-preview");
+  fireEvent.change(field(), { target: { value: "jev-preview" } });
+  expect(field().value).toBe("jev-preview");
+});
+
+it("opens as a text field for a model the provider does not list", () => {
+  // Otherwise a scenario judged by something off the shortlist would open on a
+  // select that cannot represent it, and saving would silently change the model.
+  openWith({ provider: "openai", model: "ft:gpt-4o:acme:custom" });
+  const field = screen.getByLabelText("Judge model") as HTMLInputElement;
+  expect(field.tagName).toBe("INPUT");
+  expect(field.value).toBe("ft:gpt-4o:acme:custom");
 });
 
 it("offers Claude's models when the provider is Anthropic", () => {
   openWith({ provider: "anthropic" });
-  const field = screen.getByLabelText("Judge model") as HTMLInputElement;
-  const list = document.getElementById(field.getAttribute("list") as string);
-  expect([...(list as HTMLDataListElement).options].map((o) => o.value)).toContain(
-    "claude-haiku-4-5-20251001"
-  );
+  const field = screen.getByLabelText("Judge model") as HTMLSelectElement;
+  expect([...field.options].map((o) => o.value)).toContain("claude-haiku-4-5-20251001");
 });

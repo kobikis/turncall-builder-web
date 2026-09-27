@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api } from "../../api";
-import { INHERIT, PROVIDERS, takesTemperature, type JudgeBlock } from "./judge";
+import { INHERIT, OTHER, PROVIDERS, takesTemperature, type JudgeBlock } from "./judge";
 
 // Editing a saved scenario (#20).
 //
@@ -57,6 +57,13 @@ export default function ScenarioEditor({
       : String(scenario.judge.temperature)
   );
   const warm = provider !== INHERIT && takesTemperature(provider, judgeModel);
+  const known = PROVIDERS.find((p) => p.id === provider)?.models || [];
+  // A model this provider does not list is still a real answer, so the field
+  // opens as a text box for one — and stays one, rather than snapping back to a
+  // select that cannot represent what is in it.
+  const [typing, setTyping] = useState(
+    !!scenario.judge?.model && !known.includes(scenario.judge.model)
+  );
 
   // A model name belongs to one provider, so it cannot survive a change of
   // provider: openai/`gpt-4o` switched to Anthropic sent `gpt-4o` to Claude,
@@ -68,7 +75,10 @@ export default function ScenarioEditor({
   // the way a name is, and `judgeBlock` already withholds one the chosen model
   // would reject.
   function changeProvider(next: string) {
-    if (next !== provider) setJudgeModel("");
+    if (next !== provider) {
+      setJudgeModel("");
+      setTyping(false);
+    }
     setProvider(next);
   }
 
@@ -212,29 +222,48 @@ export default function ScenarioEditor({
               </option>
             ))}
           </select>
-          {provider !== INHERIT && (
-            <>
-              {/* A picker that is still a text field: `list` gives the known
-                  models one click, and typing still works — a provider ships a
-                  new model long before this list hears about it, and an Ollama
-                  model is whatever that box serves. */}
-              <input
-                className="input"
-                style={{ maxWidth: 260 }}
-                value={judgeModel}
-                autoComplete="off"
-                spellCheck={false}
-                aria-label="Judge model"
-                list={`ed-judge-models-${provider}`}
-                placeholder={PROVIDERS.find((p) => p.id === provider)?.defaultModel}
-                onChange={(e) => setJudgeModel(e.target.value)}
-              />
-              <datalist id={`ed-judge-models-${provider}`}>
-                {(PROVIDERS.find((p) => p.id === provider)?.models || []).map((m) => (
-                  <option key={m} value={m} />
-                ))}
-              </datalist>
-            </>
+          {provider !== INHERIT && known.length > 0 && !typing && (
+            /* A real select where the provider has a shortlist, because a
+               datalist could not reopen. `<input list>` filters its options by
+               the field's own value, so once it held `jev-latest` nothing else
+               matched it and `jev-preview` was unreachable without emptying the
+               field first — a picker that works once. Typing is still reachable,
+               through OTHER below. */
+            <select
+              className="input"
+              style={{ maxWidth: 260 }}
+              value={judgeModel}
+              aria-label="Judge model"
+              onChange={(e) =>
+                e.target.value === OTHER ? setTyping(true) : setJudgeModel(e.target.value)
+              }
+            >
+              <option value="">
+                {PROVIDERS.find((p) => p.id === provider)?.defaultModel}
+              </option>
+              {known.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+              <option value={OTHER}>Other…</option>
+            </select>
+          )}
+          {provider !== INHERIT && (known.length === 0 || typing) && (
+            /* A plain text field: a provider ships a new model long before this
+               list hears about it, and an Ollama model is whatever that box
+               serves. */
+            <input
+              className="input"
+              style={{ maxWidth: 260 }}
+              value={judgeModel}
+              autoComplete="off"
+              spellCheck={false}
+              autoFocus={typing}
+              aria-label="Judge model"
+              placeholder={PROVIDERS.find((p) => p.id === provider)?.defaultModel}
+              onChange={(e) => setJudgeModel(e.target.value)}
+            />
           )}
           {warm && (
             <input
