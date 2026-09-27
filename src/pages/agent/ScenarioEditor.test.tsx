@@ -245,6 +245,23 @@ it("sends a Jev judge with no temperature at all", () => {
   expect(body().judge).toEqual({ provider: "jev" });
 });
 
+it("clears the model when the provider changes", () => {
+  // A model name belongs to one provider. Carrying `gpt-4o` over to Anthropic
+  // sent it to Claude, which answers 404 — and the form still showed a model the
+  // author had chosen, so nothing pointed at the leftover as the cause.
+  openWith({ provider: "openai", model: "gpt-4o", temperature: 0.2 });
+  fireEvent.change(screen.getByLabelText("Judge"), { target: { value: "anthropic" } });
+  expect((screen.getByLabelText("Judge model") as HTMLInputElement).value).toBe("");
+  fireEvent.click(screen.getByText("Save"));
+  expect(body().judge).toEqual({ provider: "anthropic" });
+});
+
+it("keeps the model when the provider is re-selected unchanged", () => {
+  openWith({ provider: "openai", model: "gpt-4o" });
+  fireEvent.change(screen.getByLabelText("Judge"), { target: { value: "openai" } });
+  expect((screen.getByLabelText("Judge model") as HTMLInputElement).value).toBe("gpt-4o");
+});
+
 it("says what a hosted judge costs where the choice is made", () => {
   openWith({ provider: "openai" });
   expect(screen.getByText(/costs model time/i)).toBeTruthy();

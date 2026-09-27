@@ -58,6 +58,20 @@ export default function ScenarioEditor({
   );
   const warm = provider !== INHERIT && takesTemperature(provider, judgeModel);
 
+  // A model name belongs to one provider, so it cannot survive a change of
+  // provider: openai/`gpt-4o` switched to Anthropic sent `gpt-4o` to Claude,
+  // which answers 404, and to Jev, which has one pinned model and no `gpt-4o`.
+  // The run failed with a provider error and the form still showed a model the
+  // author had deliberately chosen, so nothing pointed at the leftover.
+  //
+  // The temperature is left alone on purpose: a number is not provider-specific
+  // the way a name is, and `judgeBlock` already withholds one the chosen model
+  // would reject.
+  function changeProvider(next: string) {
+    if (next !== provider) setJudgeModel("");
+    setProvider(next);
+  }
+
   function judgeBlock(): JudgeBlock | null {
     if (provider === INHERIT) return null;
     const block: JudgeBlock = { provider };
@@ -189,7 +203,7 @@ export default function ScenarioEditor({
             className="input"
             style={{ maxWidth: 220 }}
             value={provider}
-            onChange={(e) => setProvider(e.target.value)}
+            onChange={(e) => changeProvider(e.target.value)}
           >
             <option value={INHERIT}>Platform default</option>
             {PROVIDERS.map((p) => (
