@@ -42,15 +42,54 @@ export const PROVIDERS = [
     defaultModel: "claude-haiku-4-5-20251001",
     models: ["claude-haiku-4-5-20251001", "claude-sonnet-5"],
   },
+  // A classifier rather than an LLM (turncall#141): a verdict in a few hundred
+  // milliseconds against several seconds, with a *calibrated* probability
+  // rather than a model's own guess at how sure it is. Judge-only — TurnCall
+  // keeps it out of the allowlist a persona is drawn from, because a persona is
+  // linked into a pipeline to speak — so it must never appear in a simulator
+  // picker if one is ever added here.
+  //
+  // The two names TypeSafe's own `/v1/models` advertises, and the reason the
+  // placeholder is neither of them: pipecat sends a **pinned version**
+  // (`jev-1.13.0`) when no model is named, so that is what an empty field
+  // actually runs. The API takes a pinned id as well as these aliases.
+  //
+  // Both aliases are moving targets, which matters more for a judge than for an
+  // agent's LLM: a verdict is a baseline, and `jev-latest` can change under a
+  // scenario while the recorded `judge_model` still reads "jev-latest", so the
+  // judge-change warning has nothing to compare and stays quiet. That is the
+  // "silent provider-side model update" this Console already warns about
+  // elsewhere — pin a version for a suite you intend to trust over time.
+  //
+  // Needs TYPESAFE_API_KEY and the `evals-jev` extra on the deployment; both are
+  // checked when a run builds the judge, never when a scenario is saved, so this
+  // option stays selectable on a platform that has not been provisioned yet.
+  {
+    id: "jev",
+    label: "Jev (TypeSafe)",
+    defaultModel: "jev-1.13.0",
+    models: ["jev-latest", "jev-preview"],
+  },
 ];
 
 export const INHERIT = "";
+
+// The escape hatch in the model select: a provider ships a new model long before
+// this list hears about it. A sentinel rather than an empty value, because empty
+// already means "the provider's own default".
+export const OTHER = "__other__";
 
 const NAMES: Record<string, string> = {
   ollama: "Ollama",
   openai: "OpenAI",
   anthropic: "Anthropic",
+  jev: "Jev",
 };
+
+// The judge providers that are only a classifier, mirroring TurnCall's own
+// `CLASSIFIER_ONLY_JUDGES`. Two things follow from it and nothing else does:
+// there is no temperature to set, and there is no prose to read.
+const CLASSIFIERS = ["jev"];
 
 /** A judge block as one line, or null when the scenario names none. */
 export function judgeLabel(judge?: JudgeBlock | null): string | null {
@@ -69,7 +108,10 @@ export function judgeLabel(judge?: JudgeBlock | null): string | null {
 const REASONING = ["o1", "o3", "o4", "gpt-5"];
 
 export function takesTemperature(provider: string, model: string): boolean {
-  if (provider === "anthropic") return false;
+  // A classifier is not a sampler: there is no temperature to send, and
+  // TurnCall drops one that is set. Offering the field would be the same
+  // "accepting a number that goes nowhere" the Anthropic rule below avoids.
+  if (provider === "anthropic" || CLASSIFIERS.includes(provider)) return false;
   const name = (model || "").toLowerCase();
   return !REASONING.some((prefix) => name.startsWith(prefix));
 }
@@ -95,7 +137,30 @@ function judgeFromHarness(harness: Record<string, unknown>): string | null {
 export function judgedBy(harness?: Record<string, unknown> | null): string | null {
   if (!harness) return null;
   if (harness.judge_used === false) return NOT_ASKED;
-  return judgeFromHarness(harness);
+  const judged = judgeFromHarness(harness);
+  if (!judged) return null;
+  const explained = explainedBy(harness);
+  return explained ? `${judged} · ${explained}` : judged;
+}
+
+// A classifier decides but writes nothing, so a second model — the explainer —
+// supplies the reason behind every `no` (turncall#139). Which one it was is on
+// the snapshot, and it matters here for one reason: with no explainer
+// configured, reasons are turned **off**, and a run full of bare probabilities
+// reads as broken rather than as configured. This is the sentence that says
+// which it is.
+//
+// Said only when it adds something. For an LLM judge the explainer is that same
+// model, and repeating it in every row of the runs table would be noise.
+function explainedBy(harness: Record<string, unknown>): string | null {
+  if (harness.explainer_used === undefined) return null; // a run predating #139
+  if (harness.explainer_used === false) return "no written reasons";
+  const provider = harness.explainer_provider as string | undefined;
+  if (!provider) return null;
+  const judge = (harness.judge_provider || harness.judge_service) as string | undefined;
+  const model = harness.explainer_model as string | undefined;
+  if (provider === judge && model === (harness.judge_model as string | undefined)) return null;
+  return `explained by ${[NAMES[provider] || provider, model].filter(Boolean).join(" ")}`;
 }
 
 /** The same answer for a column with room for a phrase: the sentence becomes
@@ -115,6 +180,33 @@ export function judgedByShort(harness?: Record<string, unknown> | null): string 
   if (!harness) return null;
   if (harness.judge_used === false) return "Not asked";
   return (harness.judge_model as string | undefined) || judgeFromHarness(harness);
+}
+
+/** What a scenario's *last* run actually got for written reasons, as a sentence.
+ *
+ * A classifier decides fast and writes nothing, so the prose comes from a second
+ * model — the explainer — which TurnCall compiles from the platform judge, or
+ * turns off where the platform has none (turncall#139). The Console cannot read
+ * that environment, so the editor used to state the **rule** and leave the author
+ * to evaluate it against something they cannot see. A run's snapshot is the
+ * observable half: it says what actually happened last time.
+ *
+ * Null when there is nothing to report — no run yet, a run predating those keys,
+ * or an LLM judge, where the explainer is the judging model and saying so adds
+ * nothing.
+ */
+export function explainedLast(harness?: Record<string, unknown> | null): string | null {
+  if (!harness || harness.explainer_used === undefined) return null;
+  if (harness.explainer_used === false) {
+    return "Its last run reported probabilities and no written reasons.";
+  }
+  const provider = harness.explainer_provider as string | undefined;
+  if (!provider) return null;
+  const judge = (harness.judge_provider || harness.judge_service) as string | undefined;
+  if (provider === judge && harness.explainer_model === harness.judge_model) return null;
+  const model = harness.explainer_model as string | undefined;
+  const named = [NAMES[provider] || provider, model].filter(Boolean).join(" ");
+  return `Its last run's written reasons came from ${named}.`;
 }
 
 /** The services an audio run put either side of the agent (turncall#72).

@@ -158,11 +158,12 @@ it("cancelling changes nothing", () => {
 // keep them apart: a blank field that silently means "the default" is how the
 // wrong judge runs for a month.
 
-const openWith = (judge: unknown) =>
+const openWith = (judge: unknown, lastRunHarness?: Record<string, unknown> | null) =>
   render(
     <ScenarioEditor
       agentId="a1"
       scenario={{ ...SCENARIO, judge } as never}
+      lastRunHarness={lastRunHarness}
       onSaved={saved}
       onCancel={cancelled}
     />
@@ -213,10 +214,111 @@ it("offers no temperature for a model that rejects one", () => {
   expect(screen.getByText(/Claude rejects a temperature/)).toBeTruthy();
 });
 
+/** Type a model the provider's shortlist does not name, through "Other…". */
+function typeModel(value: string) {
+  fireEvent.change(screen.getByLabelText("Judge model"), { target: { value: "__other__" } });
+  fireEvent.change(screen.getByLabelText("Judge model"), { target: { value } });
+}
+
 it("drops the temperature for an OpenAI reasoning model too", () => {
   openWith({ provider: "openai", model: "gpt-4o", temperature: 0.5 });
-  fireEvent.change(screen.getByLabelText("Judge model"), { target: { value: "o3-mini" } });
+  typeModel("o3-mini");
   expect(screen.queryByLabelText("Judge temperature")).toBeNull();
+});
+
+it("offers Jev, with no temperature and no wrong explanation", () => {
+  // A classifier has no temperature at all. Before it had a branch of its own it
+  // fell through to the reasoning-model text and blamed OpenAI for a rule that
+  // belongs to neither the provider the author picked nor any model of theirs.
+  openWith({ provider: "jev" });
+  expect((screen.getByLabelText("Judge") as HTMLSelectElement).value).toBe("jev");
+  expect(screen.queryByLabelText("Judge temperature")).toBeNull();
+  expect(screen.queryByText(/reasoning models reject a temperature/)).toBeNull();
+  expect(screen.getByText(/not a sampler/)).toBeTruthy();
+});
+
+it("prices a Jev judge the way it prices every other one", () => {
+  // Every sibling branch says what it costs. A judge nobody can price is a judge
+  // nobody audits — and a tag fan-out multiplies this one.
+  openWith({ provider: "jev" });
+  expect(screen.getByText(/Costs a Jev call/)).toBeTruthy();
+});
+
+it("offers Jev's own models, with the pinned version as the unset choice", () => {
+  // `/v1/models` advertises `jev-latest` and `jev-preview`; pipecat sends a
+  // pinned version when no model is named, so that pin is what the empty choice
+  // is labelled with — it is what an unset field actually runs.
+  openWith({ provider: "jev" });
+  const field = screen.getByLabelText("Judge model") as HTMLSelectElement;
+  expect([...field.options].map((o) => o.value)).toEqual([
+    "",
+    "jev-latest",
+    "jev-preview",
+    "__other__",
+  ]);
+  expect([...field.options].find((o) => o.value === "")?.textContent).toBe("jev-1.13.0");
+});
+
+// A classifier writes no prose, so the reasons come from a second model the
+// Console cannot see configured. Three states, and the form reports the one it
+// can actually observe rather than restating the rule (turncall#139).
+it("says which model actually explained the last run", () => {
+  openWith(
+    { provider: "jev" },
+    {
+      judge_provider: "jev",
+      explainer_used: true,
+      explainer_provider: "openai",
+      explainer_model: "gpt-4o-mini",
+    }
+  );
+  expect(screen.getByTestId("jev-reasons").textContent).toBe(
+    "Its last run's written reasons came from OpenAI gpt-4o-mini."
+  );
+});
+
+it("says outright when the last run had no written reasons", () => {
+  openWith({ provider: "jev" }, { judge_provider: "jev", explainer_used: false });
+  expect(screen.getByTestId("jev-reasons").textContent).toContain(
+    "probabilities and no written reasons"
+  );
+});
+
+it("falls back to the rule only before the first run", () => {
+  openWith({ provider: "jev" });
+  expect(screen.getByTestId("jev-reasons").textContent).toContain(
+    "whatever this TurnCall judges with"
+  );
+});
+
+it("says nothing about reasons for an LLM judge, which explains itself", () => {
+  openWith({ provider: "openai", model: "gpt-4o" });
+  expect(screen.queryByTestId("jev-reasons")).toBeNull();
+});
+
+it("sends a Jev judge with no temperature at all", () => {
+  // Not merely dropped from the form: absent from the payload, so the stored
+  // scenario does not carry a number TurnCall would discard on every run.
+  openWith({ provider: "jev" });
+  fireEvent.click(screen.getByText("Save"));
+  expect(body().judge).toEqual({ provider: "jev" });
+});
+
+it("clears the model when the provider changes", () => {
+  // A model name belongs to one provider. Carrying `gpt-4o` over to Anthropic
+  // sent it to Claude, which answers 404 — and the form still showed a model the
+  // author had chosen, so nothing pointed at the leftover as the cause.
+  openWith({ provider: "openai", model: "gpt-4o", temperature: 0.2 });
+  fireEvent.change(screen.getByLabelText("Judge"), { target: { value: "anthropic" } });
+  expect((screen.getByLabelText("Judge model") as HTMLInputElement).value).toBe("");
+  fireEvent.click(screen.getByText("Save"));
+  expect(body().judge).toEqual({ provider: "anthropic" });
+});
+
+it("keeps the model when the provider is re-selected unchanged", () => {
+  openWith({ provider: "openai", model: "gpt-4o" });
+  fireEvent.change(screen.getByLabelText("Judge"), { target: { value: "openai" } });
+  expect((screen.getByLabelText("Judge model") as HTMLInputElement).value).toBe("gpt-4o");
 });
 
 it("says what a hosted judge costs where the choice is made", () => {
@@ -225,31 +327,56 @@ it("says what a hosted judge costs where the choice is made", () => {
 });
 
 it("names the provider's own default model rather than inventing one", () => {
+  // The empty choice, which is what an unset model runs. Named rather than
+  // blank: "the default" on its own is the thing the reader wanted to know.
   openWith({ provider: "openai" });
-  expect(
-    (screen.getByLabelText("Judge model") as HTMLInputElement).placeholder
-  ).toBe("gpt-4o-mini");
+  const field = screen.getByLabelText("Judge model") as HTMLSelectElement;
+  expect(field.value).toBe("");
+  expect([...field.options].find((o) => o.value === "")?.textContent).toBe("gpt-4o-mini");
 });
 
 it("offers the known models to pick from, and still takes a typed one", () => {
-  // A datalist rather than a select: the shortlist is a convenience, not a
-  // closed set. A provider ships a new model long before this list hears about
-  // it, and an Ollama model is whatever that box serves.
+  // A select, because a datalist filters its own options by the field's value
+  // and so could not be reopened once one was chosen. The shortlist is still a
+  // convenience and not a closed set: a provider ships a new model long before
+  // this list hears about it, and an Ollama model is whatever that box serves —
+  // which is what "Other…" is for.
   openWith({ provider: "openai" });
-  const field = screen.getByLabelText("Judge model") as HTMLInputElement;
-  const list = document.getElementById(field.getAttribute("list") as string);
-  expect([...(list as HTMLDataListElement).options].map((o) => o.value)).toContain(
-    "gpt-4o-mini"
+  const field = screen.getByLabelText("Judge model") as HTMLSelectElement;
+  expect([...field.options].map((o) => o.value)).toContain("gpt-4o-mini");
+
+  typeModel("some-model-we-never-heard-of");
+  expect((screen.getByLabelText("Judge model") as HTMLInputElement).value).toBe(
+    "some-model-we-never-heard-of"
   );
-  fireEvent.change(field, { target: { value: "some-model-we-never-heard-of" } });
-  expect(field.value).toBe("some-model-we-never-heard-of");
+  fireEvent.click(screen.getByText("Save"));
+  expect(body().judge.model).toBe("some-model-we-never-heard-of");
+});
+
+it("a chosen model can still be changed to another", () => {
+  // The bug this widget exists for: `<input list>` filters its options by the
+  // field's own value, so after picking `jev-latest` nothing else matched it and
+  // `jev-preview` was unreachable without emptying the field by hand.
+  openWith({ provider: "jev" });
+  const field = () => screen.getByLabelText("Judge model") as HTMLSelectElement;
+  fireEvent.change(field(), { target: { value: "jev-latest" } });
+  expect(field().value).toBe("jev-latest");
+  expect([...field().options].map((o) => o.value)).toContain("jev-preview");
+  fireEvent.change(field(), { target: { value: "jev-preview" } });
+  expect(field().value).toBe("jev-preview");
+});
+
+it("opens as a text field for a model the provider does not list", () => {
+  // Otherwise a scenario judged by something off the shortlist would open on a
+  // select that cannot represent it, and saving would silently change the model.
+  openWith({ provider: "openai", model: "ft:gpt-4o:acme:custom" });
+  const field = screen.getByLabelText("Judge model") as HTMLInputElement;
+  expect(field.tagName).toBe("INPUT");
+  expect(field.value).toBe("ft:gpt-4o:acme:custom");
 });
 
 it("offers Claude's models when the provider is Anthropic", () => {
   openWith({ provider: "anthropic" });
-  const field = screen.getByLabelText("Judge model") as HTMLInputElement;
-  const list = document.getElementById(field.getAttribute("list") as string);
-  expect([...(list as HTMLDataListElement).options].map((o) => o.value)).toContain(
-    "claude-haiku-4-5-20251001"
-  );
+  const field = screen.getByLabelText("Judge model") as HTMLSelectElement;
+  expect([...field.options].map((o) => o.value)).toContain("claude-haiku-4-5-20251001");
 });

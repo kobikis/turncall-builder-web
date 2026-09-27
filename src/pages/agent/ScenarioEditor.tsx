@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { api } from "../../api";
-import { INHERIT, PROVIDERS, takesTemperature, type JudgeBlock } from "./judge";
+import {
+  explainedLast,
+  INHERIT,
+  OTHER,
+  PROVIDERS,
+  takesTemperature,
+  type JudgeBlock,
+} from "./judge";
 
 // Editing a saved scenario (#20).
 //
@@ -31,11 +38,18 @@ export type EditableScenario = {
 export default function ScenarioEditor({
   agentId,
   scenario,
+  lastRunHarness,
   onSaved,
   onCancel,
 }: {
   agentId: string;
   scenario: EditableScenario;
+  // The last run's harness snapshot, which the tab already reads for the Judge
+  // column. It is the only way this form can say anything true about the
+  // explainer: the platform's own judge lives in TurnCall's environment, which
+  // the Console cannot read, so the alternative is stating a rule and leaving
+  // the author to evaluate it against something invisible.
+  lastRunHarness?: Record<string, unknown> | null;
   onSaved: () => void;
   onCancel: () => void;
 }) {
@@ -57,6 +71,30 @@ export default function ScenarioEditor({
       : String(scenario.judge.temperature)
   );
   const warm = provider !== INHERIT && takesTemperature(provider, judgeModel);
+  const known = PROVIDERS.find((p) => p.id === provider)?.models || [];
+  // A model this provider does not list is still a real answer, so the field
+  // opens as a text box for one — and stays one, rather than snapping back to a
+  // select that cannot represent what is in it.
+  const [typing, setTyping] = useState(
+    !!scenario.judge?.model && !known.includes(scenario.judge.model)
+  );
+
+  // A model name belongs to one provider, so it cannot survive a change of
+  // provider: openai/`gpt-4o` switched to Anthropic sent `gpt-4o` to Claude,
+  // which answers 404, and to Jev, which has one pinned model and no `gpt-4o`.
+  // The run failed with a provider error and the form still showed a model the
+  // author had deliberately chosen, so nothing pointed at the leftover.
+  //
+  // The temperature is left alone on purpose: a number is not provider-specific
+  // the way a name is, and `judgeBlock` already withholds one the chosen model
+  // would reject.
+  function changeProvider(next: string) {
+    if (next !== provider) {
+      setJudgeModel("");
+      setTyping(false);
+    }
+    setProvider(next);
+  }
 
   function judgeBlock(): JudgeBlock | null {
     if (provider === INHERIT) return null;
@@ -189,7 +227,7 @@ export default function ScenarioEditor({
             className="input"
             style={{ maxWidth: 220 }}
             value={provider}
-            onChange={(e) => setProvider(e.target.value)}
+            onChange={(e) => changeProvider(e.target.value)}
           >
             <option value={INHERIT}>Platform default</option>
             {PROVIDERS.map((p) => (
@@ -198,29 +236,48 @@ export default function ScenarioEditor({
               </option>
             ))}
           </select>
-          {provider !== INHERIT && (
-            <>
-              {/* A picker that is still a text field: `list` gives the known
-                  models one click, and typing still works — a provider ships a
-                  new model long before this list hears about it, and an Ollama
-                  model is whatever that box serves. */}
-              <input
-                className="input"
-                style={{ maxWidth: 260 }}
-                value={judgeModel}
-                autoComplete="off"
-                spellCheck={false}
-                aria-label="Judge model"
-                list={`ed-judge-models-${provider}`}
-                placeholder={PROVIDERS.find((p) => p.id === provider)?.defaultModel}
-                onChange={(e) => setJudgeModel(e.target.value)}
-              />
-              <datalist id={`ed-judge-models-${provider}`}>
-                {(PROVIDERS.find((p) => p.id === provider)?.models || []).map((m) => (
-                  <option key={m} value={m} />
-                ))}
-              </datalist>
-            </>
+          {provider !== INHERIT && known.length > 0 && !typing && (
+            /* A real select where the provider has a shortlist, because a
+               datalist could not reopen. `<input list>` filters its options by
+               the field's own value, so once it held `jev-latest` nothing else
+               matched it and `jev-preview` was unreachable without emptying the
+               field first — a picker that works once. Typing is still reachable,
+               through OTHER below. */
+            <select
+              className="input"
+              style={{ maxWidth: 260 }}
+              value={judgeModel}
+              aria-label="Judge model"
+              onChange={(e) =>
+                e.target.value === OTHER ? setTyping(true) : setJudgeModel(e.target.value)
+              }
+            >
+              <option value="">
+                {PROVIDERS.find((p) => p.id === provider)?.defaultModel}
+              </option>
+              {known.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+              <option value={OTHER}>Other…</option>
+            </select>
+          )}
+          {provider !== INHERIT && (known.length === 0 || typing) && (
+            /* A plain text field: a provider ships a new model long before this
+               list hears about it, and an Ollama model is whatever that box
+               serves. */
+            <input
+              className="input"
+              style={{ maxWidth: 260 }}
+              value={judgeModel}
+              autoComplete="off"
+              spellCheck={false}
+              autoFocus={typing}
+              aria-label="Judge model"
+              placeholder={PROVIDERS.find((p) => p.id === provider)?.defaultModel}
+              onChange={(e) => setJudgeModel(e.target.value)}
+            />
           )}
           {warm && (
             <input
@@ -240,6 +297,20 @@ export default function ScenarioEditor({
               Whatever this TurnCall is configured to judge with — a local Ollama
               unless someone set <code>EVAL_JUDGE_PROVIDER</code>. Pick a model here
               to decide it for this scenario alone.
+            </>
+          ) : provider === "jev" ? (
+            // Without a branch of its own Jev fell through to the reasoning-model
+            // text and told the author that OpenAI rejects a temperature, which
+            // is true of nothing they selected.
+            //
+            // Two sentences, not one paragraph: what it is, then the part that
+            // surprises people. The cost line is there because every other
+            // branch has one — a judge you cannot price is one nobody audits.
+            <>
+              A classifier rather than an LLM: a verdict in about a third of a
+              second, with a probability you can compare across scenarios. No
+              temperature — it is not a sampler. Costs a Jev call per{" "}
+              <code>eval:</code> expectation and per simulation turn scored.
             </>
           ) : provider === "anthropic" ? (
             <>
@@ -263,6 +334,16 @@ export default function ScenarioEditor({
             </>
           )}
         </p>
+        {provider === "jev" && (
+          // Said only for a classifier, because it is the only judge whose
+          // reasons can be missing. What the *last run* got, where there is one:
+          // a fact the author can act on, rather than a rule about an
+          // environment variable they cannot see from here.
+          <p className="hint" style={{ margin: "4px 0 0" }} data-testid="jev-reasons">
+            {explainedLast(lastRunHarness) ||
+              "A classifier writes no prose, so the reasons come from whatever this TurnCall judges with — and a platform configured with none reports probabilities without them."}
+          </p>
+        )}
       </div>
 
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

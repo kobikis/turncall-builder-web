@@ -441,6 +441,7 @@ export default function EvalsTab() {
         <ScenarioEditor
           agentId={agentId}
           scenario={editing}
+          lastRunHarness={latestFor(editing.id)?.harness_config}
           onCancel={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
