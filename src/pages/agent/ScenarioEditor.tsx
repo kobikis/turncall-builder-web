@@ -241,6 +241,19 @@ export default function ScenarioEditor({
               unless someone set <code>EVAL_JUDGE_PROVIDER</code>. Pick a model here
               to decide it for this scenario alone.
             </>
+          ) : provider === "jev" ? (
+            // Without this branch Jev fell through to the reasoning-model text
+            // and told the author that OpenAI rejects a temperature, which is
+            // true of nothing they selected. The second sentence is the part
+            // that surprises people: a classifier gives probabilities and no
+            // prose, and the reason comes from whatever the platform judge is.
+            <>
+              A classifier, not an LLM: a verdict in a few hundred milliseconds
+              with a calibrated probability, and no temperature to set. Written
+              reasons come from the platform judge —{" "}
+              <code>EVAL_JUDGE_PROVIDER</code> — and a platform with none set, or
+              set to Jev, reports probabilities without prose.
+            </>
           ) : provider === "anthropic" ? (
             <>
               Claude rejects a temperature outright, so none is sent. Costs model

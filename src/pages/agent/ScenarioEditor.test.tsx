@@ -219,6 +219,32 @@ it("drops the temperature for an OpenAI reasoning model too", () => {
   expect(screen.queryByLabelText("Judge temperature")).toBeNull();
 });
 
+it("offers Jev, with no temperature and no wrong explanation", () => {
+  // A classifier has no temperature at all. Before it had a branch of its own it
+  // fell through to the reasoning-model text and blamed OpenAI for a rule that
+  // belongs to neither the provider the author picked nor any model of theirs.
+  openWith({ provider: "jev" });
+  expect((screen.getByLabelText("Judge") as HTMLSelectElement).value).toBe("jev");
+  expect(screen.queryByLabelText("Judge temperature")).toBeNull();
+  expect(screen.queryByText(/reasoning models reject a temperature/)).toBeNull();
+  expect(screen.getByText(/calibrated probability/)).toBeTruthy();
+});
+
+it("warns that a Jev verdict may arrive without written reasons", () => {
+  // The one thing that reads as broken rather than as configured: a classifier
+  // writes nothing, so the prose comes from the platform judge or not at all.
+  openWith({ provider: "jev" });
+  expect(screen.getByText(/EVAL_JUDGE_PROVIDER/)).toBeTruthy();
+});
+
+it("sends a Jev judge with no temperature at all", () => {
+  // Not merely dropped from the form: absent from the payload, so the stored
+  // scenario does not carry a number TurnCall would discard on every run.
+  openWith({ provider: "jev" });
+  fireEvent.click(screen.getByText("Save"));
+  expect(body().judge).toEqual({ provider: "jev" });
+});
+
 it("says what a hosted judge costs where the choice is made", () => {
   openWith({ provider: "openai" });
   expect(screen.getByText(/costs model time/i)).toBeTruthy();

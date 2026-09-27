@@ -42,6 +42,25 @@ export const PROVIDERS = [
     defaultModel: "claude-haiku-4-5-20251001",
     models: ["claude-haiku-4-5-20251001", "claude-sonnet-5"],
   },
+  // A classifier rather than an LLM (turncall#141): a verdict in a few hundred
+  // milliseconds against several seconds, with a *calibrated* probability
+  // rather than a model's own guess at how sure it is. Judge-only — TurnCall
+  // keeps it out of the allowlist a persona is drawn from, because a persona is
+  // linked into a pipeline to speak — so it must never appear in a simulator
+  // picker if one is ever added here.
+  //
+  // `models` is empty for the reason Ollama's is, inverted: pipecat pins the
+  // model (`jev-1.13.0`) so the thresholds tuned against it hold, and there is
+  // no shortlist to offer. Needs TYPESAFE_API_KEY and the `evals-jev` extra on
+  // the deployment; both are checked when a run builds the judge, never when a
+  // scenario is saved, so this option stays selectable on a platform that has
+  // not been provisioned yet.
+  {
+    id: "jev",
+    label: "Jev (TypeSafe)",
+    defaultModel: "jev-1.13.0",
+    models: [],
+  },
 ];
 
 export const INHERIT = "";
@@ -50,7 +69,13 @@ const NAMES: Record<string, string> = {
   ollama: "Ollama",
   openai: "OpenAI",
   anthropic: "Anthropic",
+  jev: "Jev",
 };
+
+// The judge providers that are only a classifier, mirroring TurnCall's own
+// `CLASSIFIER_ONLY_JUDGES`. Two things follow from it and nothing else does:
+// there is no temperature to set, and there is no prose to read.
+const CLASSIFIERS = ["jev"];
 
 /** A judge block as one line, or null when the scenario names none. */
 export function judgeLabel(judge?: JudgeBlock | null): string | null {
@@ -69,7 +94,10 @@ export function judgeLabel(judge?: JudgeBlock | null): string | null {
 const REASONING = ["o1", "o3", "o4", "gpt-5"];
 
 export function takesTemperature(provider: string, model: string): boolean {
-  if (provider === "anthropic") return false;
+  // A classifier is not a sampler: there is no temperature to send, and
+  // TurnCall drops one that is set. Offering the field would be the same
+  // "accepting a number that goes nowhere" the Anthropic rule below avoids.
+  if (provider === "anthropic" || CLASSIFIERS.includes(provider)) return false;
   const name = (model || "").toLowerCase();
   return !REASONING.some((prefix) => name.startsWith(prefix));
 }
@@ -95,7 +123,30 @@ function judgeFromHarness(harness: Record<string, unknown>): string | null {
 export function judgedBy(harness?: Record<string, unknown> | null): string | null {
   if (!harness) return null;
   if (harness.judge_used === false) return NOT_ASKED;
-  return judgeFromHarness(harness);
+  const judged = judgeFromHarness(harness);
+  if (!judged) return null;
+  const explained = explainedBy(harness);
+  return explained ? `${judged} · ${explained}` : judged;
+}
+
+// A classifier decides but writes nothing, so a second model — the explainer —
+// supplies the reason behind every `no` (turncall#139). Which one it was is on
+// the snapshot, and it matters here for one reason: with no explainer
+// configured, reasons are turned **off**, and a run full of bare probabilities
+// reads as broken rather than as configured. This is the sentence that says
+// which it is.
+//
+// Said only when it adds something. For an LLM judge the explainer is that same
+// model, and repeating it in every row of the runs table would be noise.
+function explainedBy(harness: Record<string, unknown>): string | null {
+  if (harness.explainer_used === undefined) return null; // a run predating #139
+  if (harness.explainer_used === false) return "no written reasons";
+  const provider = harness.explainer_provider as string | undefined;
+  if (!provider) return null;
+  const judge = (harness.judge_provider || harness.judge_service) as string | undefined;
+  const model = harness.explainer_model as string | undefined;
+  if (provider === judge && model === (harness.judge_model as string | undefined)) return null;
+  return `explained by ${[NAMES[provider] || provider, model].filter(Boolean).join(" ")}`;
 }
 
 /** The same answer for a column with room for a phrase: the sentence becomes

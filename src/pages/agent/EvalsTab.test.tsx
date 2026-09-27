@@ -334,6 +334,64 @@ it("does not name a judge that was never asked anything", async () => {
   expect(screen.getByTestId("judged-by").textContent).toContain("No judge was asked");
 });
 
+// A classifier judge decides fast and writes nothing, so a second model — the
+// explainer — supplies the reason (turncall#139/#141). The failure mode the tab
+// has to cover: with no explainer configured, reasons are turned *off*, and a
+// run of bare probabilities reads as broken rather than as configured.
+it("says which model explained a classifier's verdicts", async () => {
+  runs = [
+    run({
+      harness_config: {
+        judge_used: true,
+        judge_provider: "jev",
+        explainer_used: true,
+        explainer_provider: "openai",
+        explainer_model: "gpt-4o-mini",
+      },
+    }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getAllByText("Details").length).toBeGreaterThan(0));
+  fireEvent.click(screen.getAllByText("Details")[0]);
+  expect(screen.getByTestId("judged-by").textContent).toContain("Jev");
+  expect(screen.getByTestId("judged-by").textContent).toContain(
+    "explained by OpenAI gpt-4o-mini"
+  );
+});
+
+it("says a verdict has no written reasons rather than leaving it blank", async () => {
+  runs = [
+    run({
+      harness_config: { judge_used: true, judge_provider: "jev", explainer_used: false },
+    }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getAllByText("Details").length).toBeGreaterThan(0));
+  fireEvent.click(screen.getAllByText("Details")[0]);
+  expect(screen.getByTestId("judged-by").textContent).toContain("no written reasons");
+});
+
+it("does not repeat an LLM judge as its own explainer", async () => {
+  // For an LLM judge the explainer is that same model, so saying it twice in
+  // every row is noise — and the runs table shows this string too.
+  runs = [
+    run({
+      harness_config: {
+        judge_used: true,
+        judge_provider: "openai",
+        judge_model: "gpt-4o",
+        explainer_used: true,
+        explainer_provider: "openai",
+        explainer_model: "gpt-4o",
+      },
+    }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getAllByText("Details").length).toBeGreaterThan(0));
+  fireEvent.click(screen.getAllByText("Details")[0]);
+  expect(screen.getByTestId("judged-by").textContent).not.toContain("explained by");
+});
+
 it("flags a run whose judge changed, distinctly from a failure", async () => {
   runs = [
     run({
