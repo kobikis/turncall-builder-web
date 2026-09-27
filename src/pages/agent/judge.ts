@@ -182,6 +182,33 @@ export function judgedByShort(harness?: Record<string, unknown> | null): string 
   return (harness.judge_model as string | undefined) || judgeFromHarness(harness);
 }
 
+/** What a scenario's *last* run actually got for written reasons, as a sentence.
+ *
+ * A classifier decides fast and writes nothing, so the prose comes from a second
+ * model — the explainer — which TurnCall compiles from the platform judge, or
+ * turns off where the platform has none (turncall#139). The Console cannot read
+ * that environment, so the editor used to state the **rule** and leave the author
+ * to evaluate it against something they cannot see. A run's snapshot is the
+ * observable half: it says what actually happened last time.
+ *
+ * Null when there is nothing to report — no run yet, a run predating those keys,
+ * or an LLM judge, where the explainer is the judging model and saying so adds
+ * nothing.
+ */
+export function explainedLast(harness?: Record<string, unknown> | null): string | null {
+  if (!harness || harness.explainer_used === undefined) return null;
+  if (harness.explainer_used === false) {
+    return "Its last run reported probabilities and no written reasons.";
+  }
+  const provider = harness.explainer_provider as string | undefined;
+  if (!provider) return null;
+  const judge = (harness.judge_provider || harness.judge_service) as string | undefined;
+  if (provider === judge && harness.explainer_model === harness.judge_model) return null;
+  const model = harness.explainer_model as string | undefined;
+  const named = [NAMES[provider] || provider, model].filter(Boolean).join(" ");
+  return `Its last run's written reasons came from ${named}.`;
+}
+
 /** The services an audio run put either side of the agent (turncall#72).
  *
  * A different TTS says the caller's line differently and a different STT

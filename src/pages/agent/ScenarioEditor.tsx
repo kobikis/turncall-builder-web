@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { api } from "../../api";
-import { INHERIT, OTHER, PROVIDERS, takesTemperature, type JudgeBlock } from "./judge";
+import {
+  explainedLast,
+  INHERIT,
+  OTHER,
+  PROVIDERS,
+  takesTemperature,
+  type JudgeBlock,
+} from "./judge";
 
 // Editing a saved scenario (#20).
 //
@@ -31,11 +38,18 @@ export type EditableScenario = {
 export default function ScenarioEditor({
   agentId,
   scenario,
+  lastRunHarness,
   onSaved,
   onCancel,
 }: {
   agentId: string;
   scenario: EditableScenario;
+  // The last run's harness snapshot, which the tab already reads for the Judge
+  // column. It is the only way this form can say anything true about the
+  // explainer: the platform's own judge lives in TurnCall's environment, which
+  // the Console cannot read, so the alternative is stating a rule and leaving
+  // the author to evaluate it against something invisible.
+  lastRunHarness?: Record<string, unknown> | null;
   onSaved: () => void;
   onCancel: () => void;
 }) {
@@ -285,17 +299,18 @@ export default function ScenarioEditor({
               to decide it for this scenario alone.
             </>
           ) : provider === "jev" ? (
-            // Without this branch Jev fell through to the reasoning-model text
-            // and told the author that OpenAI rejects a temperature, which is
-            // true of nothing they selected. The second sentence is the part
-            // that surprises people: a classifier gives probabilities and no
-            // prose, and the reason comes from whatever the platform judge is.
+            // Without a branch of its own Jev fell through to the reasoning-model
+            // text and told the author that OpenAI rejects a temperature, which
+            // is true of nothing they selected.
+            //
+            // Two sentences, not one paragraph: what it is, then the part that
+            // surprises people. The cost line is there because every other
+            // branch has one — a judge you cannot price is one nobody audits.
             <>
-              A classifier, not an LLM: a verdict in a few hundred milliseconds
-              with a calibrated probability, and no temperature to set. Written
-              reasons come from the platform judge —{" "}
-              <code>EVAL_JUDGE_PROVIDER</code> — and a platform with none set, or
-              set to Jev, reports probabilities without prose.
+              A classifier rather than an LLM: a verdict in about a third of a
+              second, with a probability you can compare across scenarios. No
+              temperature — it is not a sampler. Costs a Jev call per{" "}
+              <code>eval:</code> expectation and per simulation turn scored.
             </>
           ) : provider === "anthropic" ? (
             <>
@@ -319,6 +334,16 @@ export default function ScenarioEditor({
             </>
           )}
         </p>
+        {provider === "jev" && (
+          // Said only for a classifier, because it is the only judge whose
+          // reasons can be missing. What the *last run* got, where there is one:
+          // a fact the author can act on, rather than a rule about an
+          // environment variable they cannot see from here.
+          <p className="hint" style={{ margin: "4px 0 0" }} data-testid="jev-reasons">
+            {explainedLast(lastRunHarness) ||
+              "A classifier writes no prose, so the reasons come from whatever this TurnCall judges with — and a platform configured with none reports probabilities without them."}
+          </p>
+        )}
       </div>
 
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

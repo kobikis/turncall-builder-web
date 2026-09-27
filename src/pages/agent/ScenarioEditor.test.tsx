@@ -158,11 +158,12 @@ it("cancelling changes nothing", () => {
 // keep them apart: a blank field that silently means "the default" is how the
 // wrong judge runs for a month.
 
-const openWith = (judge: unknown) =>
+const openWith = (judge: unknown, lastRunHarness?: Record<string, unknown> | null) =>
   render(
     <ScenarioEditor
       agentId="a1"
       scenario={{ ...SCENARIO, judge } as never}
+      lastRunHarness={lastRunHarness}
       onSaved={saved}
       onCancel={cancelled}
     />
@@ -233,7 +234,14 @@ it("offers Jev, with no temperature and no wrong explanation", () => {
   expect((screen.getByLabelText("Judge") as HTMLSelectElement).value).toBe("jev");
   expect(screen.queryByLabelText("Judge temperature")).toBeNull();
   expect(screen.queryByText(/reasoning models reject a temperature/)).toBeNull();
-  expect(screen.getByText(/calibrated probability/)).toBeTruthy();
+  expect(screen.getByText(/not a sampler/)).toBeTruthy();
+});
+
+it("prices a Jev judge the way it prices every other one", () => {
+  // Every sibling branch says what it costs. A judge nobody can price is a judge
+  // nobody audits — and a tag fan-out multiplies this one.
+  openWith({ provider: "jev" });
+  expect(screen.getByText(/Costs a Jev call/)).toBeTruthy();
 });
 
 it("offers Jev's own models, with the pinned version as the unset choice", () => {
@@ -251,11 +259,41 @@ it("offers Jev's own models, with the pinned version as the unset choice", () =>
   expect([...field.options].find((o) => o.value === "")?.textContent).toBe("jev-1.13.0");
 });
 
-it("warns that a Jev verdict may arrive without written reasons", () => {
-  // The one thing that reads as broken rather than as configured: a classifier
-  // writes nothing, so the prose comes from the platform judge or not at all.
+// A classifier writes no prose, so the reasons come from a second model the
+// Console cannot see configured. Three states, and the form reports the one it
+// can actually observe rather than restating the rule (turncall#139).
+it("says which model actually explained the last run", () => {
+  openWith(
+    { provider: "jev" },
+    {
+      judge_provider: "jev",
+      explainer_used: true,
+      explainer_provider: "openai",
+      explainer_model: "gpt-4o-mini",
+    }
+  );
+  expect(screen.getByTestId("jev-reasons").textContent).toBe(
+    "Its last run's written reasons came from OpenAI gpt-4o-mini."
+  );
+});
+
+it("says outright when the last run had no written reasons", () => {
+  openWith({ provider: "jev" }, { judge_provider: "jev", explainer_used: false });
+  expect(screen.getByTestId("jev-reasons").textContent).toContain(
+    "probabilities and no written reasons"
+  );
+});
+
+it("falls back to the rule only before the first run", () => {
   openWith({ provider: "jev" });
-  expect(screen.getByText(/EVAL_JUDGE_PROVIDER/)).toBeTruthy();
+  expect(screen.getByTestId("jev-reasons").textContent).toContain(
+    "whatever this TurnCall judges with"
+  );
+});
+
+it("says nothing about reasons for an LLM judge, which explains itself", () => {
+  openWith({ provider: "openai", model: "gpt-4o" });
+  expect(screen.queryByTestId("jev-reasons")).toBeNull();
 });
 
 it("sends a Jev judge with no temperature at all", () => {
