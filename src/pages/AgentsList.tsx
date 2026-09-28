@@ -4,6 +4,7 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import { canEdit } from "../roles";
 import Uid from "../components/Uid";
+import { agentStatus } from "../agentStatus";
 import { Agent, ApiResponse } from "../types";
 
 export default function AgentsList() {
@@ -31,10 +32,11 @@ export default function AgentsList() {
   return (
     <div>
       <div className="page-head">
-        <div>
-          <h2>Agents</h2>
-          <p>Voice agents composed with the builder, each with its own generated backend.</p>
-        </div>
+        {/* No subtitle. "Voice agents composed with the builder, each with its
+            own generated backend" described how the system is built, to an
+            audience that came here to see whether the phone is being
+            answered. */}
+        <h2>Agents</h2>
         {editable && (
           <Link to="/agents/new" className="btn btn-primary">+ New agent</Link>
         )}
@@ -60,7 +62,7 @@ export default function AgentsList() {
                 Name <span className="caret" aria-hidden="true">{sortDesc ? "▾" : "▴"}</span>
               </button>
             </th>
-            <th>ID</th><th>Backend</th><th>Status</th>
+            <th>ID</th><th>Port</th><th>Status</th>
           </tr>
         </thead>
         <tbody>
@@ -71,14 +73,22 @@ export default function AgentsList() {
               </td>
               <td><Uid id={a.agent_id} label="agent_id" /></td>
               <td className="num"><code>:{a.port}</code></td>
-              <td><span className={`badge ${a.status}`}>{a.status}</span></td>
+              <td>
+                <span className={`badge ${a.status}`} title={agentStatus(a.status).title}>
+                  {agentStatus(a.status).label}
+                </span>
+              </td>
             </tr>
           ))}
           {agents === null && !error && (
             <tr><td colSpan={4} className="muted" style={{ padding: 16 }}>Loading…</td></tr>
           )}
           {agents?.length === 0 && (
-            <tr><td colSpan={4} className="muted" style={{ padding: 16 }}>No agents yet — create one.</td></tr>
+            <tr>
+              <td colSpan={4} className="muted" style={{ padding: 16 }}>
+                No agents yet. Create one to start answering calls.
+              </td>
+            </tr>
           )}
           {agents && agents.length > 0 && visible.length === 0 && (
             <tr><td colSpan={4} className="muted" style={{ padding: 16 }}>No agents match “{q}”.</td></tr>

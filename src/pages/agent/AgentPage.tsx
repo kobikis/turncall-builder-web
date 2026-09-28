@@ -5,6 +5,7 @@ import Uid from "../../components/Uid";
 import { VoiceCallProvider } from "./VoiceCall";
 import { usePoll } from "../../usePoll";
 import { Backend, ToolStatuses } from "../../types";
+import { agentStatus } from "../../agentStatus";
 
 // Re-export so the tabs keep importing these from AgentPage.
 export type { Backend, ToolStatuses };
@@ -106,7 +107,12 @@ export default function AgentPage() {
             {backend && (
               <>
                 <code>:{backend.port}</code>
-                <span className={`badge ${backend.status}`}>{backend.status}</span>
+                <span
+                  className={`badge ${backend.status}`}
+                  title={agentStatus(backend.status).title}
+                >
+                  {agentStatus(backend.status).label}
+                </span>
               </>
             )}
           </p>
