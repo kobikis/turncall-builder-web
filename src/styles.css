@@ -153,23 +153,15 @@ code {
   flex-direction: column;
   padding: 28px 32px;
   overflow-y: auto;
-  /* The ambient wash is absolutely positioned against this. */
-  position: relative;
 }
 
-/* Above the backdrop canvas, and the reason the canvas can stay `position:
-   absolute` without a stacking-context fight: the content gets its own layer
-   rather than every child needing a z-index.
-
-   The width cap is the other job it does. Past about 1180px a four-column
-   table stops being a row and becomes four things at opposite ends of a
-   monitor, with the eye travelling further between a name and its status than
-   between two unrelated pages. Centred rather than left-aligned: the sidebar
-   already anchors the left edge, so left-aligning would pile everything into
-   one half and leave the other empty. */
+/* One reading width for every page. Past about 1180px a four-column table
+   stops being a row and becomes four things at opposite ends of a monitor,
+   with the eye travelling further between a name and its status than between
+   two unrelated pages. Centred rather than left-aligned: the sidebar already
+   anchors the left edge, so left-aligning would pile everything into one half
+   and leave the other empty. */
 .main-content {
-  position: relative;
-  z-index: 1;
   width: 100%;
   max-width: 1180px;
   margin-inline: auto;
