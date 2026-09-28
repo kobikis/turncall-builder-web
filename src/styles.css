@@ -687,3 +687,54 @@ table.list .num { font-variant-numeric: tabular-nums; }
 .integration-grid.wide .integration-card .desc { flex: none; min-height: 0; }
 .integration-card .desc + label { margin-top: 2px; }
 .integration-card select.input { max-width: 100%; }
+
+/* ---------- activity ribbon ---------- */
+
+/* Twenty-four hours of an agent, now at the right edge. Sized once here so the
+   column does not resize as counts arrive. */
+.ribbon {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.ribbon-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  width: 132px;
+  height: 22px;
+}
+.ribbon-bar {
+  flex: 1;
+  min-height: 1px;
+  border-radius: 1px;
+  background: var(--text-muted);
+  opacity: 0.5;
+}
+/* The current hour, and the only accent in the row: it is what makes the strip
+   readable as time rather than as a chart. */
+.ribbon-bar.now {
+  background: var(--primary);
+  opacity: 0.9;
+}
+.ribbon-total {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  min-width: 2ch;
+}
+/* Holds the column's height while the second request is in flight, so the
+   table does not jump when activity lands. */
+.ribbon-empty {
+  display: inline-block;
+  height: 22px;
+  font-size: 12.5px;
+}
+
+/* The identifier under a name: present for whoever needs it, quiet enough that
+   the name stays the thing you read. */
+.sub {
+  display: block;
+  margin-top: 3px;
+  font-weight: 400;
+}

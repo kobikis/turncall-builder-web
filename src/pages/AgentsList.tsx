@@ -5,7 +5,8 @@ import { useAuth } from "../auth";
 import { canEdit } from "../roles";
 import Uid from "../components/Uid";
 import { agentStatus, answersCalls } from "../agentStatus";
-import { Agent, ApiResponse } from "../types";
+import { Agent, AgentActivity, ApiResponse } from "../types";
+import Ribbon from "../components/Ribbon";
 
 // Two states, not six: an operator asks which agents are answering and which
 // are not, and `answersCalls` is the one place that split is defined.
@@ -23,12 +24,25 @@ export default function AgentsList() {
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
   const [only, setOnly] = useState<Filter>("all");
+  const [activity, setActivity] = useState<Record<string, AgentActivity>>({});
   const [sortDesc, setSortDesc] = useState(false); // by name, ascending default
 
   useEffect(() => {
     api<ApiResponse<{ agents: Agent[] }>>("/agents")
       .then((r) => setAgents(r.data.agents))
       .catch((e) => setError(e.message));
+  }, []);
+
+  // A second request, deliberately: the list is one registry query and paints
+  // at once, while this one asks TurnCall per agent. A failure here is silent
+  // in the page's error banner and shows as "no data" per row — the list of
+  // agents is still correct, and saying the page failed would be a lie.
+  useEffect(() => {
+    api<ApiResponse<{ activity: AgentActivity[] }>>("/agent-activity")
+      .then((r) =>
+        setActivity(Object.fromEntries(r.data.activity.map((a) => [a.agent_id, a])))
+      )
+      .catch(() => setActivity({}));
   }, []);
 
   // Filter by status, then by id or name, then sort by name.
@@ -98,7 +112,7 @@ export default function AgentsList() {
                 Name <span className="caret" aria-hidden="true">{sortDesc ? "▾" : "▴"}</span>
               </button>
             </th>
-            <th>ID</th><th>Port</th><th>Status</th>
+            <th>Number</th><th>Last 24 hours</th><th>Status</th>
           </tr>
         </thead>
         <tbody>
@@ -106,9 +120,28 @@ export default function AgentsList() {
             <tr key={a.agent_id}>
               <td style={{ fontWeight: 500 }}>
                 <Link to={`/agents/${a.agent_id}`}>{a.name}</Link>
+                {/* The id moves under the name: it is how the system refers to
+                    the agent, not how its operator does, and it was taking a
+                    column from the number a caller actually dials. */}
+                <span className="sub">
+                  <Uid id={a.agent_id} label="agent_id" />
+                </span>
               </td>
-              <td><Uid id={a.agent_id} label="agent_id" /></td>
-              <td className="num"><code>:{a.port}</code></td>
+              <td className="nowrap">
+                {activity[a.agent_id]?.number || <span className="muted">not routed</span>}
+              </td>
+              <td>
+                {activity[a.agent_id] ? (
+                  <Ribbon
+                    hours={activity[a.agent_id].hours}
+                    total={activity[a.agent_id].calls_24h}
+                    available={activity[a.agent_id].available}
+                    truncated={activity[a.agent_id].truncated}
+                  />
+                ) : (
+                  <span className="ribbon-empty" />
+                )}
+              </td>
               <td>
                 <span className={`badge ${a.status}`} title={agentStatus(a.status).title}>
                   {agentStatus(a.status).label}

@@ -28,6 +28,17 @@ export type Agent = {
   browser_url?: string;
 };
 
+// What an agent has been doing, fetched after the list so a slow or absent
+// TurnCall never delays the page's first paint (builder-api /agents/activity).
+export type AgentActivity = {
+  agent_id: string;
+  number: string | null;
+  hours: number[];
+  calls_24h: number;
+  truncated: boolean;
+  available: boolean;
+};
+
 // Minimal agent shape for pickers (the /agents list without runtime fields).
 export type AgentRef = { agent_id: string; name: string };
 
