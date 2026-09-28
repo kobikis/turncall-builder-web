@@ -738,3 +738,40 @@ table.list .num { font-variant-numeric: tabular-nums; }
   margin-top: 3px;
   font-weight: 400;
 }
+
+/* ---------- loading and row affordances ---------- */
+
+.skeleton {
+  display: inline-block;
+  height: 11px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--hover), var(--bg-subtle), var(--hover));
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.4s ease-in-out infinite;
+}
+.skeleton-row td { height: 44px; }
+@keyframes skeleton-sweep {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+/* The whole row navigates to the agent. The pointer is the only affordance it
+   needs — the name is already visibly a link, so a second one would be
+   decoration. */
+.row-link { cursor: pointer; }
+
+/* Links inside a table got the browser's default ring while every other
+   control here had the house one. */
+table.list a:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Nothing on this page moves for someone who asked for less motion. Covers the
+   skeleton sweep and the `generating` badge's pulse, which predates it and had
+   no guard of its own. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+  .badge.generating::before { animation: none; }
+}

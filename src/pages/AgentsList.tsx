@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { canEdit } from "../roles";
@@ -7,6 +7,7 @@ import Uid from "../components/Uid";
 import { agentStatus, answersCalls } from "../agentStatus";
 import { Agent, AgentActivity, ApiResponse } from "../types";
 import Ribbon from "../components/Ribbon";
+import SkeletonRows from "../components/SkeletonRows";
 
 // Two states, not six: an operator asks which agents are answering and which
 // are not, and `answersCalls` is the one place that split is defined.
@@ -18,6 +19,7 @@ const FILTERS: { id: Filter; label: string }[] = [
 ];
 
 export default function AgentsList() {
+  const navigate = useNavigate();
   const { activeWorkspace } = useAuth();
   const editable = canEdit(activeWorkspace?.role); // viewers get a read-only list
   const [agents, setAgents] = useState<Agent[] | null>(null); // null = loading
@@ -100,7 +102,7 @@ export default function AgentsList() {
           ))}
         </div>
       </div>
-      <table className="list">
+      <table className="list" aria-busy={agents === null}>
         <thead>
           <tr>
             <th>
@@ -117,7 +119,20 @@ export default function AgentsList() {
         </thead>
         <tbody>
           {visible.map((a) => (
-            <tr key={a.agent_id}>
+            <tr
+              key={a.agent_id}
+              className="row-link"
+              // The row is a shortcut, not the control: the name inside it is
+              // still the link, which is what keyboard and screen-reader users
+              // follow and what a middle-click opens in a new tab. A click that
+              // landed on some other link or button in the row is that
+              // control's, not the row's.
+              onClick={(e) => {
+                if (!(e.target as HTMLElement).closest("a, button")) {
+                  navigate(`/agents/${a.agent_id}`);
+                }
+              }}
+            >
               <td style={{ fontWeight: 500 }}>
                 <Link to={`/agents/${a.agent_id}`}>{a.name}</Link>
                 {/* The id moves under the name: it is how the system refers to
@@ -149,9 +164,7 @@ export default function AgentsList() {
               </td>
             </tr>
           ))}
-          {agents === null && !error && (
-            <tr><td colSpan={4} className="muted" style={{ padding: 16 }}>Loading…</td></tr>
-          )}
+          {agents === null && !error && <SkeletonRows columns={4} />}
           {agents?.length === 0 && (
             <tr>
               <td colSpan={4} className="muted" style={{ padding: 16 }}>
