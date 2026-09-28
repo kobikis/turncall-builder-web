@@ -38,3 +38,18 @@ const STATUSES: Record<string, Status> = {
 export function agentStatus(status: string): Status {
   return STATUSES[status] ?? { label: status };
 }
+
+// The states in which a caller who dials the number gets an answer. `degraded`
+// is one of them: it answers, it just is not verifying webhook signatures.
+const ANSWERING = new Set(["running", "degraded"]);
+
+/** Whether an agent in this state answers a call right now.
+ *
+ * The filter's split, and deliberately the only one: "ready" and "offline" is
+ * the question an operator actually has, where a list of six container states
+ * is the question the API has. `starting` counts as not answering, which is
+ * true — it is on its way up, and a caller ringing it now hears nothing.
+ */
+export function answersCalls(status: string): boolean {
+  return ANSWERING.has(status);
+}

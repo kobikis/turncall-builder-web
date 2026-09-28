@@ -5,7 +5,7 @@
 // vocabularies have to stay deliberately apart.
 
 import { describe, expect, it } from "vitest";
-import { agentStatus } from "./agentStatus";
+import { agentStatus, answersCalls } from "./agentStatus";
 
 describe("agentStatus", () => {
   it("says what the agent does, not what the container does", () => {
@@ -34,5 +34,25 @@ describe("agentStatus", () => {
     // The badge colours key off the API's value, so the mapping must not be
     // the only place the status exists.
     expect(agentStatus("running").label).not.toBe("running");
+  });
+});
+
+describe("answersCalls", () => {
+  it("is true for the states where a caller gets an answer", () => {
+    expect(answersCalls("running")).toBe(true);
+    // Degraded answers the phone; it just is not verifying webhook signatures.
+    expect(answersCalls("degraded")).toBe(true);
+  });
+
+  it("is false while the agent is on its way up", () => {
+    // A caller ringing a starting agent hears nothing, so grouping it with
+    // "ready" would put a lie in the filter.
+    expect(answersCalls("generating")).toBe(false);
+  });
+
+  it("is false for every state that does not answer", () => {
+    for (const status of ["stopped", "failed", "deleted", "quarantined"]) {
+      expect(answersCalls(status)).toBe(false);
+    }
   });
 });

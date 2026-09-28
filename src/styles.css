@@ -159,10 +159,70 @@ code {
 
 /* Above the backdrop canvas, and the reason the canvas can stay `position:
    absolute` without a stacking-context fight: the content gets its own layer
-   rather than every child needing a z-index. */
+   rather than every child needing a z-index.
+
+   The width cap is the other job it does. Past about 1180px a four-column
+   table stops being a row and becomes four things at opposite ends of a
+   monitor, with the eye travelling further between a name and its status than
+   between two unrelated pages. Centred rather than left-aligned: the sidebar
+   already anchors the left edge, so left-aligning would pile everything into
+   one half and leave the other empty. */
 .main-content {
   position: relative;
   z-index: 1;
+  width: 100%;
+  max-width: 1180px;
+  margin-inline: auto;
+}
+
+/* Search and status filters: one line, one question — which of these do I
+   want to look at. Wraps rather than compresses on a narrow window, because a
+   search field below its filters still works and a 90px search field does
+   not. */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+/* A segmented control, hairline like the tables it sits above. */
+.filters {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.filter {
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  background: none;
+  border: 0;
+  border-inline-start: 1px solid var(--border);
+  padding: 7px 12px;
+  cursor: pointer;
+}
+.filter:first-child { border-inline-start: 0; }
+.filter:hover { color: var(--text); background: var(--hover); }
+/* The selected one is stated by colour and weight rather than by a fill: a
+   filled segment in the accent would compete with the primary action, which is
+   the only thing on this page allowed to be that loud. */
+.filter.active {
+  color: var(--text);
+  font-weight: 600;
+  background: var(--bg-subtle);
+}
+
+/* The agent count, beside the heading. Tabular so it does not jiggle as it
+   changes, and muted because it is context, not the title. */
+.count {
+  margin-inline-start: 8px;
+  font-size: 0.7em;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
 }
 
 .page-head {
