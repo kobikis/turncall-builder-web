@@ -153,6 +153,16 @@ code {
   flex-direction: column;
   padding: 28px 32px;
   overflow-y: auto;
+  /* The ambient wash is absolutely positioned against this. */
+  position: relative;
+}
+
+/* Above the backdrop canvas, and the reason the canvas can stay `position:
+   absolute` without a stacking-context fight: the content gets its own layer
+   rather than every child needing a z-index. */
+.main-content {
+  position: relative;
+  z-index: 1;
 }
 
 .page-head {

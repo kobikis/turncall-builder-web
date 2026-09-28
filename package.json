@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.9.0",
   "license": "LicenseRef-FSL-1.1-ALv2",
-  "description": "Conversational agent builder for TurnCall \u2014 web console",
+  "description": "Conversational agent builder for TurnCall — web console",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -17,7 +17,8 @@
     "@pipecat-ai/small-webrtc-transport": "^1.10.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.26.0"
+    "react-router-dom": "^6.26.0",
+    "shaders": "^3.2.474"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",

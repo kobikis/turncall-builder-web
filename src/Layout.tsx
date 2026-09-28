@@ -4,6 +4,7 @@ import { useAuth } from "./auth";
 import { isAdmin } from "./roles";
 import WorkspaceSwitcher from "./components/WorkspaceSwitcher";
 import { applyThemePref, getThemePref, ThemePref } from "./theme";
+import Backdrop from "./components/Backdrop";
 
 export default function Layout() {
   const [theme, setTheme] = useState<ThemePref>(getThemePref);
@@ -76,7 +77,14 @@ export default function Layout() {
           re-fetch under the new X-Workspace-Id and never show stale, other-tenant
           data (#28). */}
       <main className="main" key={activeWorkspaceId ?? "none"}>
-        <Outlet />
+        {/* Scenery, behind everything and outside the flow. It is mounted here
+            rather than per page so it does not remount on every navigation —
+            a shader that restarts its animation on each route change reads as
+            a flicker. */}
+        <Backdrop />
+        <div className="main-content">
+          <Outlet />
+        </div>
       </main>
     </div>
   );
