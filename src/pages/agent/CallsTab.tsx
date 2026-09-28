@@ -5,20 +5,10 @@ import { usePoll } from "../../usePoll";
 import { useAgent } from "./AgentPage";
 import { Call } from "../../types";
 import SaveAsScenario from "./SaveAsScenario";
+import { fmtTime, inDayRange, localDay } from "../../dates";
 
 type TranscriptEntry = { role: string | null; text: string; timestamp?: string };
 
-const timeFmt = new Intl.DateTimeFormat(undefined, {
-  month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-});
-
-const fmtTime = (iso: string | null) => (iso ? timeFmt.format(new Date(iso)) : "—");
-// Local YYYY-MM-DD for comparing against a <input type="date"> value.
-const localDay = (iso: string | null) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
 const fmtDuration = (ms: number | null) => {
   if (ms == null) return "—";
   const s = Math.round(ms / 1000);
@@ -224,9 +214,7 @@ export default function CallsTab() {
   // Filter by uid (text) + an inclusive date range (from/to), then sort by time.
   const visible = (calls || [])
     .filter((c) => {
-      const d = localDay(c.started_at); // "" for calls without a start time
-      if (from && (!d || d < from)) return false;
-      if (to && (!d || d > to)) return false;
+      if (!inDayRange(c.started_at, from, to)) return false;
       const s = q.trim().toLowerCase();
       return !s || c.id.toLowerCase().includes(s);
     })

@@ -15,6 +15,7 @@ import {
 } from "./judge";
 import { SortHeader, useSort } from "./sorting";
 import { useAgent } from "./AgentPage";
+import { fmtTime, inDayRange } from "../../dates";
 
 // The agent's eval scenarios, and what happened last time they ran
 // (builder-api #41/#42, turncall#68). TurnCall owns every bit of the engine —
@@ -99,25 +100,15 @@ const STATUS: Record<string, { label: string; cls: string; hint?: string }> = {
 };
 
 // A run's age is half of what "last run: passed" means — green from ten minutes
-// ago and green from before the last three deploys are different claims. Short
-// form in the cell, full ISO in the tooltip, because a date nobody can hover is
-// still ambiguous about the year.
+// ago and green from before the last three deploys are different claims. The
+// cell reads exactly as the Calls tab's Time column does (`fmtTime`), with the
+// full ISO in the tooltip, because a date nobody can hover is still ambiguous
+// about the year.
 function when(iso?: string | null) {
   if (!iso) return { short: "—", full: "" };
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return { short: "—", full: iso };
-  // No seconds and no year: a full locale string is the widest thing in the
-  // table and wraps every row in two. Seconds never decided anything here, and
-  // the tooltip is exact for when they do.
-  return {
-    short: d.toLocaleString(undefined, {
-      month: "numeric",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    }),
-    full: d.toISOString(),
-  };
+  return { short: fmtTime(iso), full: d.toISOString() };
 }
 
 function RunWhen({ run }: { run: Run }) {
@@ -314,6 +305,13 @@ export default function EvalsTab() {
   const [filter, setFilter] = useState("");
   const [runFilter, setRunFilter] = useState("");
   const [status, setStatus] = useState("");
+  // Inclusive day bounds over the run's own clock, "" = open. Unlike the Calls
+  // tab this does **not** default to today: a calls list is long and today is
+  // the useful slice, while a runs list is short and its whole value is
+  // comparing this morning with the last time the suite was green. Defaulting
+  // to today would show an empty tab to anyone whose CI ran overnight.
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const scenarioSort = useSort<Scenario>("name", "asc");
   const runSort = useSort<Run>("when", "desc");
 
@@ -395,7 +393,12 @@ export default function EvalsTab() {
 
   const visibleRuns = runSort.sort(
     runs.filter(
-      (r) => (!status || r.status === status) && matches(runFilter, r.scenario_name)
+      (r) =>
+        (!status || r.status === status) &&
+        // The same timestamp the When column and its sort use, so a row can
+        // never be filtered by one clock and displayed by another.
+        inDayRange(r.completed_at || r.queued_at, from, to) &&
+        matches(runFilter, r.scenario_name)
     ),
     (r, key) => {
       if (key === "status") return r.status;
@@ -615,7 +618,15 @@ export default function EvalsTab() {
       {runs.length > 0 && (
         <>
           <h3 style={{ marginTop: 24 }}>Recent runs</h3>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              alignItems: "center",
+              marginBottom: 8,
+              flexWrap: "wrap",
+            }}
+          >
             <input
               className="input"
               style={{ maxWidth: 240 }}
@@ -642,6 +653,37 @@ export default function EvalsTab() {
                 </option>
               ))}
             </select>
+            <input
+              type="date"
+              className="input"
+              style={{ width: "auto" }}
+              aria-label="Runs from date"
+              value={from}
+              max={to || undefined}
+              onChange={(e) => setFrom(e.target.value)}
+            />
+            <span className="muted">→</span>
+            <input
+              type="date"
+              className="input"
+              style={{ width: "auto" }}
+              aria-label="Runs to date"
+              value={to}
+              min={from || undefined}
+              onChange={(e) => setTo(e.target.value)}
+            />
+            {(from || to) && (
+              <button
+                className="btn"
+                style={{ padding: "3px 10px" }}
+                onClick={() => {
+                  setFrom("");
+                  setTo("");
+                }}
+              >
+                clear dates
+              </button>
+            )}
             <span className="muted">
               {visibleRuns.length} of {runs.length}
             </span>
