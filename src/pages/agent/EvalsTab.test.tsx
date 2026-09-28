@@ -768,3 +768,83 @@ it("counts a multi-iteration run beside the verdict it qualifies", async () => {
   await waitFor(() => expect(screen.getAllByText(/Failed/).length).toBeGreaterThan(0));
   expect(names("tbody tr td:nth-child(2)")[0]).toContain("7/10");
 });
+
+// A runs list is read by asking "what happened when": after this morning's CI,
+// or on the day a suite went red. The Calls tab already filters by day, and one
+// tab having the control while its sibling does not is the kind of gap nobody
+// reports and everyone works around.
+it("filters runs to an inclusive day range", async () => {
+  runs = [
+    run({ id: "r1", scenario_name: "monday", completed_at: "2026-09-21T09:00:00" }),
+    run({ id: "r2", scenario_name: "tuesday", completed_at: "2026-09-22T09:00:00" }),
+    run({ id: "r3", scenario_name: "wednesday", completed_at: "2026-09-23T09:00:00" }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("monday")).toBeTruthy());
+
+  fireEvent.change(screen.getByLabelText("Runs from date"), {
+    target: { value: "2026-09-22" },
+  });
+  fireEvent.change(screen.getByLabelText("Runs to date"), {
+    target: { value: "2026-09-22" },
+  });
+
+  expect(screen.queryByText("monday")).toBeNull();
+  expect(screen.getByText("tuesday")).toBeTruthy();
+  expect(screen.queryByText("wednesday")).toBeNull();
+});
+
+it("shows every run until a date is chosen", async () => {
+  // Unlike Calls, which defaults to today: a runs list is short, and its value
+  // is comparing this morning with the last time the suite was green. An empty
+  // tab after an overnight CI run would be the opposite of useful.
+  runs = [
+    run({ id: "r1", scenario_name: "last-week", completed_at: "2026-09-14T09:00:00" }),
+    run({ id: "r2", scenario_name: "today", completed_at: new Date().toISOString() }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("today")).toBeTruthy());
+  expect(screen.getByText("last-week")).toBeTruthy();
+});
+
+it("clears the dates without touching the other filters", async () => {
+  runs = [
+    run({ id: "r1", scenario_name: "monday", completed_at: "2026-09-21T09:00:00" }),
+    run({ id: "r2", scenario_name: "tuesday", completed_at: "2026-09-22T09:00:00" }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("monday")).toBeTruthy());
+
+  fireEvent.change(screen.getByLabelText("Runs from date"), {
+    target: { value: "2026-09-22" },
+  });
+  expect(screen.queryByText("monday")).toBeNull();
+
+  fireEvent.click(screen.getByText("clear dates"));
+  expect(screen.getByText("monday")).toBeTruthy();
+  expect(screen.getByText("tuesday")).toBeTruthy();
+});
+
+it("falls back to the queued time for a run that never completed", async () => {
+  // The same timestamp the When column shows, so a row cannot be filtered by
+  // one clock and displayed by another.
+  runs = [
+    run({
+      id: "r1",
+      scenario_name: "still-going",
+      status: "running",
+      completed_at: null,
+      queued_at: "2026-09-22T09:00:00",
+    }),
+  ];
+  render(<EvalsTab />);
+  await waitFor(() => expect(screen.getByText("still-going")).toBeTruthy());
+
+  fireEvent.change(screen.getByLabelText("Runs from date"), {
+    target: { value: "2026-09-22" },
+  });
+  fireEvent.change(screen.getByLabelText("Runs to date"), {
+    target: { value: "2026-09-22" },
+  });
+  expect(screen.getByText("still-going")).toBeTruthy();
+});

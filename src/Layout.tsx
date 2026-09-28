@@ -76,7 +76,9 @@ export default function Layout() {
           re-fetch under the new X-Workspace-Id and never show stale, other-tenant
           data (#28). */}
       <main className="main" key={activeWorkspaceId ?? "none"}>
-        <Outlet />
+        <div className="main-content">
+          <Outlet />
+        </div>
       </main>
     </div>
   );
