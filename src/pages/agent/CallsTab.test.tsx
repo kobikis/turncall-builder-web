@@ -153,12 +153,14 @@ it("clicking a transcript entry jumps the recording to it", async () => {
   expect(t).toBeCloseTo(26.69);
 });
 
-it("offers the recording for download", async () => {
+it("leaves play, speed and download to the browser's own player", async () => {
   stubAudio(2);
   calls = [call({ recording_status: "completed" })];
   await openCall();
-  const link = (await screen.findByText("Download")) as HTMLAnchorElement;
-  expect(link.getAttribute("download")).toBe("c1.wav");
+  await screen.findByLabelText(/Caller waveform/);
+  expect(document.querySelector("audio")?.hasAttribute("controls")).toBe(true);
+  expect(screen.queryByLabelText("Playback speed")).toBeNull();
+  expect(screen.queryByText("Download")).toBeNull();
 });
 
 // ---- #52: latency ------------------------------------------------------------
@@ -245,6 +247,9 @@ it("the context shows one section per agent segment, titled by agent", async () 
   expect(within(section).getByText("You are Riley.")).toBeDefined();
   expect(within(section).getByText("clock")).toBeDefined();
   expect(within(section).getByText("Tool result")).toBeDefined();
+  // Open, so a captured context never reads as an empty section.
+  for (const seg of section.querySelectorAll(".ctx-segment"))
+    expect((seg as HTMLDetailsElement).open).toBe(true);
 });
 
 it("switched off reads differently from nothing captured", async () => {
@@ -256,5 +261,5 @@ it("switched off reads differently from nothing captured", async () => {
   cleanup();
   context = { status: "not_captured", segments: [] };
   await openCall();
-  expect(await screen.findByText("No context was captured for this call.")).toBeDefined();
+  expect(await screen.findByText(/No context was captured for this call\./)).toBeDefined();
 });

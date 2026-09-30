@@ -3,7 +3,6 @@ import { getActiveWorkspaceId } from "../../api";
 import { peaks, tracksOf, Track } from "./callDetail";
 
 const BARS = 240;
-const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 
 const fmtClock = (s: number) =>
   `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -61,7 +60,8 @@ function Waveform(props: { track: Track; progress: number; onSeek: (fraction: nu
 }
 
 /** The call's recording: caller and agent drawn as two waveforms (turncall
- * #178), a playhead, speed, download. `audioRef` is shared with the transcript
+ * #178) with a playhead, over the browser's own player. `audioRef` is shared
+ * with the transcript
  * so an entry can seek here. */
 export default function RecordingTimeline(props: {
   agentId: string;
@@ -74,7 +74,6 @@ export default function RecordingTimeline(props: {
   const [err, setErr] = useState("");
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [speed, setSpeed] = useState(1);
 
   useEffect(() => {
     let url: string | null = null;
@@ -107,10 +106,6 @@ export default function RecordingTimeline(props: {
     };
   }, [agentId, callId]);
 
-  useEffect(() => {
-    if (audioRef.current) audioRef.current.playbackRate = speed;
-  }, [speed, audioRef, src]);
-
   if (err) return <p className="error-text">{err}</p>;
   if (!src) return <p className="muted">Loading recording…</p>;
 
@@ -135,34 +130,19 @@ export default function RecordingTimeline(props: {
       ) : (
         tracks && <p className="muted">Waveform unavailable in this browser.</p>
       )}
-      <div className="recording-controls">
-        <audio
-          ref={audioRef}
-          controls
-          preload="metadata"
-          src={src}
-          onTimeUpdate={(e) => setTime(e.currentTarget.currentTime)}
-          onLoadedMetadata={(e) => {
-            const d = e.currentTarget.duration;
-            if (Number.isFinite(d) && d > 0) setDuration(d);
-          }}
-        />
-        <select
-          className="input"
-          aria-label="Playback speed"
-          value={speed}
-          onChange={(e) => setSpeed(Number(e.target.value))}
-        >
-          {SPEEDS.map((s) => (
-            <option key={s} value={s}>
-              {s}x
-            </option>
-          ))}
-        </select>
-        <a className="btn" href={src} download={`${callId}.wav`}>
-          Download
-        </a>
-      </div>
+      {/* The browser's own controls carry play, seek, speed and download. */}
+      <audio
+        ref={audioRef}
+        controls
+        preload="metadata"
+        src={src}
+        className="recording-player"
+        onTimeUpdate={(e) => setTime(e.currentTarget.currentTime)}
+        onLoadedMetadata={(e) => {
+          const d = e.currentTarget.duration;
+          if (Number.isFinite(d) && d > 0) setDuration(d);
+        }}
+      />
     </div>
   );
 }

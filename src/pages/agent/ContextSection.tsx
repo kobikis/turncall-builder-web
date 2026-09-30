@@ -22,6 +22,9 @@ const ROLE_LABEL: Record<string, string> = {
   assistant: "Agent",
   tool: "Tool result",
   system: "System",
+  // Pipecat's own note to the model, e.g. after an utterance it could not
+  // transcribe. Neither party said it.
+  developer: "Pipeline note",
 };
 
 function MessageRow({ m }: { m: Message }) {
@@ -41,7 +44,7 @@ function MessageRow({ m }: { m: Message }) {
 }
 
 /** What the model was given (turncall #177/#180): one section per agent the
- * call ran, collapsed because a prompt and its tool results are long. Only the
+ * call ran, open, with only the long system instruction folded away. Only the
  * call's active agent has a name to hand; an earlier one shows its id. */
 export default function ContextSection({ agentId, call }: { agentId: string; call: Call }) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
@@ -69,10 +72,13 @@ export default function ContextSection({ agentId, call }: { agentId: string; cal
         <p className="muted">Context capture is switched off for this agent.</p>
       )}
       {snapshot?.status === "not_captured" && (
-        <p className="muted">No context was captured for this call.</p>
+        <p className="muted">
+          No context was captured for this call. Calls made before context capture
+          was added have none, and so does a call that ended before the agent started.
+        </p>
       )}
       {snapshot?.segments.map((s) => (
-        <details key={s.segment} className="ctx-segment">
+        <details key={s.segment} className="ctx-segment" open>
           <summary>
             <strong>{title(s)}</strong>
             <span className="muted"> · {s.messages.length} messages</span>
