@@ -93,7 +93,9 @@ export default function PhoneNumbersList() {
         <tbody>
           {visible.map((n) => (
             <tr key={n.id}>
-              <td className="num" style={{ fontWeight: 500 }}>{n.e164}</td>
+              <td className="num" style={{ fontWeight: 500 }}>
+                {editable ? <Link to={`/phone-numbers/${n.id}/edit`}>{n.e164}</Link> : n.e164}
+              </td>
               <td><Uid id={n.id} label="phone_number_id" /></td>
               <td>{ROUTING_LABELS[n.routing_type] || n.routing_type}</td>
        <td className="hint">
@@ -110,12 +112,9 @@ export default function PhoneNumbersList() {
               <td>{n.sms_enabled ? "on" : <span className="muted">off</span>}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                 {editable && (
-                  <>
-                    <Link to={`/phone-numbers/${n.id}/edit`}>edit</Link>
-                    <button className="btn btn-danger" style={{ marginLeft: 10, padding: "3px 10px" }} onClick={() => unbind(n.id)}>
-                      remove
-                    </button>
-                  </>
+                  <button className="btn btn-danger" style={{ padding: "3px 10px" }} onClick={() => unbind(n.id)}>
+                    remove
+                  </button>
                 )}
               </td>
             </tr>
