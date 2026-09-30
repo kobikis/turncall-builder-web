@@ -29,6 +29,10 @@ const ACCEPT = "audio/*,.wav,.mp3,.flac,.ogg,.aiff,.aif";
 type Props = {
   agentId: string;
   value: AmbienceValue | undefined;
+  /** The sound the agent's *saved* config uses. TurnCall refuses to delete it
+   *  (409) — that would silently strip the room off a working agent — so the
+   *  form says how to free it rather than offering a delete that fails. */
+  savedSound?: string;
   editable: boolean;
   onChange: (next: AmbienceValue | undefined) => void;
 };
@@ -40,7 +44,7 @@ const seconds = (ms: number) => `${Math.round(ms / 1000)}s`;
  * the project's files. Which one plays, and how loud, is ordinary config that
  * the Config tab's Save applies, like every other field on it.
  */
-export function Ambience({ agentId, value, editable, onChange }: Props) {
+export function Ambience({ agentId, value, savedSound, editable, onChange }: Props) {
   const [sounds, setSounds] = useState<AmbienceSound[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -145,7 +149,12 @@ export function Ambience({ agentId, value, editable, onChange }: Props) {
             <button className="btn" style={{ padding: "2px 8px" }} onClick={() => play(s)} aria-label={`Preview ${s.name}`}>
               ▶
             </button>
-            {editable && (
+            {editable && s.id === savedSound && (
+              <span className="hint">
+                in use — {value?.sound === s.id ? "choose None and Save" : "Save"} to free it for deletion
+              </span>
+            )}
+            {editable && s.id !== savedSound && (
               <button className="btn btn-danger" style={{ padding: "2px 8px" }} disabled={busy} onClick={() => remove(s)} aria-label={`Delete ${s.name}`}>
                 delete
               </button>

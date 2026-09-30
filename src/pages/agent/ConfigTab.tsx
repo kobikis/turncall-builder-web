@@ -578,6 +578,7 @@ export default function ConfigTab() {
           <Ambience
             agentId={agentId}
             value={cfg.ambience || undefined}
+            savedSound={(data.config as { ambience?: { sound?: string } } | null)?.ambience?.sound}
             editable={editable}
             onChange={(next) =>
               patch((c) => {

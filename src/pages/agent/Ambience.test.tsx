@@ -41,8 +41,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function show(value?: { sound: string; volume?: number }, onChange = vi.fn()) {
-  render(<Ambience agentId="a1" value={value} editable onChange={onChange} />);
+function show(
+  value?: { sound: string; volume?: number },
+  onChange = vi.fn(),
+  savedSound?: string,
+) {
+  render(<Ambience agentId="a1" value={value} savedSound={savedSound} editable onChange={onChange} />);
   return onChange;
 }
 
@@ -146,4 +150,18 @@ it("preview fetches the phone rendition with the workspace header", async () => 
   const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
   expect(url).toBe("/api/agents/a1/ambience/sounds/s1/audio?rate=8000");
   expect(init.headers).toEqual({ "X-Workspace-Id": "ws-1" });
+});
+
+it("the saved sound offers no delete, and says how to free it", async () => {
+  show({ sound: "s1" }, vi.fn(), "s1");
+  await screen.findByRole("radio", { name: /room\.mp3/ });
+  expect(screen.queryByLabelText("Delete room.mp3")).toBeNull();
+  expect(screen.getByText(/choose None and Save to free it/)).toBeTruthy();
+});
+
+it("once None is chosen but not yet saved, it says Save", async () => {
+  show(undefined, vi.fn(), "s1");
+  await screen.findByRole("radio", { name: /room\.mp3/ });
+  expect(screen.queryByLabelText("Delete room.mp3")).toBeNull();
+  expect(screen.getByText(/in use — Save to free it/)).toBeTruthy();
 });
