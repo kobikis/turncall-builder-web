@@ -510,6 +510,13 @@ table.list .num { font-variant-numeric: tabular-nums; }
 .recording-controls select { width: auto; }
 .bubble.seekable { font: inherit; color: inherit; text-align: left; cursor: pointer; }
 .bubble.seekable:hover { border-color: var(--primary); }
+.stat-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.stat-tile { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
+.stat-label { font-size: 11.5px; color: var(--text-muted); }
+.stat-value { font-weight: 600; }
+.table-scroll { overflow-x: auto; margin-bottom: 12px; }
+.latency-table tr.slowest td { background: var(--danger-soft); }
+.latency-table .badge { margin-left: 6px; }
 .call-header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 12px; }
 .call-header .version { margin-left: 6px; }
 .call-drawer .offset { font-size: 11.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; margin-top: 2px; }

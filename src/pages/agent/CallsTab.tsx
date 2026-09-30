@@ -8,6 +8,7 @@ import SaveAsScenario from "./SaveAsScenario";
 import { fmtTime, inDayRange, localDay } from "../../dates";
 import { endedReasonLabel, offsetLabel, offsetSeconds } from "./callDetail";
 import RecordingTimeline from "./RecordingTimeline";
+import LatencySection from "./LatencySection";
 
 type TranscriptEntry = { role: string | null; text: string; timestamp?: string };
 
@@ -81,6 +82,8 @@ function CallDrawer({ agentId, call }: { agentId: string; call: Call }) {
       {/* The loop the Evals tab's empty state points at: a call that went
           wrong becomes a scenario that checks it never does again (#17). */}
       <SaveAsScenario agentId={agentId} callId={call.id} />
+
+      <LatencySection agentId={agentId} call={call} />
 
       <h3>Analysis</h3>
       {!analysis && <p className="muted">No analysis for this call.</p>}

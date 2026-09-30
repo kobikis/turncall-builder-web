@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 // The call detail, driven through the Calls tab the way a person opens it:
 // the list loads, a row expands, and each section reads its own endpoint.
@@ -159,4 +159,59 @@ it("offers the recording for download", async () => {
   await openCall();
   const link = (await screen.findByText("Download")) as HTMLAnchorElement;
   expect(link.getAttribute("download")).toBe("c1.wav");
+});
+
+// ---- #52: latency ------------------------------------------------------------
+
+const turn = (n: number, ms: number, stages: Record<string, number>) => ({
+  event_type: "metrics.turn",
+  payload: {
+    turn: n,
+    user_to_bot_ms: ms,
+    stages: Object.fromEntries(
+      Object.entries(stages).map(([k, v]) => [k, { ttfb_ms: v, service: k }])
+    ),
+  },
+});
+
+const summary = {
+  turns: 2,
+  user_to_bot: { p50_ms: 900, p95_ms: 1500, count: 2 },
+  stages: { llm: { p50_ms: 300, p95_ms: 420, count: 2 } },
+  slowest_turn: { turn: 2, user_to_bot_ms: 1500 },
+};
+
+it("latency shows the summary and one row per turn", async () => {
+  calls = [call({ latency_summary: summary })];
+  events = [turn(1, 900, { llm: 300 }), turn(2, 1500, { llm: 420 })];
+  await openCall();
+  const section = await screen.findByRole("region", { name: "Latency" });
+  expect(within(section).getByText("p50 900 ms")).toBeDefined();
+  await waitFor(() => expect(within(section).getAllByRole("row")).toHaveLength(3));
+  expect(requested).toContain("/agents/a1/calls/c1/events?event_type=metrics.turn");
+});
+
+it("the slowest turn is marked", async () => {
+  calls = [call({ latency_summary: summary })];
+  events = [turn(1, 900, { llm: 300 }), turn(2, 1500, { llm: 420 })];
+  await openCall();
+  const slow = await screen.findByText("slowest");
+  expect(slow.closest("tr")?.textContent).toContain("1500");
+});
+
+it("a stage the call never had is blank, not zero", async () => {
+  calls = [call({ latency_summary: summary })];
+  events = [turn(1, 900, { llm: 300 })];
+  await openCall();
+  const section = await screen.findByRole("region", { name: "Latency" });
+  await waitFor(() => expect(within(section).getAllByRole("row")).toHaveLength(2));
+  const cells = within(section).getAllByRole("row")[1].querySelectorAll("td");
+  expect(Array.from(cells).map((c) => c.textContent)).toEqual(["1", "—", "300", "—", "900"]);
+});
+
+it("no measured turns says so instead of showing zeros", async () => {
+  calls = [call({ latency_summary: null })];
+  await openCall();
+  expect(await screen.findByText("No latency measured for this call.")).toBeDefined();
+  expect(requested.some((p) => p.includes("/events"))).toBe(false);
 });
