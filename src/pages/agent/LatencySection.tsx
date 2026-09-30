@@ -47,8 +47,7 @@ export default function LatencySection({ agentId, call }: { agentId: string; cal
   }, [agentId, call.id, summary]);
 
   return (
-    <section aria-labelledby={`latency-${call.id}`}>
-      <h3 id={`latency-${call.id}`}>Latency</h3>
+    <>
       {!summary ? (
         <p className="muted">No latency measured for this call.</p>
       ) : (
@@ -91,6 +90,6 @@ export default function LatencySection({ agentId, call }: { agentId: string; cal
           )}
         </>
       )}
-    </section>
+    </>
   );
 }

@@ -27,6 +27,9 @@
   --bubble-user-border: #f6d9c2;
   --wave-caller: #d46a2e;
   --wave-agent: #2563eb;
+  --tool: #6d28d9;
+  --tool-soft: #f5f3ff;
+  --tool-border: #ddd6fe;
   --radius: 10px;
   --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
@@ -59,6 +62,9 @@
   --bubble-user-border: rgba(232, 123, 53, 0.35);
   --wave-caller: #f5a623;
   --wave-agent: #60a5fa;
+  --tool: #c4b5fd;
+  --tool-soft: rgba(139, 92, 246, 0.12);
+  --tool-border: rgba(167, 139, 250, 0.35);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   color-scheme: dark;
 }
@@ -497,6 +503,7 @@ table.list .num { font-variant-numeric: tabular-nums; }
   padding: 14px;
 }
 .recording { margin-bottom: 12px; }
+.call-drawer .section-body > .recording { margin-bottom: 0; }
 .waves { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px 4px; margin-bottom: 8px; background: var(--bg-subtle); }
 .wave-track { display: grid; grid-template-columns: 52px 1fr; align-items: center; gap: 8px; }
 .wave-label { font-size: 11.5px; color: var(--text-muted); }
@@ -515,6 +522,53 @@ table.list .num { font-variant-numeric: tabular-nums; }
 .table-scroll { overflow-x: auto; margin-bottom: 12px; }
 table.list.latency-table tr.slowest td { background: var(--danger-soft); white-space: nowrap; }
 .latency-table .badge { margin-left: 6px; }
+/* ---------- collapsible section (Section.tsx) ---------- */
+details.section { margin: 0 0 16px; }
+.section-summary { cursor: pointer; font-weight: 500; font-size: 13px; }
+.section-hint { color: var(--text-muted); font-weight: 400; }
+.section-hint::before { content: " · "; }
+.section-body { margin-top: 10px; }
+
+/* In the call drawer a section is a card with its own header row. */
+.call-drawer { interpolate-size: allow-keywords; }
+.call-drawer .section { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); margin: 0 0 10px; overflow: clip; box-shadow: var(--shadow); }
+.call-drawer .section-summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 14px; font-weight: 600; user-select: none; transition: background 0.15s ease; }
+.call-drawer .section-summary::-webkit-details-marker { display: none; }
+.call-drawer .section-summary::before { content: ""; flex: none; width: 7px; height: 7px; margin: 0 3px 0 2px; border-right: 1.5px solid var(--text-muted); border-bottom: 1.5px solid var(--text-muted); transform: rotate(-45deg); transition: transform 0.2s ease; }
+.call-drawer .section[open] > .section-summary::before { transform: rotate(45deg); }
+.call-drawer .section[open] > .section-summary { border-bottom: 1px solid var(--border); }
+.call-drawer .section-summary:hover { background: var(--hover); }
+.call-drawer .section-summary:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.call-drawer .section-hint { margin-left: auto; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 999px; padding: 1px 9px; }
+.call-drawer .section-hint::before { content: none; }
+.call-drawer .section-body { margin: 0; padding: 12px 14px 14px; }
+/* Animated where the browser can size to auto; an instant toggle elsewhere. */
+.call-drawer .section::details-content { block-size: 0; overflow-y: clip; transition: block-size 0.22s ease, content-visibility 0.22s allow-discrete; }
+.call-drawer .section[open]::details-content { block-size: auto; }
+
+/* ---------- transcript lines + tool calls ---------- */
+.call-drawer .transcript .row { display: flex; flex-direction: column; align-items: flex-start; margin: 6px 0; }
+.call-drawer .transcript .row.user { align-items: flex-end; }
+.tool-call { width: min(640px, 100%); border: 1px solid var(--tool-border); background: var(--tool-soft); border-radius: 10px; border-bottom-left-radius: 4px; }
+.tool-call > summary { list-style: none; display: flex; align-items: center; gap: 8px; padding: 7px 12px; cursor: pointer; font-size: 13px; color: var(--tool); }
+.tool-call > summary::-webkit-details-marker { display: none; }
+.tool-call > summary::after { content: ""; margin-left: auto; flex: none; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); transition: transform 0.2s ease; }
+.tool-call[open] > summary::after { transform: rotate(-135deg); }
+.tool-call > summary:focus-visible { outline: 2px solid var(--tool); outline-offset: 2px; border-radius: 8px; }
+.tool-icon { width: 14px; height: 14px; fill: currentColor; flex: none; }
+.tool-name { font-family: var(--mono); font-weight: 600; overflow-wrap: anywhere; }
+.tool-meta { color: var(--text-muted); font-size: 12px; white-space: nowrap; }
+.tool-call.failed { border-color: var(--danger-border); background: var(--danger-soft); }
+.tool-call.failed > summary { color: var(--danger); }
+.tool-body { border-top: 1px solid var(--tool-border); padding: 8px 12px 12px; display: grid; gap: 4px; }
+.tool-call.failed .tool-body { border-top-color: var(--danger-border); }
+.tool-label { margin-top: 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+.tool-body pre { margin: 0; padding: 8px 10px; max-height: 280px; overflow: auto; font-family: var(--mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .call-drawer .section::details-content, .call-drawer .section-summary::before, .tool-call > summary::after { transition: none; }
+}
+
 .call-header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 12px; }
 .call-header .version-tag { margin-left: 6px; font-size: 11.5px; padding: 1px 6px; border: 1px solid var(--ok-border); color: var(--ok); border-radius: 6px; font-family: var(--mono); }
 .call-drawer .offset { font-size: 11.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; margin-top: 2px; }

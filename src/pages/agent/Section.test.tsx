@@ -58,8 +58,10 @@ it("remembers each section separately", () => {
 });
 
 it("shows a hint beside the title so a shut section still says something", () => {
+  // The " · " separator is drawn by CSS, so a section styled as a card can
+  // show the hint as a pill instead.
   render(<Section id="a" title="MCP servers" hint={3}>body</Section>);
-  expect(screen.getByText(/· 3/)).toBeTruthy();
+  expect(screen.getByText("3").className).toContain("section-hint");
 });
 
 it("shows no separator when there is nothing to hint at", () => {

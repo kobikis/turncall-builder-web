@@ -52,24 +52,20 @@ export function Section({ id, title, hint, defaultOpen = true, children }: Props
   const [open, setOpen] = useState(() => remembered(id, defaultOpen));
   return (
     <details
+      className="section"
+      aria-label={title}
       open={open}
-      style={{ margin: "0 0 16px" }}
       onToggle={(e) => {
         const next = e.currentTarget.open;
         setOpen(next);
         remember(id, next);
       }}
     >
-      <summary style={{ cursor: "pointer", fontWeight: 500, fontSize: 13 }}>
-        {title}
-        {hint != null && hint !== "" && (
-          <span className="muted" style={{ fontWeight: 400 }}>
-            {" "}
-            · {hint}
-          </span>
-        )}
+      <summary className="section-summary">
+        <span className="section-title">{title}</span>
+        {hint != null && hint !== "" && <span className="section-hint">{hint}</span>}
       </summary>
-      <div style={{ marginTop: 10 }}>{children}</div>
+      <div className="section-body">{children}</div>
     </details>
   );
 }
