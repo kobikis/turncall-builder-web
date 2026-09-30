@@ -56,11 +56,11 @@ describe("waveform", () => {
 
 describe("endedReasonTone", () => {
   it("is good when the call ended the way calls should", () => {
-    for (const r of ["customer_ended_call", "assistant_ended_call", "transferred"])
+    for (const r of ["customer_ended_call", "assistant_ended_call", "transferred", "voicemail"])
       expect(endedReasonTone(r)).toBe("good");
   });
   it("is bad for everything else, including a reason it does not know", () => {
-    for (const r of ["pipeline_error", "telephony_failed", "customer_silent", "voicemail", "unknown", "brand_new"])
+    for (const r of ["pipeline_error", "telephony_failed", "customer_silent", "unknown", "brand_new"])
       expect(endedReasonTone(r)).toBe("bad");
   });
   it("has no tone while the call has no reason", () => {

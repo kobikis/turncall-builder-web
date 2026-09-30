@@ -23,9 +23,15 @@ const ENDED_REASONS: Record<string, string> = {
   unknown: "Unknown",
 };
 
-// The endings a call is supposed to have. Everything else — an error, a caller
-// who never answered or went silent, voicemail, the duration cap — is flagged.
-const GOOD_ENDINGS = new Set(["customer_ended_call", "assistant_ended_call", "transferred"]);
+// The endings a call is supposed to have — voicemail included, since reaching
+// one is an expected outcome of an outbound call. Everything else — an error, a
+// caller who never answered or went silent, the duration cap — is flagged.
+const GOOD_ENDINGS = new Set([
+  "customer_ended_call",
+  "assistant_ended_call",
+  "transferred",
+  "voicemail",
+]);
 
 export const endedReasonTone = (reason: string | null | undefined): "good" | "bad" | null =>
   reason ? (GOOD_ENDINGS.has(reason) ? "good" : "bad") : null;
