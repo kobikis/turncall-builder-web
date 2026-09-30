@@ -41,7 +41,7 @@ function CallDrawer({ agentId, call }: { agentId: string; call: Call }) {
           {call.agent_name && (
             <span className="muted">
               Agent: <strong>{call.agent_name}</strong>
-              {call.agent_version != null && <span className="badge version">v{call.agent_version}</span>}
+              {call.agent_version != null && <span className="version-tag">v{call.agent_version}</span>}
             </span>
           )}
         </div>

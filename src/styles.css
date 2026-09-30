@@ -515,7 +515,7 @@ table.list .num { font-variant-numeric: tabular-nums; }
 .stat-label { font-size: 11.5px; color: var(--text-muted); }
 .stat-value { font-weight: 600; }
 .table-scroll { overflow-x: auto; margin-bottom: 12px; }
-.latency-table tr.slowest td { background: var(--danger-soft); }
+table.list.latency-table tr.slowest td { background: var(--danger-soft); white-space: nowrap; }
 .latency-table .badge { margin-left: 6px; }
 .ctx-segment { border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 10px; margin-bottom: 8px; }
 .ctx-segment > summary { cursor: pointer; }
@@ -525,7 +525,7 @@ table.list .num { font-variant-numeric: tabular-nums; }
 .ctx-msg.tool .ctx-role { color: var(--primary-dark); }
 .ctx-segment pre { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; font-family: var(--mono); max-height: 320px; overflow-y: auto; }
 .call-header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 12px; }
-.call-header .version { margin-left: 6px; }
+.call-header .version-tag { margin-left: 6px; font-size: 11.5px; padding: 1px 6px; border: 1px solid var(--ok-border); color: var(--ok); border-radius: 6px; font-family: var(--mono); }
 .call-drawer .offset { font-size: 11.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
 .call-drawer .transcript { max-height: 320px; overflow-y: auto; margin-bottom: 10px; }
 .call-drawer dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 12.5px; }

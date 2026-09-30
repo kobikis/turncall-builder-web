@@ -10,13 +10,20 @@ const fmtClock = (s: number) =>
 
 /** Decoded in the browser with the Web Audio API — no library. An empty list
  * when the browser can't (no AudioContext): the recording still plays. */
-async function decodeChannels(buf: ArrayBuffer): Promise<Float32Array[]> {
+async function decodeChannels(
+  buf: ArrayBuffer
+): Promise<{ channels: Float32Array[]; duration: number }> {
   const Ctx = window.AudioContext ?? (window as any).webkitAudioContext;
-  if (!Ctx) return [];
+  if (!Ctx) return { channels: [], duration: 0 };
   const ctx = new Ctx();
   try {
     const audio = await ctx.decodeAudioData(buf);
-    return Array.from({ length: audio.numberOfChannels }, (_, i) => audio.getChannelData(i));
+    return {
+      channels: Array.from({ length: audio.numberOfChannels }, (_, i) => audio.getChannelData(i)),
+      // Known before the <audio> element has loaded anything, so the axis and
+      // click-to-seek work before the first play.
+      duration: audio.duration,
+    };
   } finally {
     ctx.close?.();
   }
@@ -86,8 +93,10 @@ export default function RecordingTimeline(props: {
         if (cancelled) return;
         url = URL.createObjectURL(blob);
         setSrc(url);
-        const channels = await decodeChannels(await blob.arrayBuffer()).catch(() => []);
-        if (!cancelled) setTracks(tracksOf(channels));
+        const decoded = await decodeChannels(await blob.arrayBuffer()).catch(() => null);
+        if (cancelled) return;
+        setTracks(tracksOf(decoded?.channels ?? []));
+        if (decoded?.duration) setDuration(decoded.duration);
       } catch {
         if (!cancelled) setErr("Couldn't load the recording.");
       }
@@ -130,9 +139,13 @@ export default function RecordingTimeline(props: {
         <audio
           ref={audioRef}
           controls
+          preload="metadata"
           src={src}
           onTimeUpdate={(e) => setTime(e.currentTarget.currentTime)}
-          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
+          onLoadedMetadata={(e) => {
+            const d = e.currentTarget.duration;
+            if (Number.isFinite(d) && d > 0) setDuration(d);
+          }}
         />
         <select
           className="input"
