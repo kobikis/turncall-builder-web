@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Ambience } from "./Ambience";
 import { McpServers } from "./McpServers";
 import {
   ConnectedApps,
@@ -571,6 +572,19 @@ export default function ConfigTab() {
                 // read as "no change" rather than "remove them".
                 if (servers.length) c.mcp_servers = servers;
                 else delete c.mcp_servers;
+              })
+            }
+          />
+          <Ambience
+            agentId={agentId}
+            value={cfg.ambience || undefined}
+            savedSound={(data.config as { ambience?: { sound?: string } } | null)?.ambience?.sound}
+            editable={editable}
+            onChange={(next) =>
+              patch((c) => {
+                // Absence is TurnCall's "off" — never send a null block.
+                if (next) c.ambience = next;
+                else delete c.ambience;
               })
             }
           />
