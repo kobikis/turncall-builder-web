@@ -523,28 +523,21 @@ table.list .num { font-variant-numeric: tabular-nums; }
 table.list.latency-table tr.slowest td { background: var(--danger-soft); white-space: nowrap; }
 .latency-table .badge { margin-left: 6px; }
 /* ---------- collapsible section (Section.tsx) ---------- */
-details.section { margin: 0 0 16px; }
-.section-summary { cursor: pointer; font-weight: 500; font-size: 13px; }
-.section-hint { color: var(--text-muted); font-weight: 400; }
-.section-hint::before { content: " · "; }
-.section-body { margin-top: 10px; }
-
-/* In the call drawer a section is a card with its own header row. */
-.call-drawer { interpolate-size: allow-keywords; }
-.call-drawer .section { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); margin: 0 0 10px; overflow: clip; box-shadow: var(--shadow); }
-.call-drawer .section-summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 14px; font-weight: 600; user-select: none; transition: background 0.15s ease; }
-.call-drawer .section-summary::-webkit-details-marker { display: none; }
-.call-drawer .section-summary::before { content: ""; flex: none; width: 7px; height: 7px; margin: 0 3px 0 2px; border-right: 1.5px solid var(--text-muted); border-bottom: 1.5px solid var(--text-muted); transform: rotate(-45deg); transition: transform 0.2s ease; }
-.call-drawer .section[open] > .section-summary::before { transform: rotate(45deg); }
-.call-drawer .section[open] > .section-summary { border-bottom: 1px solid var(--border); }
-.call-drawer .section-summary:hover { background: var(--hover); }
-.call-drawer .section-summary:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
-.call-drawer .section-hint { margin-left: auto; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 999px; padding: 1px 9px; }
-.call-drawer .section-hint::before { content: none; }
-.call-drawer .section-body { margin: 0; padding: 12px 14px 14px; }
+/* A card with its own header row: the Config tab and the call drawer alike. */
+.section { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); margin: 0 0 12px; overflow: clip; box-shadow: var(--shadow); interpolate-size: allow-keywords; }
+.section-summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; font-size: 14px; font-weight: 600; user-select: none; transition: background 0.15s ease; }
+.section-summary::-webkit-details-marker { display: none; }
+.section-summary::before { content: ""; flex: none; width: 7px; height: 7px; margin: 0 3px 0 2px; border-right: 1.5px solid var(--text-muted); border-bottom: 1.5px solid var(--text-muted); transform: rotate(-45deg); transition: transform 0.2s ease; }
+.section[open] > .section-summary::before { transform: rotate(45deg); }
+.section[open] > .section-summary { border-bottom: 1px solid var(--border); }
+.section-summary:hover { background: var(--hover); }
+.section-summary:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.section-hint { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--text-muted); font-variant-numeric: tabular-nums; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 999px; padding: 1px 9px; }
+.section-body { padding: 12px 14px 14px; }
 /* Animated where the browser can size to auto; an instant toggle elsewhere. */
-.call-drawer .section::details-content { block-size: 0; overflow-y: clip; transition: block-size 0.22s ease, content-visibility 0.22s allow-discrete; }
-.call-drawer .section[open]::details-content { block-size: auto; }
+.section::details-content { block-size: 0; overflow-y: clip; transition: block-size 0.22s ease, content-visibility 0.22s allow-discrete; }
+.section[open]::details-content { block-size: auto; }
+.call-drawer .section { margin-bottom: 10px; }
 
 /* ---------- transcript lines + tool calls ---------- */
 .call-drawer .transcript .row { display: flex; flex-direction: column; align-items: flex-start; margin: 6px 0; }
@@ -566,7 +559,7 @@ details.section { margin: 0 0 16px; }
 .tool-body pre { margin: 0; padding: 8px 10px; max-height: 280px; overflow: auto; font-family: var(--mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .call-drawer .section::details-content, .call-drawer .section-summary::before, .tool-call > summary::after { transition: none; }
+  .section::details-content, .section-summary::before, .tool-call > summary::after { transition: none; }
 }
 
 .call-header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 12px; }
