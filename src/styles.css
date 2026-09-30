@@ -492,6 +492,9 @@ table.list .num { font-variant-numeric: tabular-nums; }
   border-top: 1px solid var(--border);
   padding: 14px;
 }
+.call-header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 12px; }
+.call-header .version { margin-left: 6px; }
+.call-drawer .offset { font-size: 11.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
 .call-drawer .transcript { max-height: 320px; overflow-y: auto; margin-bottom: 10px; }
 .call-drawer dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 12.5px; }
 .call-drawer dt { color: var(--text-muted); }

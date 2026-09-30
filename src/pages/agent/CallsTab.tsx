@@ -6,6 +6,7 @@ import { useAgent } from "./AgentPage";
 import { Call } from "../../types";
 import SaveAsScenario from "./SaveAsScenario";
 import { fmtTime, inDayRange, localDay } from "../../dates";
+import { endedReasonLabel, offsetLabel } from "./callDetail";
 
 type TranscriptEntry = { role: string | null; text: string; timestamp?: string };
 
@@ -62,8 +63,20 @@ function CallDrawer({ agentId, call }: { agentId: string; call: Call }) {
   }, [agentId, call.id]);
 
   const analysis = call.analysis;
+  const ended = endedReasonLabel(call.ended_reason);
   return (
     <div className="call-drawer">
+      {(ended || call.agent_name) && (
+        <div className="call-header">
+          {ended && <span className="badge">{ended}</span>}
+          {call.agent_name && (
+            <span className="muted">
+              Agent: <strong>{call.agent_name}</strong>
+              {call.agent_version != null && <span className="badge version">v{call.agent_version}</span>}
+            </span>
+          )}
+        </div>
+      )}
       {call.recording_status === "completed" && (
         <>
           <h3>Recording</h3>
@@ -78,9 +91,11 @@ function CallDrawer({ agentId, call }: { agentId: string; call: Call }) {
         <div className="transcript">
           {transcript.map((t, i) => {
             const isCaller = t.role === "customer" || t.role === "user";
+            const offset = offsetLabel(t.timestamp, call.started_at);
             return (
-              <div key={i} className={`row ${isCaller ? "user" : "assistant"}`} style={{ display: "flex", margin: "6px 0", justifyContent: isCaller ? "flex-end" : "flex-start" }}>
+              <div key={i} className={`row ${isCaller ? "user" : "assistant"}`} style={{ display: "flex", flexDirection: "column", margin: "6px 0", alignItems: isCaller ? "flex-end" : "flex-start" }}>
                 <span className="bubble">{t.text}</span>
+                {offset && <span className="offset">{offset}</span>}
               </div>
             );
           })}
