@@ -55,6 +55,21 @@ export type Call = {
   duration_ms: number | null;
   recording_status: string;
   analysis: Record<string, unknown> | null;
+  // Derived by TurnCall on every read (turncall#175, #179); null while live,
+  // and the agent pair is null for an inline agent.
+  ended_reason?: string | null;
+  agent_name?: string | null;
+  agent_version?: number | null;
+  latency_summary?: LatencySummary | null;
+};
+
+export type Spread = { p50_ms: number; p95_ms: number; count: number };
+
+export type LatencySummary = {
+  turns: number;
+  user_to_bot: Spread;
+  stages: Partial<Record<"stt" | "llm" | "tts", Spread>>;
+  slowest_turn: { turn: number; user_to_bot_ms: number };
 };
 
 export type Doc = {
