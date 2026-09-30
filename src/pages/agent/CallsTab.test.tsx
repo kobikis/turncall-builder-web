@@ -215,3 +215,46 @@ it("no measured turns says so instead of showing zeros", async () => {
   expect(await screen.findByText("No latency measured for this call.")).toBeDefined();
   expect(requested.some((p) => p.includes("/events"))).toBe(false);
 });
+
+// ---- #53: context snapshot ----------------------------------------------------
+
+const AGENT = "11111111-2222-3333-4444-555555555555";
+
+it("the context shows one section per agent segment, titled by agent", async () => {
+  calls = [call({ active_agent_id: AGENT })];
+  context = {
+    status: "captured",
+    segments: [
+      { segment: 0, agent_id: null, system_instruction: "You are the router.", messages: [] },
+      {
+        segment: 1,
+        agent_id: AGENT,
+        system_instruction: "You are Riley.",
+        messages: [
+          { role: "user", content: "What time is it?" },
+          { role: "assistant", tool_calls: [{ function: { name: "clock", arguments: "{}" } }] },
+          { role: "tool", content: '{"time": "12:42"}' },
+        ],
+      },
+    ],
+  };
+  await openCall();
+  const section = await screen.findByRole("region", { name: "Context" });
+  await within(section).findByText("Inline agent");
+  expect(within(section).getByText("Riley")).toBeDefined();
+  expect(within(section).getByText("You are Riley.")).toBeDefined();
+  expect(within(section).getByText("clock")).toBeDefined();
+  expect(within(section).getByText("Tool result")).toBeDefined();
+});
+
+it("switched off reads differently from nothing captured", async () => {
+  context = { status: "switched_off", segments: [] };
+  await openCall();
+  expect(
+    await screen.findByText("Context capture is switched off for this agent.")
+  ).toBeDefined();
+  cleanup();
+  context = { status: "not_captured", segments: [] };
+  await openCall();
+  expect(await screen.findByText("No context was captured for this call.")).toBeDefined();
+});

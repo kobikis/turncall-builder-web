@@ -517,6 +517,13 @@ table.list .num { font-variant-numeric: tabular-nums; }
 .table-scroll { overflow-x: auto; margin-bottom: 12px; }
 .latency-table tr.slowest td { background: var(--danger-soft); }
 .latency-table .badge { margin-left: 6px; }
+.ctx-segment { border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 10px; margin-bottom: 8px; }
+.ctx-segment > summary { cursor: pointer; }
+.ctx-block summary { cursor: pointer; color: var(--text-muted); font-size: 12.5px; margin: 6px 0; }
+.ctx-msg { border-top: 1px solid var(--border); padding: 6px 0; font-size: 12.5px; }
+.ctx-role { font-size: 11.5px; color: var(--text-muted); font-weight: 600; }
+.ctx-msg.tool .ctx-role { color: var(--primary-dark); }
+.ctx-segment pre { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; font-family: var(--mono); max-height: 320px; overflow-y: auto; }
 .call-header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 12px; }
 .call-header .version { margin-left: 6px; }
 .call-drawer .offset { font-size: 11.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; margin-top: 2px; }

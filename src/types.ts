@@ -57,6 +57,7 @@ export type Call = {
   analysis: Record<string, unknown> | null;
   // Derived by TurnCall on every read (turncall#175, #179); null while live,
   // and the agent pair is null for an inline agent.
+  active_agent_id?: string | null;
   ended_reason?: string | null;
   agent_name?: string | null;
   agent_version?: number | null;

@@ -9,6 +9,7 @@ import { fmtTime, inDayRange, localDay } from "../../dates";
 import { endedReasonLabel, offsetLabel, offsetSeconds } from "./callDetail";
 import RecordingTimeline from "./RecordingTimeline";
 import LatencySection from "./LatencySection";
+import ContextSection from "./ContextSection";
 
 type TranscriptEntry = { role: string | null; text: string; timestamp?: string };
 
@@ -84,6 +85,7 @@ function CallDrawer({ agentId, call }: { agentId: string; call: Call }) {
       <SaveAsScenario agentId={agentId} callId={call.id} />
 
       <LatencySection agentId={agentId} call={call} />
+      <ContextSection agentId={agentId} call={call} />
 
       <h3>Analysis</h3>
       {!analysis && <p className="muted">No analysis for this call.</p>}
