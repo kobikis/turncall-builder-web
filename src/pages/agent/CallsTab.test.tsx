@@ -100,3 +100,63 @@ it("an entry that cannot be placed on the timeline shows no offset", async () =>
   await screen.findByText("early");
   expect(screen.queryByText(/^\+\d/)).toBeNull();
 });
+
+// ---- #51: recording timeline ------------------------------------------------
+
+function stubAudio(channels: number) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(new Blob([new Uint8Array(64)]), { status: 200 }))
+  );
+  URL.createObjectURL = vi.fn(() => "blob:rec");
+  URL.revokeObjectURL = vi.fn();
+  class FakeAudioContext {
+    async decodeAudioData() {
+      return {
+        numberOfChannels: channels,
+        getChannelData: (i: number) => new Float32Array(480).fill(i === 0 ? 0.5 : -0.25),
+      };
+    }
+    close() {}
+  }
+  vi.stubGlobal("AudioContext", FakeAudioContext);
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
+it("a stereo recording draws the caller and the agent as two waveforms", async () => {
+  stubAudio(2);
+  calls = [call({ recording_status: "completed" })];
+  await openCall();
+  expect(await screen.findByLabelText(/Caller waveform/)).toBeDefined();
+  expect(screen.getByLabelText(/Agent waveform/)).toBeDefined();
+});
+
+it("an older mono recording draws one waveform", async () => {
+  stubAudio(1);
+  calls = [call({ recording_status: "completed" })];
+  await openCall();
+  expect(await screen.findByLabelText(/Call waveform/)).toBeDefined();
+  expect(screen.queryByLabelText(/Caller waveform/)).toBeNull();
+});
+
+it("clicking a transcript entry jumps the recording to it", async () => {
+  stubAudio(2);
+  calls = [call({ recording_status: "completed" })];
+  transcript = [{ role: "customer", text: "Thank you. Bye.", timestamp: at(26.69) }];
+  await openCall();
+  await screen.findByLabelText(/Caller waveform/);
+  const audio = document.querySelector("audio") as HTMLAudioElement;
+  let t = 0;
+  Object.defineProperty(audio, "currentTime", { get: () => t, set: (v) => (t = v) });
+  fireEvent.click(screen.getByRole("button", { name: "Thank you. Bye." }));
+  expect(t).toBeCloseTo(26.69);
+});
+
+it("offers the recording for download", async () => {
+  stubAudio(2);
+  calls = [call({ recording_status: "completed" })];
+  await openCall();
+  const link = (await screen.findByText("Download")) as HTMLAnchorElement;
+  expect(link.getAttribute("download")).toBe("c1.wav");
+});

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, getActiveWorkspaceId } from "../../api";
+import { api } from "../../api";
 import Uid from "../../components/Uid";
 import { usePoll } from "../../usePoll";
 import { useAgent } from "./AgentPage";
 import { Call } from "../../types";
 import SaveAsScenario from "./SaveAsScenario";
 import { fmtTime, inDayRange, localDay } from "../../dates";
-import { endedReasonLabel, offsetLabel } from "./callDetail";
+import { endedReasonLabel, offsetLabel, offsetSeconds } from "./callDetail";
+import RecordingTimeline from "./RecordingTimeline";
 
 type TranscriptEntry = { role: string | null; text: string; timestamp?: string };
 
@@ -16,45 +17,11 @@ const fmtDuration = (ms: number | null) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
-// A bare <audio src> can't attach X-Workspace-Id (RBAC gate → 400), so fetch
-// the WAV with the header via the api() bypass helper and play a blob URL.
-function RecordingPlayer({ agentId, callId }: { agentId: string; callId: string }) {
-  const [src, setSrc] = useState<string | null>(null);
-  const [err, setErr] = useState("");
-
-  useEffect(() => {
-    let url: string | null = null;
-    let cancelled = false;
-    (async () => {
-      try {
-        const ws = getActiveWorkspaceId();
-        const r = await fetch(`/api/agents/${agentId}/calls/${callId}/recording`, {
-          credentials: "same-origin",
-          headers: ws ? { "X-Workspace-Id": ws } : {},
-        });
-        if (!r.ok) throw new Error(`recording ${r.status}`);
-        const blob = await r.blob();
-        if (cancelled) return;
-        url = URL.createObjectURL(blob);
-        setSrc(url);
-      } catch {
-        if (!cancelled) setErr("Couldn't load the recording.");
-      }
-    })();
-    return () => {
-      cancelled = true;
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [agentId, callId]);
-
-  if (err) return <p className="error-text">{err}</p>;
-  if (!src) return <p className="muted">Loading recording…</p>;
-  return <audio controls src={src} style={{ width: "100%", marginBottom: 10 }} />;
-}
-
 function CallDrawer({ agentId, call }: { agentId: string; call: Call }) {
   const [transcript, setTranscript] = useState<TranscriptEntry[] | null>(null);
   const [error, setError] = useState("");
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const hasRecording = call.recording_status === "completed";
 
   useEffect(() => {
     api(`/agents/${agentId}/calls/${call.id}/transcript`)
@@ -77,10 +44,10 @@ function CallDrawer({ agentId, call }: { agentId: string; call: Call }) {
           )}
         </div>
       )}
-      {call.recording_status === "completed" && (
+      {hasRecording && (
         <>
           <h3>Recording</h3>
-          <RecordingPlayer agentId={agentId} callId={call.id} />
+          <RecordingTimeline agentId={agentId} callId={call.id} audioRef={audioRef} />
         </>
       )}
       <h3>Transcript</h3>
@@ -92,9 +59,19 @@ function CallDrawer({ agentId, call }: { agentId: string; call: Call }) {
           {transcript.map((t, i) => {
             const isCaller = t.role === "customer" || t.role === "user";
             const offset = offsetLabel(t.timestamp, call.started_at);
+            const secs = offsetSeconds(t.timestamp, call.started_at);
+            const seek = () => {
+              if (audioRef.current && secs != null) audioRef.current.currentTime = secs;
+            };
             return (
               <div key={i} className={`row ${isCaller ? "user" : "assistant"}`} style={{ display: "flex", flexDirection: "column", margin: "6px 0", alignItems: isCaller ? "flex-end" : "flex-start" }}>
-                <span className="bubble">{t.text}</span>
+                {hasRecording && secs != null ? (
+                  <button className="bubble seekable" onClick={seek} title="Play from here">
+                    {t.text}
+                  </button>
+                ) : (
+                  <span className="bubble">{t.text}</span>
+                )}
                 {offset && <span className="offset">{offset}</span>}
               </div>
             );

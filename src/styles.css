@@ -25,6 +25,8 @@
   --ok-soft: #ecfdf5;
   --ok-border: #a7f3d0;
   --bubble-user-border: #f6d9c2;
+  --wave-caller: #d46a2e;
+  --wave-agent: #2563eb;
   --radius: 10px;
   --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
@@ -55,6 +57,8 @@
   --ok-soft: rgba(5, 150, 105, 0.12);
   --ok-border: rgba(52, 211, 153, 0.35);
   --bubble-user-border: rgba(232, 123, 53, 0.35);
+  --wave-caller: #f5a623;
+  --wave-agent: #60a5fa;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   color-scheme: dark;
 }
@@ -492,6 +496,20 @@ table.list .num { font-variant-numeric: tabular-nums; }
   border-top: 1px solid var(--border);
   padding: 14px;
 }
+.recording { margin-bottom: 12px; }
+.waves { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px 4px; margin-bottom: 8px; background: var(--bg-subtle); }
+.wave-track { display: grid; grid-template-columns: 52px 1fr; align-items: center; gap: 8px; }
+.wave-label { font-size: 11.5px; color: var(--text-muted); }
+.wave-track svg { width: 100%; height: 44px; cursor: pointer; display: block; }
+.wave-track.caller rect { fill: var(--wave-caller); }
+.wave-track.agent rect, .wave-track.call rect { fill: var(--wave-agent); }
+.wave-track .playhead { stroke: var(--text); stroke-width: 0.6; vector-effect: non-scaling-stroke; }
+.wave-axis { display: flex; justify-content: space-between; font-size: 11px; margin-left: 60px; font-variant-numeric: tabular-nums; }
+.recording-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.recording-controls audio { flex: 1; min-width: 220px; height: 36px; }
+.recording-controls select { width: auto; }
+.bubble.seekable { font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.bubble.seekable:hover { border-color: var(--primary); }
 .call-header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 12px; }
 .call-header .version { margin-left: 6px; }
 .call-drawer .offset { font-size: 11.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
