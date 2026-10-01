@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Ambience } from "./Ambience";
 import { McpServers } from "./McpServers";
+import type { RegisteredServer } from "../integrations/McpRegistry";
+import { ProviderKeyNote, type ProviderCard } from "./ProviderKeyNote";
 import {
   ConnectedApps,
   type AttachmentValue,
@@ -131,6 +133,9 @@ export default function ConfigTab() {
   const [catalog, setCatalog] = useState<CatalogApp[]>([]);
   const [connected, setConnected] = useState<ConnectedAccount[]>([]);
   const [runs, setRuns] = useState<AutomationRun[]>([]);
+  const [registered, setRegistered] = useState<RegisteredServer[]>([]);
+  // Which key each provider would run on (#48). Unloaded = no notes at all.
+  const [cards, setCards] = useState<ProviderCard[]>([]);
 
   useEffect(() => {
     api("/providers").then((r) => setProviders(r.data)).catch(() => {});
@@ -141,6 +146,12 @@ export default function ConfigTab() {
   useEffect(() => {
     api("/integrations/catalog").then((r) => setCatalog(r.data)).catch(() => {});
     api("/integrations").then((r) => setConnected(r.data)).catch(() => {});
+    api("/integrations/mcp-servers")
+      .then((r) => setRegistered(Array.isArray(r.data) ? r.data : []))
+      .catch(() => {});
+    api("/integrations/providers")
+      .then((r) => setCards(Array.isArray(r.data?.providers) ? r.data.providers : []))
+      .catch(() => {});
   }, []);
 
   // What this agent's Automations actually did (#47). Straight from the
@@ -388,6 +399,7 @@ export default function ConfigTab() {
                 >
                   {providerOptions("s2s", providers.s2s)}
                 </select>
+                <ProviderKeyNote role="s2s" provider={s2sProvider} cards={cards} />
               </div>
               <PickField
                 id="cfg-s2s-m"
@@ -419,6 +431,7 @@ export default function ConfigTab() {
               >
                 {providerOptions("stt", providers.stt)}
               </select>
+              <ProviderKeyNote role="stt" provider={sttProvider} cards={cards} />
             </div>
             <PickField
               id="cfg-stt-m"
@@ -440,6 +453,7 @@ export default function ConfigTab() {
               >
                 {providerOptions("llm", providers.llm)}
               </select>
+              <ProviderKeyNote role="llm" provider={llmProvider} cards={cards} pinned={Boolean(cfg.llm?.api_key)} />
             </div>
             <PickField
               id="cfg-llm-m"
@@ -461,6 +475,7 @@ export default function ConfigTab() {
               >
                 {providerOptions("tts", providers.tts)}
               </select>
+              <ProviderKeyNote role="tts" provider={ttsProvider} cards={cards} />
             </div>
             <PickField
               id="cfg-tts-v"
@@ -493,7 +508,9 @@ export default function ConfigTab() {
                 <p className="hint" style={{ margin: "4px 0 0" }}>
                   Bedrock model availability is region-specific, and access is granted
                   per model per region. Leave blank to use the server's AWS_REGION.
-                  Credentials are configured on the TurnCall server, never here.
+                  Credentials are never entered in this form: an admin connects an
+                  AWS credential set on the Integrations page, and without one the
+                  server's own AWS credentials are used.
                 </p>
               </div>
             </div>
@@ -564,6 +581,15 @@ export default function ConfigTab() {
           />
           <McpServers
             servers={Array.isArray(cfg.mcp_servers) ? cfg.mcp_servers : []}
+            registered={registered}
+            selected={Array.isArray(cfg.workspace_mcp_servers) ? cfg.workspace_mcp_servers : []}
+            onSelect={(ids) =>
+              patch((c) => {
+                // Same omit-when-empty rule as mcp_servers below.
+                if (ids.length) c.workspace_mcp_servers = ids;
+                else delete c.workspace_mcp_servers;
+              })
+            }
             editable={editable}
             onChange={(servers) =>
               patch((c) => {

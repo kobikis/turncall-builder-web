@@ -93,6 +93,7 @@ export type Takeaway = {
 };
 
 export type PhoneNumber = {
+  label?: string | null;
   id: string;
   e164: string;
   routing_type: string;

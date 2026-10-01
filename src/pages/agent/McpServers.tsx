@@ -36,6 +36,10 @@ type Props = {
   servers: McpServer[];
   editable: boolean;
   onChange: (servers: McpServer[]) => void;
+  // Workspace-registered servers (ADR-0023) and the ids this agent opted into.
+  registered?: { id: string; name: string; transport: string; url: string }[];
+  selected?: string[];
+  onSelect?: (ids: string[]) => void;
 };
 
 /**
@@ -46,7 +50,14 @@ type Props = {
  * into a chat transcript. Typed by someone who knows them, neither problem
  * exists — which is what this form is for.
  */
-export function McpServers({ servers, editable, onChange }: Props) {
+export function McpServers({
+  servers,
+  editable,
+  onChange,
+  registered = [],
+  selected = [],
+  onSelect,
+}: Props) {
   // Header text is held per-row while editing so a half-typed line doesn't
   // vanish on re-parse ("Authorization" alone is not a header yet).
   const [headerText, setHeaderText] = useState<Record<number, string>>({});
@@ -63,12 +74,37 @@ export function McpServers({ servers, editable, onChange }: Props) {
     onChange([...servers, { name: "", transport: "http", url: "" }]);
 
   return (
-    <Section id="mcp" title="MCP servers" hint={servers.length || ""}>
+    <Section id="mcp" title="MCP servers" hint={servers.length + selected.length || ""}>
       <p className="hint" style={{ margin: "0 0 10px" }}>
         Tool servers the agent connects out to — Slack, a calendar, your own CRM.
         Their tools are discovered when a call starts and offered to the model
         alongside the agent's own.
       </p>
+
+      {registered.length > 0 && (
+        <fieldset style={{ border: 0, padding: 0, margin: "0 0 12px" }}>
+          <legend className="hint">Workspace servers — opt in to the ones this agent needs</legend>
+          {registered.map((r) => (
+            <label key={r.id} style={{ display: "block" }}>
+              <input
+                type="checkbox"
+                disabled={!editable}
+                checked={selected.includes(r.id)}
+                onChange={(e) =>
+                  onSelect?.(
+                    e.target.checked ? [...selected, r.id] : selected.filter((id) => id !== r.id),
+                  )
+                }
+              />{" "}
+              {r.name} <span className="muted">{r.transport} · {r.url}</span>
+            </label>
+          ))}
+          <p className="hint" style={{ margin: "4px 0 0" }}>
+            Registered on the Integrations page; their headers are stored there,
+            encrypted. A server added below wins a tool-name clash with these.
+          </p>
+        </fieldset>
+      )}
 
       {servers.map((server, i) => (
         <div

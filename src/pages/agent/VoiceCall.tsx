@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
-import { getActiveWorkspaceId } from "../../api";
-import { buildConnectRequest } from "../../webrtc";
+import { api, getActiveWorkspaceId } from "../../api";
+import { agentStopReason, buildConnectRequest, watchConnect } from "../../webrtc";
 
 // The WebRTC test call lives here (provided at the agent level) rather than in
 // the Voice tab, so switching tabs — or the Chat/Voice toggle — doesn't tear the
@@ -36,10 +36,15 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const clientRef = useRef<{ disconnect: () => Promise<void> } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const erroredRef = useRef(false);
+  const unwatchRef = useRef<(() => void) | null>(null);
+  const callIdRef = useRef<string | null>(null);
 
+  // Ends the connect phase: the timeout and the signaling watch go together.
   const clearTimer = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
+    unwatchRef.current?.();
+    unwatchRef.current = null;
   };
 
   // Tear down only when the provider unmounts (leaving the agent).
@@ -112,6 +117,11 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
             if (erroredRef.current) return; // keep the failure reason
             setState("idle");
             setMsg("Call ended.");
+            // A call the agent ended on a provider error looks like any other
+            // hangup from here; TurnCall recorded why before the line dropped.
+            const callId = callIdRef.current;
+            callIdRef.current = null;
+            if (callId) void explainEnd(agentId, callId);
           },
           onTransportStateChanged: (s: string) => {
             if (s === "error") fail("Connection error.");
@@ -125,16 +135,36 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
         },
       });
       clientRef.current = client;
+      const endpoint = buildConnectRequest(agentId, workspaceId);
+      // A refused connect carries the reason (e.g. a provider with no key);
+      // fail() also disconnects, which stops the transport's retries.
+      callIdRef.current = null;
+      unwatchRef.current = watchConnect(endpoint.url, {
+        failure: fail,
+        call: (callId) => {
+          callIdRef.current = callId;
+        },
+      });
       await client.connect({
         webrtcRequestParams: {
           // Signaling goes through builder-api's proxy (#35) — the session cookie
           // + X-Workspace-Id (baked into this Request) authenticate it; no
           // TurnCall key is ever fetched or sent. The agent is pinned by the path.
-          endpoint: buildConnectRequest(agentId, workspaceId),
+          endpoint,
         },
       });
     } catch (e) {
       fail(e instanceof Error ? e.message : "Couldn't start the call.");
+    }
+  }
+
+  async function explainEnd(agentId: string, callId: string) {
+    try {
+      const r = await api(`/agents/${agentId}/calls/${callId}/events?event_type=error.raised`);
+      const reason = agentStopReason(r.data || []);
+      if (reason) fail(reason);
+    } catch {
+      /* the plain "Call ended." stands */
     }
   }
 

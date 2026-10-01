@@ -36,11 +36,16 @@ export default function PhoneNumbersList() {
       .catch(() => {}); // best-effort — falls back to the id
   }, []);
 
-  // Filter by id or number, then sort by number (e164).
+  // Filter by id, number or label, then sort by number (e164).
   const visible = (numbers || [])
     .filter((n) => {
       const s = q.trim().toLowerCase();
-      return !s || n.e164.toLowerCase().includes(s) || n.id.toLowerCase().includes(s);
+      return (
+        !s ||
+        n.e164.toLowerCase().includes(s) ||
+        n.id.toLowerCase().includes(s) ||
+        (n.label || "").toLowerCase().includes(s)
+      );
     })
     .sort((a, b) => (sortDesc ? -1 : 1) * a.e164.localeCompare(b.e164));
 
@@ -73,7 +78,7 @@ export default function PhoneNumbersList() {
         aria-label="Search phone numbers by id or number"
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="Search by number or id (e.g. +1415… or 3f2a…)"
+        placeholder="Search by number, label or id (e.g. +1415… or Support)"
       />
       <table className="list">
         <thead>
@@ -95,6 +100,7 @@ export default function PhoneNumbersList() {
             <tr key={n.id}>
               <td className="num" style={{ fontWeight: 500 }}>
                 {editable ? <Link to={`/phone-numbers/${n.id}/edit`}>{n.e164}</Link> : n.e164}
+                {n.label && <div className="hint" style={{ fontWeight: 400 }}>{n.label}</div>}
               </td>
               <td><Uid id={n.id} label="phone_number_id" /></td>
               <td>{ROUTING_LABELS[n.routing_type] || n.routing_type}</td>
