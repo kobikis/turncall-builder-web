@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { atLeast } from "../roles";
 import { describe, tint, type CatalogApp } from "../apps";
 import { McpRegistry } from "./integrations/McpRegistry";
+import { PipedreamProject } from "./integrations/PipedreamProject";
 import { ProviderAccounts } from "./integrations/ProviderAccounts";
 import { TwilioAccount } from "./integrations/TwilioAccount";
 
@@ -156,6 +157,7 @@ export default function Integrations() {
       )}
 
       <div className="integration-grid">
+        <PipedreamProject isAdmin={isAdmin} onChange={() => void load()} />
         {all.map((row) => {
           const account = connected.find((c) => c.app === row.app);
           const unlisted = row.tools.length === 0;
