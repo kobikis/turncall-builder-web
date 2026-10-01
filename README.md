@@ -70,12 +70,26 @@ filter, and a run carries any warnings it earned — a judge that changed since
 the last verdict, a scenario nothing in which can fail, a worker older than the
 code it runs — as notes beside the status rather than as failures.
 
-`/integrations` is the other page: a workspace admin authorizes Slack or Google
-Calendar there, through the provider's own consent screen. Each agent then
-chooses when an app runs — during a call, or when a call ends — on its own
-Configuration tab, because that is per agent while connecting is per workspace.
-Values a person cannot check by eye are picked from a list rather than typed: a
-channel is chosen by name and stored by id.
+`/integrations` is everything the workspace is connected to, as cards:
+
+- **Provider accounts** — the workspace's own keys for model, transcription,
+  voice, speech-to-speech, avatar and eval-judge providers. One card per
+  account (Deepgram once, for both transcription and voice); the key is entered
+  in a dialog, write-only, and the card shows only its last four characters and
+  which key a call will actually use — the workspace's, the platform's, or none.
+- **Telephony** — the workspace's Twilio account. Adding a phone number then
+  picks from that account's numbers instead of asking for credentials.
+- **MCP servers** — registered once, opted into per agent on its
+  Configuration tab.
+- **Connected apps** — Slack or Google Calendar, authorized through the
+  provider's own consent screen, optionally under the workspace's own Pipedream
+  project. Each agent chooses when an app runs — during a call, or when a call
+  ends — on its own Configuration tab. Values a person cannot check by eye are
+  picked from a list rather than typed: a channel is chosen by name and stored
+  by id.
+
+Entering or removing anything there is admin-only; every member sees the status,
+and the agent form warns (never blocks) when a selected provider has no key.
 
 Backend, glossary and decisions live in
 [`turncall-builder-api`](https://github.com/kobikis/turncall-builder-api).
