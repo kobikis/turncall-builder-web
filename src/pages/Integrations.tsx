@@ -6,6 +6,7 @@ import { atLeast } from "../roles";
 import { AppHead, describe, type CatalogApp } from "../apps";
 import { McpRegistry } from "./integrations/McpRegistry";
 import { ProviderAccounts } from "./integrations/ProviderAccounts";
+import { TwilioAccount } from "./integrations/TwilioAccount";
 
 // Everything this Workspace is connected to, on one page (ADR-0023): its own
 // provider accounts, its registered MCP servers, and its Connected apps. The
@@ -131,6 +132,7 @@ export default function Integrations() {
       </div>
 
       <ProviderAccounts isAdmin={isAdmin} />
+      <TwilioAccount isAdmin={isAdmin} />
       <McpRegistry isAdmin={isAdmin} />
 
       <h3 id="connected-apps">Connected apps</h3>

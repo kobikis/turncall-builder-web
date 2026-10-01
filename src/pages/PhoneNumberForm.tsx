@@ -14,7 +14,7 @@ export type PhoneInitial = {
   sms_enabled?: boolean;
   // The number's own Twilio account, if any. The token is never sent back.
   twilio_account_sid?: string | null;
-  twilio_credentials?: "number" | "platform";
+  twilio_credentials?: "workspace" | "number" | "platform";
 };
 
 const E164_RE = /^\+[1-9]\d{1,14}$/;
@@ -51,8 +51,12 @@ export default function PhoneNumberForm(props: {
   const savedAccount = i.twilio_credentials === "number" ? i.twilio_account_sid || "" : "";
   const [accountSid, setAccountSid] = useState(savedAccount);
   const [authToken, setAuthToken] = useState(""); // write-only: never prefilled
+  // The Workspace's connected Twilio account, if any (Integrations page).
+  const [workspaceTwilio, setWorkspaceTwilio] = useState<{ account_sid: string } | null>(null);
+  const [useWorkspace, setUseWorkspace] = useState(i.twilio_credentials === "workspace");
+  const [accountNumbers, setAccountNumbers] = useState<{ sid: string; phone_number: string; friendly_name?: string | null; bound: boolean }[]>([]);
   // Own account = the number runs on these credentials; else the platform's.
-  const ownAccount = accountSid.trim() !== "";
+  const ownAccount = !useWorkspace && accountSid.trim() !== "";
   const [voiceHook, setVoiceHook] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -66,11 +70,29 @@ export default function PhoneNumberForm(props: {
       })
       .catch((e) => setErr(e.message));
     api("/meta").then((r) => setVoiceHook(r.data.twilio_voice_webhook)).catch(() => {});
+    api("/integrations/twilio")
+      .then((r) => {
+        if (!r.data?.connected) return;
+        setWorkspaceTwilio({ account_sid: r.data.account_sid });
+        // A new number defaults to the workspace's account once there is one.
+        if (!i.twilio_credentials) setUseWorkspace(true);
+      })
+      .catch(() => {});
   }, []);
+
+  // The connected account's numbers, to pick instead of typing (new numbers only).
+  useEffect(() => {
+    if (!useWorkspace || !workspaceTwilio || props.lockNumber) return;
+    api("/integrations/twilio/numbers")
+      .then((r) => setAccountNumbers(Array.isArray(r.data) ? r.data : []))
+      .catch((e) => setErr(e instanceof Error ? e.message : "Could not list the account's numbers."));
+  }, [useWorkspace, workspaceTwilio, props.lockNumber]);
 
   function validate(): string {
     if (!E164_RE.test(e164)) return "Number must be E.164, e.g. +15551234567.";
-    if (ownAccount) {
+    if (useWorkspace) {
+      if (!workspaceTwilio) return "This workspace has no Twilio account connected.";
+    } else if (ownAccount) {
       if (!ACCOUNT_RE.test(accountSid.trim())) return "Twilio Account SID should look like AC followed by 32 hex characters.";
       // A saved account can be kept without re-entering its token; a new or
       // changed one needs it.
@@ -101,6 +123,7 @@ export default function PhoneNumberForm(props: {
     )
       return;
     const body: any = { sid: ownAccount ? "" : sid, e164, routing_type: routing, sms_enabled: sms };
+    if (useWorkspace) body.use_workspace_twilio = true;
     if (ownAccount && authToken.trim()) {
       body.twilio_account_sid = accountSid.trim();
       body.twilio_auth_token = authToken.trim();
@@ -159,13 +182,58 @@ export default function PhoneNumberForm(props: {
 
   return (
     <div style={{ maxWidth: 460 }}>
+      {workspaceTwilio && (
+        <fieldset style={{ border: 0, padding: 0, margin: "0 0 12px" }}>
+          <legend style={{ padding: 0, fontWeight: 500, fontSize: 13 }}>Twilio account</legend>
+          <div className="radio-row">
+            <label>
+              <input type="radio" name="twilio-source" checked={useWorkspace} onChange={() => setUseWorkspace(true)} />{" "}
+              Workspace account ({workspaceTwilio.account_sid.slice(0, 8)}…)
+            </label>
+            <label>
+              <input type="radio" name="twilio-source" checked={!useWorkspace} onChange={() => setUseWorkspace(false)} />{" "}
+              Other credentials
+            </label>
+          </div>
+        </fieldset>
+      )}
+
+      {useWorkspace && workspaceTwilio && !props.lockNumber && (
+        <div className="field">
+          <label htmlFor="pn-pick">Number on this account</label>
+          <select
+            id="pn-pick"
+            className="input"
+            value={sid}
+            onChange={(e) => {
+              const picked = accountNumbers.find((n) => n.sid === e.target.value);
+              setSid(picked?.sid || "");
+              setE164(picked?.phone_number || "");
+            }}
+          >
+            <option value="">— select —</option>
+            {accountNumbers.map((n) => (
+              <option key={n.sid} value={n.sid} disabled={n.bound}>
+                {n.phone_number}
+                {n.friendly_name && n.friendly_name !== n.phone_number ? ` — ${n.friendly_name}` : ""}
+                {n.bound ? " (already added)" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {!(useWorkspace && workspaceTwilio && !props.lockNumber) && (
       <div className="field">
         <label htmlFor="pn-e164">Twilio Phone Number</label>
         <input id="pn-e164" name="phone_number" type="tel" inputMode="tel" className="input" value={e164}
           disabled={props.lockNumber} autoComplete="off"
           onChange={(e) => setE164(e.target.value)} placeholder="+15551234567" />
       </div>
+      )}
 
+      {!useWorkspace && (
+      <>
       <div className="field">
         <label htmlFor="pn-account">Twilio Account SID</label>
         <input id="pn-account" name="twilio_account_sid" className="input" value={accountSid}
@@ -185,8 +253,10 @@ export default function PhoneNumberForm(props: {
           Twilio account.
         </p>
       </div>
+      </>
+      )}
 
-      {!ownAccount && (
+      {!useWorkspace && !ownAccount && (
         <div className="field">
           <label htmlFor="pn-sid">Twilio Phone Number SID</label>
           <input id="pn-sid" name="twilio_sid" className="input" value={sid} disabled={props.lockNumber}
