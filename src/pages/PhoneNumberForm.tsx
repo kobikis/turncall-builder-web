@@ -12,10 +12,14 @@ export type PhoneInitial = {
   server_url?: string | null;
   server_url_secret?: string | null;
   sms_enabled?: boolean;
+  // The number's own Twilio account, if any. The token is never sent back.
+  twilio_account_sid?: string | null;
+  twilio_credentials?: "number" | "platform";
 };
 
 const E164_RE = /^\+[1-9]\d{1,14}$/;
 const SID_RE = /^PN[a-zA-Z0-9]{8,}$/;
+const ACCOUNT_RE = /^AC[0-9a-fA-F]{32}$/;
 
 // Whether an edit moves the number to a different TurnCall project — that
 // rebinding rotates the phone id AND the call-init signing secret.
@@ -44,6 +48,11 @@ export default function PhoneNumberForm(props: {
   const [agentId, setAgentId] = useState(i.agent_id || "");
   const [serverUrl, setServerUrl] = useState(i.server_url || "");
   const [sms, setSms] = useState(!!i.sms_enabled);
+  const savedAccount = i.twilio_credentials === "number" ? i.twilio_account_sid || "" : "";
+  const [accountSid, setAccountSid] = useState(savedAccount);
+  const [authToken, setAuthToken] = useState(""); // write-only: never prefilled
+  // Own account = the number runs on these credentials; else the platform's.
+  const ownAccount = accountSid.trim() !== "";
   const [voiceHook, setVoiceHook] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -60,8 +69,15 @@ export default function PhoneNumberForm(props: {
   }, []);
 
   function validate(): string {
-    if (!SID_RE.test(sid)) return "Twilio SID should look like PNxxxxxxxx.";
     if (!E164_RE.test(e164)) return "Number must be E.164, e.g. +15551234567.";
+    if (ownAccount) {
+      if (!ACCOUNT_RE.test(accountSid.trim())) return "Twilio Account SID should look like AC followed by 32 hex characters.";
+      // A saved account can be kept without re-entering its token; a new or
+      // changed one needs it.
+      if (!authToken.trim() && accountSid.trim() !== savedAccount) return "Enter the Twilio Auth Token for this account.";
+    } else if (!SID_RE.test(sid)) {
+      return "Twilio Phone Number SID should look like PNxxxxxxxx — or enter your Twilio Account SID and Auth Token instead.";
+    }
     if ((routing === "agent" || routing === "agent_call_init") && !agentId)
       return "Pick an agent (or create one first).";
     if (routing === "webhook" && !/^https?:\/\//.test(serverUrl))
@@ -84,7 +100,11 @@ export default function PhoneNumberForm(props: {
       )
     )
       return;
-    const body: any = { sid, e164, routing_type: routing, sms_enabled: sms };
+    const body: any = { sid: ownAccount ? "" : sid, e164, routing_type: routing, sms_enabled: sms };
+    if (ownAccount && authToken.trim()) {
+      body.twilio_account_sid = accountSid.trim();
+      body.twilio_auth_token = authToken.trim();
+    }
     if (routing === "agent" || routing === "agent_call_init") body.agent_id = agentId;
     if (routing === "webhook") body.server_url = serverUrl;
     setBusy(true);
@@ -140,18 +160,43 @@ export default function PhoneNumberForm(props: {
   return (
     <div style={{ maxWidth: 460 }}>
       <div className="field">
-        <label htmlFor="pn-sid">Twilio Phone Number SID</label>
-        <input id="pn-sid" name="twilio_sid" className="input" value={sid} disabled={props.lockNumber}
-          autoComplete="off" spellCheck={false}
-          onChange={(e) => setSid(e.target.value)} placeholder="PNxxxxxxxx" />
-      </div>
-
-      <div className="field">
-        <label htmlFor="pn-e164">Number (E.164)</label>
+        <label htmlFor="pn-e164">Twilio Phone Number</label>
         <input id="pn-e164" name="phone_number" type="tel" inputMode="tel" className="input" value={e164}
           disabled={props.lockNumber} autoComplete="off"
           onChange={(e) => setE164(e.target.value)} placeholder="+15551234567" />
       </div>
+
+      <div className="field">
+        <label htmlFor="pn-account">Twilio Account SID</label>
+        <input id="pn-account" name="twilio_account_sid" className="input" value={accountSid}
+          autoComplete="off" spellCheck={false}
+          onChange={(e) => setAccountSid(e.target.value)} placeholder="ACxxxxxxxx" />
+      </div>
+
+      <div className="field">
+        <label htmlFor="pn-token">Twilio Auth Token</label>
+        <input id="pn-token" name="twilio_auth_token" type="password" className="input" value={authToken}
+          autoComplete="new-password" spellCheck={false}
+          onChange={(e) => setAuthToken(e.target.value)}
+          placeholder={savedAccount ? "Saved — leave blank to keep it" : "Twilio Auth Token"} />
+        <p className="hint" style={{ margin: "4px 0 0" }}>
+          From your Twilio console. Checked against the number when you save, stored
+          encrypted, and never shown again. Leave both blank to use the platform's
+          Twilio account.
+        </p>
+      </div>
+
+      {!ownAccount && (
+        <div className="field">
+          <label htmlFor="pn-sid">Twilio Phone Number SID</label>
+          <input id="pn-sid" name="twilio_sid" className="input" value={sid} disabled={props.lockNumber}
+            autoComplete="off" spellCheck={false}
+            onChange={(e) => setSid(e.target.value)} placeholder="PNxxxxxxxx" />
+          <p className="hint" style={{ margin: "4px 0 0" }}>
+            Needed only on the platform's account — with your own, it is looked up for you.
+          </p>
+        </div>
+      )}
 
       <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
         <legend style={{ padding: 0, fontWeight: 500, fontSize: 13 }}>Routing</legend>
