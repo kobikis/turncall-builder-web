@@ -777,6 +777,7 @@ table.list.latency-table tr.slowest td { background: var(--danger-soft); white-s
 .provider-card .title, .modal-head .title { flex: 1; min-width: 0; }
 .provider-card .name, .modal-head .name { font-size: 14px; font-weight: 600; line-height: 1.3; }
 .provider-card .roles, .modal-head .roles { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.provider-card .roles.account-name { display: block; flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .provider-card .desc { flex: none; min-height: 0; font-size: 13px; line-height: 1.45; }
 .provider-card .desc.meta { font-size: 12px; }
 .provider-card .foot { margin-top: auto; justify-content: space-between; }

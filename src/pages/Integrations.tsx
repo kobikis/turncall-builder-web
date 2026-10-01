@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { atLeast } from "../roles";
-import { AppHead, describe, type CatalogApp } from "../apps";
+import { describe, tint, type CatalogApp } from "../apps";
 import { McpRegistry } from "./integrations/McpRegistry";
 import { ProviderAccounts } from "./integrations/ProviderAccounts";
 import { TwilioAccount } from "./integrations/TwilioAccount";
@@ -160,18 +160,24 @@ export default function Integrations() {
           const account = connected.find((c) => c.app === row.app);
           const unlisted = row.tools.length === 0;
           return (
-            <div className="integration-card" key={row.app}>
-              {/* The status is the header's job now. Repeating it in the footer
-                  cost the row that a long account name needed. */}
-              <AppHead row={row} status={account ? "connected" : "disconnected"} />
-              <div className="name">{row.name}</div>
+            <div className="integration-card provider-card" key={row.app}>
+              <div className="head">
+                <span className="app-tile" aria-hidden="true" style={{ background: tint(row.app) }}>
+                  {row.name.charAt(0).toUpperCase()}
+                </span>
+                <div className="title">
+                  <div className="name">{row.name}</div>
+                  {/* The connected account (often an email) — truncated, never wrapping. */}
+                  <div className="roles account-name" title={account?.account_name || account?.name || ""}>
+                    {unlisted ? "Unlisted" : account ? account.account_name || account.name || "Connected app" : "Connected app"}
+                  </div>
+                </div>
+              </div>
               <p className="desc">{describe(row)}</p>
               <div className="foot">
-                {account && (
-                  <span className="account-name" title={account.account_name || account.name || ""}>
-                    {account.account_name || account.name || ""}
-                  </span>
-                )}
+                <span className={`badge app-status ${account ? "connected" : "disconnected"}`}>
+                  {account ? "Connected" : "Not connected"}
+                </span>
                 {account
                   ? isAdmin && (
                       <button
@@ -187,7 +193,7 @@ export default function Integrations() {
                     !unlisted && (
                       <button
                         type="button"
-                        className="btn btn-primary"
+                        className="btn"
                         disabled={busy === row.app}
                         onClick={() => void connect(row.app)}
                       >
