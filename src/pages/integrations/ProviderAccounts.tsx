@@ -30,6 +30,9 @@ export type ProviderCard = {
   agents_using: number;
   pinned_agents: { agent_id: string; name?: string | null }[];
   agents: AgentProjection[];
+  // Numbers on a custom call-init server (builder-api#65): their project's
+  // projection, and how many still sit in the old shared project.
+  webhook_numbers?: { state: string | null; error: string | null; on_platform_keys: number };
 };
 
 export const ROLE_LABELS: Record<Role, string> = {
@@ -67,6 +70,19 @@ export function runsOnText(card: ProviderCard): string {
     default:
       return "Whether the platform has a key could not be checked.";
   }
+}
+
+/** The exception to `runsOnText`: custom call-init numbers that are not on
+ * this workspace's key. Null when there is nothing to say. */
+export function webhookNumbersText(card: ProviderCard): string | null {
+  const w = card.webhook_numbers;
+  if (!w || !card.connected) return null;
+  if (w.state === "failed")
+    return `Custom call-init numbers did not get this key${w.error ? ` (${w.error})` : ""}.`;
+  const n = w.on_platform_keys;
+  if (n > 0)
+    return `${n === 1 ? "1 custom call-init number still runs" : `${n} custom call-init numbers still run`} on the platform's key — rebind ${n === 1 ? "it" : "them"} to use this one.`;
+  return null;
 }
 
 /** What disconnecting will actually do, in words (#45). */
@@ -203,6 +219,23 @@ function Card({
         </div>
       </div>
       <p className={`desc${card.runs_on === "none" ? " danger" : ""}`}>{runsOnText(card)}</p>
+      {webhookNumbersText(card) &&
+        (card.webhook_numbers?.state === "failed" ? (
+          <div className="callout warn">
+            {webhookNumbersText(card)}
+            <button
+              type="button"
+              className="btn"
+              style={{ marginLeft: 8 }}
+              disabled={busy}
+              onClick={() => void retry()}
+            >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <p className="desc meta">{webhookNumbersText(card)}</p>
+        ))}
       {pinned > 0 && (
         <p className="desc meta">
           {pinned === 1 ? "1 agent uses its own key" : `${pinned} agents use their own key`} for
