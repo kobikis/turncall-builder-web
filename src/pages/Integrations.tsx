@@ -4,7 +4,15 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import { atLeast } from "../roles";
 import { AppHead, describe, type CatalogApp } from "../apps";
+import { McpRegistry } from "./integrations/McpRegistry";
+import { ProviderAccounts } from "./integrations/ProviderAccounts";
 
+// Everything this Workspace is connected to, on one page (ADR-0023): its own
+// provider accounts, its registered MCP servers, and its Connected apps. The
+// two kinds of credential stay visibly different — a provider key is a
+// long-lived secret this console stores; a Connected app's is held by the
+// provider and minted per call.
+//
 // Connecting an app for the Workspace (ADR-0018, ADR-0021). Authorizing one had
 // no Console surface at all before this page: the Connect Link had to be minted
 // by hand, and the callback redirected the browser to a route that did not
@@ -118,13 +126,21 @@ export default function Integrations() {
       <div className="page-head">
         <div>
           <h2>Integrations</h2>
-          <p>
-            Apps this workspace has authorized. Connect one here and every agent
-            can use it — each agent chooses whether it runs during a call, after
-            one, or both, on its Configuration tab.
-          </p>
+          <p>Everything this workspace is connected to.</p>
         </div>
       </div>
+
+      <ProviderAccounts isAdmin={isAdmin} />
+      <McpRegistry isAdmin={isAdmin} />
+
+      <h3 id="connected-apps">Connected apps</h3>
+      <p className="hint">
+        Apps this workspace has authorized. Connect one here and every agent
+        can use it — each agent chooses whether it runs during a call, after
+        one, or both, on its Configuration tab. Unlike a provider key, nothing
+        is stored here: the app's credentials are held by Pipedream and minted
+        for each call.
+      </p>
 
       {notice && <div className="callout info" role="status">{notice}</div>}
       {error && <div className="callout error" role="alert">{error}</div>}

@@ -5,7 +5,9 @@ import type { ApiResponse, User, Workspace } from "./types";
 // Auth + active-Workspace state for the whole app (builder-api #29/#31/#33). The
 // session itself is an httpOnly cookie the browser can't read, so "am I logged
 // in?" is answered by asking the server (GET /auth/me). No TurnCall key ever
-// lives here — the browser only holds identity, never a provider credential.
+// lives here — the browser holds identity, and never *holds* a provider
+// credential. An admin may type one into the Integrations page (ADR-0023), which
+// sends it once and never gets it back: an entry surface, not a display one.
 
 const ACTIVE_WS_KEY = "tc.activeWorkspaceId";
 
