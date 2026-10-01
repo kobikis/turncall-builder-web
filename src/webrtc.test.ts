@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildConnectRequest, watchConnectFailures } from "./webrtc";
+import { agentStopReason, buildConnectRequest, watchConnect } from "./webrtc";
 
 // The security contract of #29: the WebRTC test call is signaled through the
 // builder proxy with the session cookie, scoped by X-Workspace-Id, and NEVER
@@ -31,7 +31,7 @@ describe("buildConnectRequest", () => {
   });
 });
 
-describe("watchConnectFailures", () => {
+describe("watchConnect", () => {
   const url = "http://localhost/api/agents/a1/webrtc/connect";
   const realFetch = window.fetch;
   afterEach(() => {
@@ -41,40 +41,60 @@ describe("watchConnectFailures", () => {
   function respond(status: number, body: unknown) {
     window.fetch = vi.fn(async () => new Response(JSON.stringify(body), { status }));
   }
+  const post = () => window.fetch(new Request(url, { method: "POST" }));
+  const handlers = () => ({ failure: vi.fn(), call: vi.fn() });
 
-  it("hands over the proxy's reason when the connect fails", async () => {
+  it("hands over the proxy's reason when the offer is refused", async () => {
     respond(502, { detail: "The agent could not start: Missing credentials" });
-    const onFailure = vi.fn();
-    const stop = watchConnectFailures(url, onFailure);
-    await window.fetch(new Request(url, { method: "POST" }));
+    const on = handlers();
+    const stop = watchConnect(url, on);
+    await post();
     stop();
-    expect(onFailure).toHaveBeenCalledWith("The agent could not start: Missing credentials");
+    expect(on.failure).toHaveBeenCalledWith("The agent could not start: Missing credentials");
   });
 
   it("falls back to the status when the body says nothing", async () => {
     window.fetch = vi.fn(async () => new Response("oops", { status: 500 }));
-    const onFailure = vi.fn();
-    watchConnectFailures(url, onFailure);
-    await window.fetch(url);
-    expect(onFailure).toHaveBeenCalledWith("The voice server refused the call (HTTP 500).");
+    const on = handlers();
+    watchConnect(url, on);
+    await post();
+    expect(on.failure).toHaveBeenCalledWith("The voice server refused the call (HTTP 500).");
   });
 
-  it("ignores other URLs and successful answers", async () => {
-    respond(500, { detail: "x" });
-    const onFailure = vi.fn();
-    watchConnectFailures(url, onFailure);
-    await window.fetch("http://localhost/api/other");
-    respond(200, { sdp: "v=0" });
-    watchConnectFailures(url, onFailure);
-    await window.fetch(url);
-    expect(onFailure).not.toHaveBeenCalled();
+  it("hands over the call id when the offer is answered", async () => {
+    respond(200, { sdp: "v=0", type: "answer", call_id: "c1" });
+    const on = handlers();
+    watchConnect(url, on);
+    await post();
+    expect(on.call).toHaveBeenCalledWith("c1");
+    expect(on.failure).not.toHaveBeenCalled();
+  });
+
+  it("ignores the ICE PATCH the proxy refuses by design, and other URLs", async () => {
+    respond(405, { detail: "Method Not Allowed" });
+    const on = handlers();
+    watchConnect(url, on);
+    await window.fetch(new Request(url, { method: "PATCH" }));
+    await window.fetch(new Request("http://localhost/api/other", { method: "POST" }));
+    expect(on.failure).not.toHaveBeenCalled();
   });
 
   it("puts fetch back when stopped", () => {
     const before = window.fetch;
-    const stop = watchConnectFailures(url, vi.fn());
+    const stop = watchConnect(url, handlers());
     expect(window.fetch).not.toBe(before);
     stop();
     expect(window.fetch).toBe(before);
+  });
+});
+
+describe("agentStopReason", () => {
+  it("names the provider error the agent stopped on", () => {
+    const events = [{ payload: { stage: "DeepgramSTTService#0", error: "status 401" } }];
+    expect(agentStopReason(events)).toBe("The agent stopped: status 401");
+  });
+
+  it("is null for a call nothing went wrong on", () => {
+    expect(agentStopReason([])).toBeNull();
   });
 });
