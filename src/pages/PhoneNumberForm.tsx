@@ -247,6 +247,13 @@ export default function PhoneNumberForm(props: {
         </div>
       )}
 
+      <div className="field">
+        <label htmlFor="pn-label">Label</label>
+        <input id="pn-label" name="label" className="input" value={label} maxLength={100}
+          autoComplete="off" onChange={(e) => setLabel(e.target.value)}
+          placeholder="Label for phone number, e.g. Support line" />
+      </div>
+
       {!useWorkspace && (
       <>
       <div className="field">
@@ -270,13 +277,6 @@ export default function PhoneNumberForm(props: {
       </div>
       </>
       )}
-
-      <div className="field">
-        <label htmlFor="pn-label">Label</label>
-        <input id="pn-label" name="label" className="input" value={label} maxLength={100}
-          autoComplete="off" onChange={(e) => setLabel(e.target.value)}
-          placeholder="Label for phone number, e.g. Support line" />
-      </div>
 
       <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
         <legend style={{ padding: 0, fontWeight: 500, fontSize: 13 }}>Routing</legend>
