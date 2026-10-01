@@ -30,7 +30,8 @@ afterEach(() => {
 
 it("connects with a masked token and never shows it again", async () => {
   render(<TwilioAccount isAdmin />);
-  fireEvent.change(await screen.findByLabelText("Twilio Account SID"), { target: { value: AC } });
+  fireEvent.click(await screen.findByText("Connect"));
+  fireEvent.change(screen.getByLabelText("Twilio Account SID"), { target: { value: AC } });
   const token = screen.getByLabelText("Twilio Auth Token") as HTMLInputElement;
   expect(token.type).toBe("password");
   fireEvent.change(token, { target: { value: "tw-secret" } });
@@ -42,14 +43,15 @@ it("connects with a masked token and never shows it again", async () => {
     auth_token: "tw-secret",
   });
   expect(document.body.textContent).not.toContain("tw-secret");
-  expect(token.value).toBe("");
+  expect(screen.queryByRole("dialog")).toBeNull();
 });
 
 it("says which numbers a rotation could not reach", async () => {
   status = { connected: true, account_sid: AC, last4: "1234", numbers: [{ id: "pn-1", e164: "+1555" }] };
   putResult = { numbers: [{ id: "pn-1", e164: "+1555", state: "failed", error: "not on this account" }] };
   render(<TwilioAccount isAdmin />);
-  fireEvent.change(await screen.findByLabelText("Twilio Auth Token"), { target: { value: "new" } });
+  fireEvent.click(await screen.findByText("Manage"));
+  fireEvent.change(screen.getByLabelText("Twilio Auth Token"), { target: { value: "new" } });
   fireEvent.click(screen.getByText("Replace"));
   expect(await screen.findByText(/Not updated: \+1555 \(not on this account\)/)).toBeDefined();
 });

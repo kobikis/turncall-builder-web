@@ -49,18 +49,18 @@ it("shows one card per account, tagged with every role it serves", async () => {
   cards = [card()];
   show();
   const el = await screen.findByTestId("provider-deepgram");
-  expect(within(el).getByText("Transcription")).toBeDefined();
-  expect(within(el).getByText("Voice")).toBeDefined();
+  expect(within(el).getByText("Transcription · Voice")).toBeDefined();
   expect(screen.getAllByTestId(/^provider-/)).toHaveLength(1);
 });
 
 it("enters a key through a masked field and never renders a stored one", async () => {
   cards = [card({ connected: true, last4: "wxyz", runs_on: "workspace" })];
   show();
-  const input = (await screen.findByLabelText("deepgram API key")) as HTMLInputElement;
+  fireEvent.click(await screen.findByText("Manage"));
+  const input = screen.getByLabelText("deepgram API key") as HTMLInputElement;
   expect(input.type).toBe("password");
   expect(input.value).toBe("");
-  expect(screen.getByText(/····wxyz/)).toBeDefined();
+  expect(screen.getAllByText(/····wxyz/).length).toBeGreaterThan(0);
 
   fireEvent.change(input, { target: { value: "dg-new-secret" } });
   fireEvent.click(screen.getByText("Replace key"));
@@ -68,7 +68,7 @@ it("enters a key through a masked field and never renders a stored one", async (
   const put = calls.find((c) => c.method === "PUT")!;
   expect(put.path).toBe("/integrations/providers/deepgram");
   expect(put.body).toBe(JSON.stringify({ api_key: "dg-new-secret" }));
-  await waitFor(() => expect(input.value).toBe(""));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   expect(document.body.textContent).not.toContain("dg-new-secret");
 });
 
@@ -88,6 +88,7 @@ it("shows a non-admin the status without any control", async () => {
   cards = [card({ connected: true, last4: "1234", runs_on: "workspace", pinned_agents: [{ agent_id: "a", name: "A" }] })];
   show(false);
   await screen.findByText(/····1234/);
+  expect(screen.queryByText("Manage")).toBeNull();
   expect(screen.queryByLabelText("deepgram API key")).toBeNull();
   expect(screen.queryByText("Disconnect")).toBeNull();
   expect(screen.queryByText("Adopt into workspace")).toBeNull();
@@ -97,7 +98,8 @@ it("shows a non-admin the status without any control", async () => {
 it("confirms a disconnect that falls back to the platform key", async () => {
   cards = [card({ connected: true, last4: "1234", runs_on: "workspace", agents_using: 2 })];
   show();
-  fireEvent.click(await screen.findByText("Disconnect"));
+  fireEvent.click(await screen.findByText("Manage"));
+  fireEvent.click(screen.getByText("Disconnect"));
   const dialog = screen.getByRole("alertdialog");
   expect(dialog.textContent).toMatch(/2 agents use this key/);
   expect(dialog.textContent).toMatch(/fall back to the platform's key/);
@@ -132,7 +134,8 @@ it("adopts a pinned agent's key and updates the card in place", async () => {
   ];
   adopted = [card({ provider: "openai", serves: { llm: ["openai"] }, connected: true, last4: "abcd", runs_on: "workspace" })];
   show();
-  fireEvent.click(await screen.findByText("Adopt into workspace"));
+  fireEvent.click(await screen.findByText("Connect"));
+  fireEvent.click(screen.getByText("Adopt into workspace"));
   expect(await screen.findByText("Calls use this workspace's key ····abcd.")).toBeDefined();
   expect(calls.find((c) => c.path.endsWith("/adopt"))?.body).toBe(JSON.stringify({ agent_id: "a1" }));
   expect(calls.filter((c) => c.path === "/integrations/providers")).toHaveLength(1);
@@ -148,6 +151,7 @@ it("offers to finish an interrupted disconnect", async () => {
   ];
   show();
   expect(await screen.findByText(/Still holding the key: Sales/)).toBeDefined();
+  fireEvent.click(screen.getByText("Manage"));
   fireEvent.click(screen.getByText("Finish disconnecting"));
   await waitFor(() => expect(calls.some((c) => c.method === "DELETE")).toBe(true));
 });
@@ -161,5 +165,5 @@ it("files a voice provider under Voice", async () => {
   cards = [card({ provider: "cartesia", serves: { stt: ["cartesia"], tts: ["cartesia"] } })];
   show();
   await screen.findByTestId("provider-cartesia");
-  expect(screen.getByRole("heading", { name: "Voice" })).toBeDefined();
+  expect(screen.getByText("Voice", { selector: ".int-group-title" })).toBeDefined();
 });

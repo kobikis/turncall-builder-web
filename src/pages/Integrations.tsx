@@ -135,8 +135,9 @@ export default function Integrations() {
       <TwilioAccount isAdmin={isAdmin} />
       <McpRegistry isAdmin={isAdmin} />
 
+      <section aria-labelledby="connected-apps" className="int-section">
       <h3 id="connected-apps">Connected apps</h3>
-      <p className="hint">
+      <p className="lead">
         Apps this workspace has authorized. Connect one here and every agent
         can use it — each agent chooses whether it runs during a call, after
         one, or both, on its Configuration tab. Unlike a provider key, nothing
@@ -204,6 +205,7 @@ export default function Integrations() {
         agent's configuration never carries one — they are minted for each call
         and expire within the hour.
       </p>
+      </section>
     </>
   );
 }

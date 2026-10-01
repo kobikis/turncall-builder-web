@@ -74,12 +74,11 @@ export function McpRegistry({ isAdmin }: { isAdmin: boolean }) {
   };
 
   return (
-    <section aria-labelledby="mcp-registry">
+    <section aria-labelledby="mcp-registry" className="int-section">
       <h3 id="mcp-registry">MCP servers</h3>
-      <p className="hint">
+      <p className="lead">
         Register a tool server once for the workspace; each agent opts in on its
-        Configuration tab. Nothing is inherited — an agent only connects the
-        servers it chose.
+        Configuration tab. Nothing is inherited.
       </p>
       {error && (
         <div className="callout error" role="alert">
@@ -87,17 +86,20 @@ export function McpRegistry({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
       {servers.length === 0 && <p className="muted">No servers registered.</p>}
-      <ul className="plain-list">
+      {servers.length > 0 && (
+      <ul className="mcp-list">
         {servers.map((s) => (
           <li key={s.id} data-testid={`mcp-${s.name}`}>
-            <strong>{s.name}</strong> <span className="muted">{s.transport} · {s.url}</span>
-            {s.header_names.length > 0 && (
-              <span className="muted"> · headers: {s.header_names.join(", ")}</span>
-            )}
-            <span className="muted"> · {(s.agents || []).length} agent(s)</span>
+            <div className="mcp-main">
+              <strong>{s.name}</strong>
+              <span className="muted">
+                {s.transport} · {s.url}
+                {s.header_names.length > 0 && <> · headers: {s.header_names.join(", ")}</>}
+                {" "}· {(s.agents || []).length} agent(s)
+              </span>
+            </div>
             {isAdmin && (
               <>
-                {" "}
                 <button
                   type="button"
                   className="btn"
@@ -117,6 +119,7 @@ export function McpRegistry({ isAdmin }: { isAdmin: boolean }) {
           </li>
         ))}
       </ul>
+      )}
       {isAdmin && !draft && (
         <button type="button" className="btn" onClick={() => setDraft(EMPTY)}>
           Register a server

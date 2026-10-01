@@ -86,6 +86,21 @@ function validationText(v: ProviderCard["validation"]): string | null {
   return `Could not be checked (${v.detail}). Saved anyway.`;
 }
 
+const DISPLAY_NAMES: Record<string, string> = {
+  openai: "OpenAI",
+  anthropic: "Anthropic",
+  openrouter: "OpenRouter",
+  aws: "AWS",
+  google: "Google Gemini",
+  deepgram: "Deepgram",
+  elevenlabs: "ElevenLabs",
+  cartesia: "Cartesia",
+  heygen: "HeyGen",
+  tavus: "Tavus",
+};
+export const displayName = (provider: string) =>
+  DISPLAY_NAMES[provider] ?? provider.charAt(0).toUpperCase() + provider.slice(1);
+
 const primaryRole = (card: ProviderCard): Role =>
   GROUP_ORDER.find((r) => card.serves[r]?.length) ?? "llm";
 
@@ -103,14 +118,20 @@ function Card({
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState("");
+  const [open, setOpen] = useState(false);
+  const close = () => {
+    setOpen(false);
+    setConfirming(false);
+    setValues({});
+    setError("");
+  };
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setError("");
     try {
       await fn();
-      setValues({});
-      setConfirming(false);
+      close();
       onData(null); // reload
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
@@ -143,6 +164,7 @@ function Card({
         method: "POST",
         body: JSON.stringify({ agent_id: agentId }),
       });
+      close();
       onData(r.data.providers);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not adopt the key.");
@@ -156,120 +178,183 @@ function Card({
   const roles = ROLE_ORDER.filter((r) => card.serves[r]?.length);
   const checked = validationText(card.validation);
 
+  const name = displayName(card.provider);
+  const status = card.disconnecting
+    ? { cls: "warn", text: "Disconnecting" }
+    : card.connected
+      ? { cls: "connected", text: "Connected" }
+      : card.runs_on === "platform"
+        ? { cls: "platform", text: "Platform key" }
+        : card.runs_on === "none"
+          ? { cls: "missing", text: "No key" }
+          : { cls: "disconnected", text: "Not connected" };
+
   return (
-    <div className="integration-card" data-testid={`provider-${card.provider}`}>
+    <div className="integration-card provider-card" data-testid={`provider-${card.provider}`}>
       <div className="head">
         <span className="app-tile" aria-hidden="true" style={{ background: tint(card.provider) }}>
-          {card.provider.charAt(0).toUpperCase()}
+          {name.charAt(0)}
         </span>
-        <span className={`badge app-status ${card.connected ? "connected" : "disconnected"}`}>
-          {card.disconnecting ? "Disconnecting" : card.connected ? "Workspace key" : "No workspace key"}
-        </span>
-      </div>
-      <div className="name">{card.provider}</div>
-      <div>
-        {roles.map((r) => (
-          <span key={r} className="chip" style={{ marginRight: 4 }}>
-            {ROLE_LABELS[r]}
-          </span>
-        ))}
+        <div className="title">
+          <div className="name">{name}</div>
+          <div className="roles">{roles.map((r) => ROLE_LABELS[r]).join(" · ")}</div>
+        </div>
       </div>
       <p className={`desc${card.runs_on === "none" ? " danger" : ""}`}>{runsOnText(card)}</p>
-      {card.connected && checked && <p className="desc">{checked}</p>}
       {pinned > 0 && (
-        <p className="desc">
+        <p className="desc meta">
           {pinned === 1 ? "1 agent uses its own key" : `${pinned} agents use their own key`} for
           its model instead of this one.
         </p>
       )}
-      {/* Adoption only fills an empty slot — it never replaces a workspace key. */}
-      {isAdmin &&
-        !card.connected &&
-        card.pinned_agents.map((a) => (
-          <div key={a.agent_id} className="foot">
-            <span className="account-name">{a.name || a.agent_id}</span>
-            <button type="button" className="btn" disabled={busy} onClick={() => void adopt(a.agent_id)}>
-              Adopt into workspace
-            </button>
-          </div>
-        ))}
       {failed.length > 0 && (
-        <div className="callout warn">
+        <p className="desc meta danger">
           {card.disconnecting ? "Still holding the key: " : "Not yet applied to: "}
           {failed.map((a) => a.name || a.agent_id).join(", ")}
-          {isAdmin && (
-            <button
-              type="button"
-              className="btn"
-              style={{ marginLeft: 8 }}
-              disabled={busy}
-              onClick={() => void (card.disconnecting ? disconnect() : retry())}
-            >
-              {card.disconnecting ? "Finish disconnecting" : "Retry"}
-            </button>
-          )}
-        </div>
+        </p>
       )}
-      {isAdmin && !card.disconnecting && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (canSave) void save();
-          }}
-        >
-          {aws ? (
-            AWS_FIELDS.map((f) => (
-              <input
-                key={f.name}
-                className="input"
-                type={f.secret ? "password" : "text"}
-                autoComplete="off"
-                aria-label={`${card.provider} ${f.label}`}
-                placeholder={f.label}
-                value={values[f.name] || ""}
-                onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
-                style={{ marginBottom: 4 }}
-              />
-            ))
-          ) : (
-            <input
-              className="input"
-              type="password"
-              autoComplete="off"
-              aria-label={`${card.provider} API key`}
-              placeholder={card.connected ? "Paste a new key to replace it" : "Paste an API key"}
-              value={values.api_key || ""}
-              onChange={(e) => setValues({ api_key: e.target.value })}
-            />
-          )}
-          <div className="foot" style={{ marginTop: 6 }}>
-            <button type="submit" className="btn btn-primary" disabled={busy || !canSave}>
-              {busy ? "Checking…" : card.connected ? "Replace key" : "Save key"}
-            </button>
-            {card.connected && !confirming && (
-              <button type="button" className="btn btn-danger" disabled={busy} onClick={() => setConfirming(true)}>
-                Disconnect
+      <div className="foot">
+        <span className={`badge app-status ${status.cls}`}>{status.text}</span>
+        {isAdmin && (
+          <button type="button" className="btn" onClick={() => setOpen(true)}>
+            {card.connected || card.disconnecting ? "Manage" : "Connect"}
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <div className="modal-backdrop" onClick={() => !busy && close()}>
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${name} key`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-head">
+              <span className="app-tile" aria-hidden="true" style={{ background: tint(card.provider) }}>
+                {name.charAt(0)}
+              </span>
+              <div className="title">
+                <div className="name">{name}</div>
+                <div className="roles">{roles.map((r) => ROLE_LABELS[r]).join(" · ")}</div>
+              </div>
+              <button type="button" className="modal-close" aria-label="Close" onClick={close}>
+                ×
               </button>
+            </div>
+
+            <p className="modal-status">{runsOnText(card)}</p>
+            {card.connected && checked && <p className="hint">{checked}</p>}
+
+            {/* Adoption only fills an empty slot — it never replaces a workspace key. */}
+            {!card.connected &&
+              card.pinned_agents.map((a) => (
+                <div key={a.agent_id} className="modal-row">
+                  <span>{a.name || a.agent_id} uses its own key</span>
+                  <button type="button" className="btn" disabled={busy} onClick={() => void adopt(a.agent_id)}>
+                    Adopt into workspace
+                  </button>
+                </div>
+              ))}
+
+            {failed.length > 0 && (
+              <div className="callout warn">
+                {card.disconnecting ? "Still holding the key: " : "Not yet applied to: "}
+                {failed.map((a) => a.name || a.agent_id).join(", ")}
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ marginLeft: 8 }}
+                  disabled={busy}
+                  onClick={() => void (card.disconnecting ? disconnect() : retry())}
+                >
+                  {card.disconnecting ? "Finish disconnecting" : "Retry"}
+                </button>
+              </div>
+            )}
+
+            {!card.disconnecting && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (canSave) void save();
+                }}
+              >
+                {aws ? (
+                  AWS_FIELDS.map((f) => (
+                    <div className="field" key={f.name}>
+                      <label htmlFor={`aws-${f.name}`}>{f.label}</label>
+                      <input
+                        id={`aws-${f.name}`}
+                        className="input"
+                        type={f.secret ? "password" : "text"}
+                        autoComplete="off"
+                        aria-label={`${card.provider} ${f.label}`}
+                        value={values[f.name] || ""}
+                        onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+                      />
+                    </div>
+                  ))
+                ) : (
+                  <div className="field">
+                    <label htmlFor={`key-${card.provider}`}>API key</label>
+                    <input
+                      id={`key-${card.provider}`}
+                      className="input"
+                      type="password"
+                      autoComplete="off"
+                      aria-label={`${card.provider} API key`}
+                      placeholder={card.connected ? `····${card.last4 ?? ""} — paste a new key to replace it` : "Paste an API key"}
+                      value={values.api_key || ""}
+                      onChange={(e) => setValues({ api_key: e.target.value })}
+                    />
+                    <p className="hint" style={{ margin: "4px 0 0" }}>
+                      Stored encrypted and never shown again.
+                    </p>
+                  </div>
+                )}
+                {confirming ? (
+                  <div className="callout warn" role="alertdialog" aria-label={`Disconnect ${card.provider}`}>
+                    {disconnectText(card)}
+                    <div className="modal-actions">
+                      <button type="button" className="btn" onClick={() => setConfirming(false)}>
+                        Cancel
+                      </button>
+                      <button type="button" className="btn btn-danger" disabled={busy} onClick={() => void disconnect()}>
+                        Confirm disconnect
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="modal-actions">
+                    {card.connected && (
+                      <button
+                        type="button"
+                        className="btn btn-danger-ghost"
+                        disabled={busy}
+                        onClick={() => setConfirming(true)}
+                        style={{ marginRight: "auto" }}
+                      >
+                        Disconnect
+                      </button>
+                    )}
+                    <button type="button" className="btn" onClick={close}>
+                      Cancel
+                    </button>
+                    <button type="submit" className="btn btn-primary" disabled={busy || !canSave}>
+                      {busy ? "Checking…" : card.connected ? "Replace key" : "Save key"}
+                    </button>
+                  </div>
+                )}
+              </form>
+            )}
+            {error && (
+              <div className="callout error" role="alert">
+                {error}
+              </div>
             )}
           </div>
-        </form>
-      )}
-      {confirming && (
-        <div className="callout warn" role="alertdialog" aria-label={`Disconnect ${card.provider}`}>
-          {disconnectText(card)}
-          <div className="foot" style={{ marginTop: 6 }}>
-            <button type="button" className="btn btn-danger" disabled={busy} onClick={() => void disconnect()}>
-              Confirm disconnect
-            </button>
-            <button type="button" className="btn" onClick={() => setConfirming(false)}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-      {error && (
-        <div className="callout error" role="alert">
-          {error}
         </div>
       )}
     </div>
@@ -299,13 +384,12 @@ export function ProviderAccounts({ isAdmin }: { isAdmin: boolean }) {
   })).filter((g) => g.cards.length);
 
   return (
-    <section aria-labelledby="provider-accounts">
+    <section aria-labelledby="provider-accounts" className="int-section">
       <h3 id="provider-accounts">Provider accounts</h3>
-      <p className="hint">
-        Your own keys for the services an agent's calls run on. A key is stored
-        encrypted, checked when you save it, and never shown again — a card shows
-        only its last four characters. A provider you have not connected runs on
-        the platform's key, if it has one.
+      <p className="lead">
+        Your own keys for the services an agent's calls run on — stored encrypted,
+        checked when you save, never shown again. Without one, calls use the
+        platform's key.
       </p>
       {!isAdmin && <p className="muted">Only workspace admins can enter or remove a key.</p>}
       {error && (
@@ -315,7 +399,7 @@ export function ProviderAccounts({ isAdmin }: { isAdmin: boolean }) {
       )}
       {groups.map((g) => (
         <div key={g.role}>
-          <h4>{ROLE_LABELS[g.role]}</h4>
+          <div className="int-group-title">{ROLE_LABELS[g.role]}</div>
           <div className="integration-grid">
             {g.cards.map((card) => (
               <Card key={card.provider} card={card} isAdmin={isAdmin} onData={onData} />
