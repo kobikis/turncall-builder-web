@@ -1,3 +1,4 @@
+import { displayName } from "./pages/integrations/ProviderAccounts";
 // Build the signaling request for a WebRTC test call (#29). The browser POSTs its
 // SDP offer to builder-api's proxy (#35) — NOT TurnCall directly — so no TurnCall
 // key ever reaches the browser. Returned as a Request so the SmallWebRTC transport
@@ -48,9 +49,20 @@ export function watchConnect(
   };
 }
 
+// "Deepgram", "Deepgram and OpenAI", "Deepgram, OpenAI and Cartesia".
+function keyNames(accounts: string[]): string {
+  const names = accounts.map(displayName);
+  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+const missingKeysMessage = (accounts: string[]) =>
+  `No ${keyNames(accounts)} API key — add ${accounts.length > 1 ? "them" : "one"} in Integrations.`;
+
 async function failureReason(res: Response): Promise<string> {
   try {
     const body = await res.json();
+    const missing = body?.missing_keys;
+    if (Array.isArray(missing) && missing.length) return missingKeysMessage(missing);
     if (typeof body?.detail === "string" && body.detail) return body.detail;
   } catch {
     /* not JSON */
@@ -70,7 +82,21 @@ async function answeredCallId(res: Response): Promise<string | null> {
 // Why the agent ended a call it had started: a provider that stopped working
 // mid-call (a 401 from a speech provider with no key, say). TurnCall records it
 // as an `error.raised` event before the line drops; null when there is none.
-export function agentStopReason(events: { payload?: { error?: unknown } }[]): string | null {
-  const error = events.find((e) => typeof e.payload?.error === "string")?.payload?.error;
-  return typeof error === "string" && error ? `The agent stopped: ${error}` : null;
+type ErrorPayload = {
+  error?: unknown;
+  provider?: unknown;
+  key_rejected?: unknown;
+  missing_keys?: unknown;
+};
+
+export function agentStopReason(events: { payload?: ErrorPayload }[]): string | null {
+  const p = events.find((e) => typeof e.payload?.error === "string")?.payload;
+  if (!p) return null;
+  if (Array.isArray(p.missing_keys) && p.missing_keys.length) {
+    return missingKeysMessage(p.missing_keys.map(String));
+  }
+  if (p.key_rejected === true && typeof p.provider === "string") {
+    return `The ${displayName(p.provider)} API key was rejected — check it in Integrations.`;
+  }
+  return p.error ? `The agent stopped: ${p.error}` : null;
 }

@@ -53,6 +53,14 @@ describe("watchConnect", () => {
     expect(on.failure).toHaveBeenCalledWith("The agent could not start: Missing credentials");
   });
 
+  it("names the keys the proxy says are missing", async () => {
+    respond(502, { detail: "long upstream sentence", missing_keys: ["deepgram"] });
+    const on = handlers();
+    watchConnect(url, on);
+    await post();
+    expect(on.failure).toHaveBeenCalledWith("No Deepgram API key — add one in Integrations.");
+  });
+
   it("falls back to the status when the body says nothing", async () => {
     window.fetch = vi.fn(async () => new Response("oops", { status: 500 }));
     const on = handlers();
@@ -92,6 +100,20 @@ describe("agentStopReason", () => {
   it("names the provider error the agent stopped on", () => {
     const events = [{ payload: { stage: "DeepgramSTTService#0", error: "status 401" } }];
     expect(agentStopReason(events)).toBe("The agent stopped: status 401");
+  });
+
+  it("names a rejected key by its provider", () => {
+    const events = [{ payload: { error: "x", provider: "deepgram", key_rejected: true } }];
+    expect(agentStopReason(events)).toBe(
+      "The Deepgram API key was rejected — check it in Integrations.",
+    );
+  });
+
+  it("names missing keys", () => {
+    const events = [{ payload: { error: "x", missing_keys: ["deepgram", "openai"] } }];
+    expect(agentStopReason(events)).toBe(
+      "No Deepgram and OpenAI API key — add them in Integrations.",
+    );
   });
 
   it("is null for a call nothing went wrong on", () => {
