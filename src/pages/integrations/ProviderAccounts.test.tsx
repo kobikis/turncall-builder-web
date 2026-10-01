@@ -17,7 +17,7 @@ vi.mock("../../api", () => ({
   ApiError: class ApiError extends Error {},
 }));
 
-import { ProviderAccounts, disconnectText } from "./ProviderAccounts";
+import { ProviderAccounts, disconnectText, webhookNumbersText } from "./ProviderAccounts";
 
 const card = (over: Partial<ProviderCard> = {}): ProviderCard => ({
   provider: "deepgram",
@@ -166,4 +166,17 @@ it("files a voice provider under Voice", async () => {
   show();
   await screen.findByTestId("provider-cartesia");
   expect(screen.getByText("Voice", { selector: ".int-group-title" })).toBeDefined();
+});
+
+it("says when custom call-init numbers are not on the workspace key (builder-api#65)", () => {
+  const w = (over: object) => ({ state: "applied", error: null, on_platform_keys: 0, ...over });
+  expect(webhookNumbersText(card({ connected: true, webhook_numbers: w({}) }))).toBeNull();
+  expect(
+    webhookNumbersText(card({ connected: true, webhook_numbers: w({ on_platform_keys: 2 }) })),
+  ).toBe("2 custom call-init numbers still run on the platform's key — rebind them to use this one.");
+  expect(
+    webhookNumbersText(card({ connected: true, webhook_numbers: w({ state: "failed", error: "401" }) })),
+  ).toBe("Custom call-init numbers did not get this key (401).");
+  // Nothing to say about a key the workspace has not connected.
+  expect(webhookNumbersText(card({ connected: false, webhook_numbers: w({ on_platform_keys: 2 }) }))).toBeNull();
 });
