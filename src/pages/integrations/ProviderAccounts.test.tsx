@@ -151,3 +151,15 @@ it("offers to finish an interrupted disconnect", async () => {
   fireEvent.click(screen.getByText("Finish disconnecting"));
   await waitFor(() => expect(calls.some((c) => c.method === "DELETE")).toBe(true));
 });
+
+it("does not claim calls will fail when the platform key is unknown", () => {
+  const text = disconnectText(card({ connected: true, platform_key: null, runs_on: "workspace" }));
+  expect(text).toMatch(/could not be checked/);
+});
+
+it("files a voice provider under Voice", async () => {
+  cards = [card({ provider: "cartesia", serves: { stt: ["cartesia"], tts: ["cartesia"] } })];
+  show();
+  await screen.findByTestId("provider-cartesia");
+  expect(screen.getByRole("heading", { name: "Voice" })).toBeDefined();
+});

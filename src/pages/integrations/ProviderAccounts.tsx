@@ -40,12 +40,17 @@ export const ROLE_LABELS: Record<Role, string> = {
   avatar: "Avatar",
 };
 const ROLE_ORDER: Role[] = ["llm", "stt", "tts", "s2s", "avatar"];
+// Which group a multi-role card is browsed under. Voice before Transcription:
+// every TTS provider also transcribes, so the other way round empties Voice.
+const GROUP_ORDER: Role[] = ["llm", "tts", "s2s", "stt", "avatar"];
 
 const AWS_FIELDS = [
   { name: "access_key_id", label: "Access key ID", secret: false },
   { name: "secret_access_key", label: "Secret access key", secret: true },
   { name: "session_token", label: "Session token (optional)", secret: true },
   { name: "role_arn", label: "Role ARN (instead of keys)", secret: false },
+  { name: "external_id", label: "External ID (with a role ARN)", secret: false },
+  { name: "profile", label: "Profile on the TurnCall host (instead of keys)", secret: false },
   { name: "region", label: "Region (optional)", secret: false },
 ];
 
@@ -65,8 +70,10 @@ export function runsOnText(card: ProviderCard): string {
 
 /** What disconnecting will actually do, in words (#45). */
 export function disconnectText(card: ProviderCard): string {
-  const n = card.agents_using - card.pinned_agents.length;
+  const n = card.agents_using;
   const who = n === 1 ? "1 agent uses" : `${n} agents use`;
+  if (card.platform_key === null)
+    return `${who} this key. Whether the platform has a ${card.provider} key could not be checked, so their calls may fail after disconnecting.`;
   return card.platform_key
     ? `${who} this key. After disconnecting they fall back to the platform's key.`
     : `${who} this key. The platform has no ${card.provider} key, so after disconnecting their calls will fail.`;
@@ -80,7 +87,7 @@ function validationText(v: ProviderCard["validation"]): string | null {
 }
 
 const primaryRole = (card: ProviderCard): Role =>
-  ROLE_ORDER.find((r) => card.serves[r]?.length) ?? "llm";
+  GROUP_ORDER.find((r) => card.serves[r]?.length) ?? "llm";
 
 function Card({
   card,
@@ -115,7 +122,10 @@ function Card({
   const body = aws
     ? Object.fromEntries(Object.entries(values).filter(([, v]) => v.trim()))
     : { api_key: values.api_key || "" };
-  const canSave = aws ? Object.keys(body).length > 0 : Boolean(values.api_key?.trim());
+  // An AWS set has to name a source; a region alone changes nothing.
+  const canSave = aws
+    ? Boolean(body.access_key_id || body.role_arn || body.profile)
+    : Boolean(values.api_key?.trim());
 
   const save = () =>
     run(() =>
@@ -168,11 +178,13 @@ function Card({
       {card.connected && checked && <p className="desc">{checked}</p>}
       {pinned > 0 && (
         <p className="desc">
-          {pinned === 1 ? "1 agent uses its own key" : `${pinned} agents use their own key`} instead of
-          this one.
+          {pinned === 1 ? "1 agent uses its own key" : `${pinned} agents use their own key`} for
+          its model instead of this one.
         </p>
       )}
+      {/* Adoption only fills an empty slot — it never replaces a workspace key. */}
       {isAdmin &&
+        !card.connected &&
         card.pinned_agents.map((a) => (
           <div key={a.agent_id} className="foot">
             <span className="account-name">{a.name || a.agent_id}</span>
@@ -281,7 +293,7 @@ export function ProviderAccounts({ isAdmin }: { isAdmin: boolean }) {
 
   const onData = (next: ProviderCard[] | null) => (next ? setCards(next) : void load());
 
-  const groups = ROLE_ORDER.map((role) => ({
+  const groups = GROUP_ORDER.map((role) => ({
     role,
     cards: cards.filter((c) => primaryRole(c) === role),
   })).filter((g) => g.cards.length);
