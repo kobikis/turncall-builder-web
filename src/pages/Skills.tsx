@@ -17,6 +17,7 @@ export default function Skills() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [open, setOpen] = useState(false); // the add/edit dialog
 
   const load = () =>
     api("/skills").then((r) => {
@@ -53,6 +54,7 @@ export default function Skills() {
       );
       setForm(BLANK);
       setEditing(null);
+      setOpen(false);
     });
 
   const edit = (s: Skill) => {
@@ -74,123 +76,169 @@ export default function Skills() {
     });
 
   const complete = form.name.trim() && form.description.trim() && form.body.trim();
+  const close = () => {
+    setOpen(false);
+    setForm(BLANK);
+    setEditing(null);
+    setError("");
+  };
 
   return (
-    <section>
-      <h2>Skills</h2>
-      <p className="muted" style={{ fontSize: 13, maxWidth: 680 }}>
-        A skill teaches the builder how to build a kind of agent — how you take a
-        table booking, what your dispatchers need before a job goes out. It reads
-        one when the work matches its description, alongside the ones that ship
-        with TurnCall.
-      </p>
-      <p className="muted" style={{ fontSize: 13, maxWidth: 680 }}>
-        A skill teaches the builder <strong>how to decide</strong>, not what to
-        pick. It is read only when it looks relevant, so it is the wrong place
-        for “always use this voice” — that would apply most of the time, which is
-        worse than never.
-      </p>
-
-      <div className="card" style={{ maxWidth: 680 }}>
-        <div className="field">
-          <label htmlFor="sk-name">Name</label>
-          <input
-            id="sk-name"
-            className="input"
-            placeholder="restaurant-reservations"
-            value={form.name}
-            disabled={busy || editing !== null}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-          />
-          <p className="hint" style={{ margin: "4px 0 0" }}>
-            Lowercase words joined by hyphens. These names are taken by built-in
-            skills: {reserved.join(", ") || "—"}.
-          </p>
+    <div>
+      <div className="page-head">
+        <div>
+          <h2>Skills</h2>
+          <p>Guidance the builder reads when the agent it is building matches a skill's description.</p>
         </div>
-
-        <div className="field">
-          <label htmlFor="sk-when">When should the builder use this?</label>
-          <textarea
-            id="sk-when"
-            className="input"
-            rows={2}
-            placeholder="Use when building an agent that takes table bookings — covers party size, seating preferences, waitlists and no-shows."
-            value={form.description}
-            disabled={busy}
-            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-          />
-          <p className="hint" style={{ margin: "4px 0 0" }}>
-            The one part the builder always sees. Everything below is read only
-            once this line matches what it is doing — so a vague line here means
-            the skill is never opened, however good it is.
-          </p>
-        </div>
-
-        <div className="field">
-          <label htmlFor="sk-body">Instructions</label>
-          <textarea
-            id="sk-body"
-            className="input"
-            rows={12}
-            placeholder={"# Taking a booking\n\nAsk for covers before time — the time you can offer depends on it.\nNever read options as a numbered list; the caller cannot skim."}
-            value={form.body}
-            disabled={busy}
-            onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
-          />
-          <p className="hint" style={{ margin: "4px 0 0" }}>
-            Markdown. Write it as instructions to the builder.
-          </p>
-        </div>
-
-        {error && <p role="alert" className="error-text">{error}</p>}
-        {notice && !error && <p className="muted">{notice}</p>}
-
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <button className="btn primary" disabled={busy || !complete} onClick={save}>
-            {editing ? `Save ${editing}` : "Add skill"}
-          </button>
-          {editing && (
-            <button
-              className="btn"
-              disabled={busy}
-              onClick={() => {
-                setForm(BLANK);
-                setEditing(null);
-              }}
-            >
-              Cancel
-            </button>
-          )}
-        </div>
+        <button
+          className="btn btn-primary"
+          onClick={() => {
+            setForm(BLANK);
+            setEditing(null);
+            setNotice("");
+            setOpen(true);
+          }}
+        >
+          + New skill
+        </button>
       </div>
 
-      <h3 style={{ marginTop: 24 }}>This workspace's skills</h3>
-      {skills.length === 0 ? (
-        <p className="muted" style={{ fontSize: 13 }}>
-          None yet. The built-in skills still apply.
-        </p>
-      ) : (
-        <div style={{ display: "grid", gap: 10, maxWidth: 680 }}>
+      {notice && !open && <div className="callout info" role="status">{notice}</div>}
+      {error && !open && <p role="alert" className="error-text">{error}</p>}
+
+      <table className="list">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>When the builder uses it</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
           {skills.map((s) => (
-            <div key={s.name} className="card">
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                <strong>{s.name}</strong>
-                <span style={{ display: "flex", gap: 8 }}>
-                  <button className="btn" disabled={busy} onClick={() => edit(s)}>
-                    Edit
-                  </button>
-                  <button className="btn" disabled={busy} onClick={() => remove(s.name)}>
-                    Delete
-                  </button>
-                </span>
+            <tr key={s.name}>
+              <td className="num" style={{ fontWeight: 500, whiteSpace: "nowrap" }}>
+                <button className="link-button" onClick={() => { edit(s); setOpen(true); }}>
+                  {s.name}
+                </button>
+              </td>
+              <td className="hint">{s.description}</td>
+              <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                <button
+                  className="btn"
+                  style={{ padding: "3px 10px", marginRight: 6 }}
+                  disabled={busy}
+                  onClick={() => { edit(s); setOpen(true); }}
+                >
+                  edit
+                </button>
+                <button
+                  className="btn btn-danger"
+                  style={{ padding: "3px 10px" }}
+                  disabled={busy}
+                  onClick={() => remove(s.name)}
+                >
+                  delete
+                </button>
+              </td>
+            </tr>
+          ))}
+          {skills.length === 0 && (
+            <tr>
+              <td colSpan={3} className="muted" style={{ padding: 16 }}>
+                No skills yet. The built-in skills still apply.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      <p className="hint" style={{ marginTop: 10 }}>
+        Built-in skills: {reserved.join(", ") || "—"}. Their names are taken.
+      </p>
+
+      {open && (
+        <div className="modal-backdrop" onClick={() => !busy && close()}>
+          <div
+            className="modal modal-wide"
+            role="dialog"
+            aria-modal="true"
+            aria-label={editing ? `Edit ${editing}` : "New skill"}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-head">
+              <div className="title">
+                <div className="name">{editing ? `Edit ${editing}` : "New skill"}</div>
+                <div className="roles">
+                  Teaches the builder how to decide, not what to pick — it is read only
+                  when it looks relevant, so it is the wrong place for "always use this voice".
+                </div>
               </div>
-              <p className="hint" style={{ margin: "6px 0 0" }}>
-                {s.description}
+              <button type="button" className="modal-close" aria-label="Close" onClick={close}>
+                ×
+              </button>
+            </div>
+
+            <div className="field">
+              <label htmlFor="sk-name">Name</label>
+              <input
+                id="sk-name"
+                className="input"
+                placeholder="restaurant-reservations"
+                value={form.name}
+                disabled={busy || editing !== null}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              />
+              <p className="hint" style={{ margin: "4px 0 0" }}>
+                Lowercase words joined by hyphens. Taken by built-in skills:{" "}
+                {reserved.join(", ") || "—"}.
               </p>
             </div>
-          ))}
+
+            <div className="field">
+              <label htmlFor="sk-when">When should the builder use this?</label>
+              <textarea
+                id="sk-when"
+                className="input"
+                rows={2}
+                placeholder="Use when building an agent that takes table bookings — covers party size, seating preferences, waitlists and no-shows."
+                value={form.description}
+                disabled={busy}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              />
+              <p className="hint" style={{ margin: "4px 0 0" }}>
+                The one part the builder always sees — a vague line means the skill is never opened.
+              </p>
+            </div>
+
+            <div className="field">
+              <label htmlFor="sk-body">Instructions</label>
+              <textarea
+                id="sk-body"
+                className="input"
+                rows={12}
+                placeholder={"# Taking a booking\n\nAsk for covers before time — the time you can offer depends on it.\nNever read options as a numbered list; the caller cannot skim."}
+                value={form.body}
+                disabled={busy}
+                onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
+              />
+              <p className="hint" style={{ margin: "4px 0 0" }}>
+                Markdown. Write it as instructions to the builder.
+              </p>
+            </div>
+
+            {error && <p role="alert" className="error-text">{error}</p>}
+
+            <div className="modal-actions">
+              <button type="button" className="btn" disabled={busy} onClick={close}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" disabled={busy || !complete} onClick={save}>
+                {editing ? `Save ${editing}` : "Add skill"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
-    </section>
+    </div>
   );
 }

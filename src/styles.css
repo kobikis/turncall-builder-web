@@ -833,6 +833,16 @@ table.list.latency-table tr.slowest td { background: var(--danger-soft); white-s
   border-top: 1px solid var(--border);
 }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.modal-wide { width: min(640px, 100%); }
+.link-button {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  cursor: pointer;
+}
+.link-button:hover { text-decoration: underline; }
 .btn-danger-ghost { color: var(--danger); background: none; border-color: transparent; }
 .btn-danger-ghost:hover:not(:disabled) { background: var(--danger-soft); }
 

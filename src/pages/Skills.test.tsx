@@ -30,12 +30,15 @@ afterEach(() => {
 it("names the built-in skills so a refused name is explainable", async () => {
   render(<Skills />);
   await waitFor(() => expect(screen.getByText(/agent-tools, guardrails/)).toBeDefined());
+  fireEvent.click(screen.getByText("+ New skill"));
+  expect(screen.getAllByText(/agent-tools, guardrails/)).toHaveLength(2); // the dialog says it too
   expect(screen.getByText("takeaway-orders")).toBeDefined();
 });
 
 it("saves a skill by name", async () => {
   render(<Skills />);
   await waitFor(() => expect(screen.getByText("takeaway-orders")).toBeDefined());
+  fireEvent.click(screen.getByText("+ New skill"));
 
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "restaurant-reservations" } });
   fireEvent.change(screen.getByLabelText("When should the builder use this?"), {
@@ -52,6 +55,7 @@ it("saves a skill by name", async () => {
 it("says an edited skill reaches conversations already open", async () => {
   render(<Skills />);
   await waitFor(() => expect(screen.getByText("takeaway-orders")).toBeDefined());
+  fireEvent.click(screen.getByText("+ New skill"));
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "a-skill" } });
   fireEvent.change(screen.getByLabelText("When should the builder use this?"), { target: { value: "d" } });
   fireEvent.change(screen.getByLabelText("Instructions"), { target: { value: "b" } });
