@@ -23,21 +23,33 @@ export function buildConnectRequest(agentId: string, workspaceId: string | null)
 // that could not start just timed out. Watch the offer (the POST to the connect
 // URL) for the length of the handshake: hand over the reason when it is refused,
 // and the call id when it is answered. Only the POST — the transport also
-// PATCHes ICE candidates there, which the proxy answers 405 by design. Returns
-// the function that stops watching.
+// PATCHes ICE candidates there, which the proxy answers 405 by design.
+//
+// Once an offer is refused, later offers are answered here without reaching the
+// network. The transport retries a refused offer on a timer that disconnecting
+// does not cancel (and `stop()` resets its attempt count), so one press of
+// "Test call" used to place four failed calls. Returns the function that stops
+// watching — and blocking.
 export function watchConnect(
   url: string,
   on: { failure: (reason: string) => void; call: (callId: string) => void },
 ): () => void {
   const original = window.fetch;
+  let refused = false;
   window.fetch = async (input, init) => {
-    const res = await original.call(window, input, init);
     const req = input instanceof Request ? input : null;
     const target = req ? req.url : String(input);
     const method = (init?.method ?? req?.method ?? "GET").toUpperCase();
-    if (target === url && method === "POST") {
-      if (!res.ok) on.failure(await failureReason(res.clone()));
-      else {
+    const isOffer = target === url && method === "POST";
+    if (isOffer && refused) {
+      return new Response(JSON.stringify({ detail: "already refused" }), { status: 409 });
+    }
+    const res = await original.call(window, input, init);
+    if (isOffer) {
+      if (!res.ok) {
+        refused = true;
+        on.failure(await failureReason(res.clone()));
+      } else {
         const callId = await answeredCallId(res.clone());
         if (callId) on.call(callId);
       }

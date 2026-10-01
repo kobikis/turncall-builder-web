@@ -78,6 +78,18 @@ describe("watchConnect", () => {
     expect(on.failure).not.toHaveBeenCalled();
   });
 
+  it("keeps the transport's retries of a refused offer off the network", async () => {
+    respond(502, { detail: "No key" });
+    const network = window.fetch;
+    const on = handlers();
+    watchConnect(url, on);
+    await post();
+    const retry = await post();
+    expect(retry.status).toBe(409);
+    expect(network).toHaveBeenCalledTimes(1);
+    expect(on.failure).toHaveBeenCalledTimes(1);
+  });
+
   it("ignores the ICE PATCH the proxy refuses by design, and other URLs", async () => {
     respond(405, { detail: "Method Not Allowed" });
     const on = handlers();

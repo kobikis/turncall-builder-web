@@ -39,10 +39,15 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const unwatchRef = useRef<(() => void) | null>(null);
   const callIdRef = useRef<string | null>(null);
 
-  // Ends the connect phase: the timeout and the signaling watch go together.
   const clearTimer = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
+  };
+
+  // The signaling watch outlives a failure on purpose: it is what keeps the
+  // transport's retries off the server. It ends when the call connects, when
+  // the user stops, when the next call starts, or when the page goes.
+  const unwatch = () => {
     unwatchRef.current?.();
     unwatchRef.current = null;
   };
@@ -51,6 +56,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   useEffect(
     () => () => {
       clearTimer();
+      unwatch();
       void clientRef.current?.disconnect().catch(() => {});
     },
     [],
@@ -104,10 +110,12 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
         callbacks: {
           onConnected: () => {
             clearTimer();
+            unwatch();
             setState("connected");
           },
           onBotReady: () => {
             clearTimer();
+            unwatch();
             setState("connected");
             setMsg("Connected — speak now.");
           },
@@ -139,6 +147,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
       // A refused connect carries the reason (e.g. a provider with no key);
       // fail() also disconnects, which stops the transport's retries.
       callIdRef.current = null;
+      unwatch();
       unwatchRef.current = watchConnect(endpoint.url, {
         failure: fail,
         call: (callId) => {
@@ -170,6 +179,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
 
   async function stop() {
     clearTimer();
+    unwatch();
     erroredRef.current = false;
     try {
       await clientRef.current?.disconnect();
