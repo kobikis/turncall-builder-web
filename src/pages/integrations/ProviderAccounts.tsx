@@ -9,7 +9,7 @@ import { tint } from "../../apps";
 // back, only its presence and last four characters — and the card says which
 // key a call will actually use, which is the point of the page.
 
-export type Role = "llm" | "stt" | "tts" | "s2s" | "avatar";
+export type Role = "llm" | "stt" | "tts" | "s2s" | "avatar" | "judge";
 
 export type AgentProjection = {
   agent_id: string;
@@ -38,11 +38,12 @@ export const ROLE_LABELS: Record<Role, string> = {
   tts: "Voice",
   s2s: "Speech-to-speech",
   avatar: "Avatar",
+  judge: "Eval judge",
 };
-const ROLE_ORDER: Role[] = ["llm", "stt", "tts", "s2s", "avatar"];
+const ROLE_ORDER: Role[] = ["llm", "stt", "tts", "s2s", "avatar", "judge"];
 // Which group a multi-role card is browsed under. Voice before Transcription:
 // every TTS provider also transcribes, so the other way round empties Voice.
-const GROUP_ORDER: Role[] = ["llm", "tts", "s2s", "stt", "avatar"];
+const GROUP_ORDER: Role[] = ["llm", "tts", "s2s", "stt", "avatar", "judge"];
 
 const AWS_FIELDS = [
   { name: "access_key_id", label: "Access key ID", secret: false },
@@ -97,6 +98,7 @@ const DISPLAY_NAMES: Record<string, string> = {
   cartesia: "Cartesia",
   heygen: "HeyGen",
   tavus: "Tavus",
+  typesafe: "TypeSafe (Jev)",
 };
 export const displayName = (provider: string) =>
   DISPLAY_NAMES[provider] ?? provider.charAt(0).toUpperCase() + provider.slice(1);
