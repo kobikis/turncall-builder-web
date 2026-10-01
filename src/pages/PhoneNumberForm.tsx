@@ -235,6 +235,18 @@ export default function PhoneNumberForm(props: {
       </div>
       )}
 
+      {!useWorkspace && !ownAccount && (
+        <div className="field">
+          <label htmlFor="pn-sid">Twilio Phone Number SID</label>
+          <input id="pn-sid" name="twilio_sid" className="input" value={sid} disabled={props.lockNumber}
+            autoComplete="off" spellCheck={false}
+            onChange={(e) => setSid(e.target.value)} placeholder="PNxxxxxxxx" />
+          <p className="hint" style={{ margin: "4px 0 0" }}>
+            Needed only on the platform's account — enter your own Account SID below and it is looked up for you.
+          </p>
+        </div>
+      )}
+
       {!useWorkspace && (
       <>
       <div className="field">
@@ -257,18 +269,6 @@ export default function PhoneNumberForm(props: {
         </p>
       </div>
       </>
-      )}
-
-      {!useWorkspace && !ownAccount && (
-        <div className="field">
-          <label htmlFor="pn-sid">Twilio Phone Number SID</label>
-          <input id="pn-sid" name="twilio_sid" className="input" value={sid} disabled={props.lockNumber}
-            autoComplete="off" spellCheck={false}
-            onChange={(e) => setSid(e.target.value)} placeholder="PNxxxxxxxx" />
-          <p className="hint" style={{ margin: "4px 0 0" }}>
-            Needed only on the platform's account — with your own, it is looked up for you.
-          </p>
-        </div>
       )}
 
       <div className="field">
