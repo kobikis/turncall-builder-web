@@ -6,6 +6,7 @@ import { AgentRef as Agent } from "../types";
 type Routing = "agent" | "agent_call_init" | "webhook" | "none";
 export type PhoneInitial = {
   e164?: string;
+  label?: string | null;
   sid?: string;
   routing_type?: Routing;
   agent_id?: string | null;
@@ -48,6 +49,7 @@ export default function PhoneNumberForm(props: {
   const [agentId, setAgentId] = useState(i.agent_id || "");
   const [serverUrl, setServerUrl] = useState(i.server_url || "");
   const [sms, setSms] = useState(!!i.sms_enabled);
+  const [label, setLabel] = useState(i.label || "");
   const savedAccount = i.twilio_credentials === "number" ? i.twilio_account_sid || "" : "";
   const [accountSid, setAccountSid] = useState(savedAccount);
   const [authToken, setAuthToken] = useState(""); // write-only: never prefilled
@@ -124,6 +126,7 @@ export default function PhoneNumberForm(props: {
       return;
     const body: any = { sid: ownAccount ? "" : sid, e164, routing_type: routing, sms_enabled: sms };
     if (useWorkspace) body.use_workspace_twilio = true;
+    body.label = label.trim() || null;
     if (ownAccount && authToken.trim()) {
       body.twilio_account_sid = accountSid.trim();
       body.twilio_auth_token = authToken.trim();
@@ -267,6 +270,13 @@ export default function PhoneNumberForm(props: {
           </p>
         </div>
       )}
+
+      <div className="field">
+        <label htmlFor="pn-label">Label</label>
+        <input id="pn-label" name="label" className="input" value={label} maxLength={100}
+          autoComplete="off" onChange={(e) => setLabel(e.target.value)}
+          placeholder="Label for phone number, e.g. Support line" />
+      </div>
 
       <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
         <legend style={{ padding: 0, fontWeight: 500, fontSize: 13 }}>Routing</legend>

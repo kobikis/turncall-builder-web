@@ -85,3 +85,11 @@ it("still accepts a number SID on the platform's account", async () => {
   await waitFor(() => expect(onSubmit).toHaveBeenCalled());
   expect(onSubmit.mock.calls[0][0]).not.toHaveProperty("twilio_account_sid");
 });
+
+it("sends a trimmed label, and none when blank", async () => {
+  const onSubmit = show({ e164: "+14156021922", sid: "PN123456789", routing_type: "none" });
+  fireEvent.change(screen.getByLabelText("Label"), { target: { value: "  Support line " } });
+  fireEvent.click(screen.getByText("Bind number"));
+  await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+  expect(onSubmit.mock.calls[0][0]).toMatchObject({ label: "Support line" });
+});
