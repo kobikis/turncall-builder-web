@@ -212,6 +212,21 @@ export default function ConfigTab() {
     };
   }, [sttProvider]);
 
+  // openai_live's delegate is an OpenAI-hosted Responses model, so it picks
+  // from the workspace's OpenAI list whatever the agent's own LLM provider is.
+  const [delegateModels, setDelegateModels] = useState<string[]>([]);
+  const wantsDelegateModels = (cfg.s2s?.provider || "openai") === "openai_live";
+  useEffect(() => {
+    if (!wantsDelegateModels) return;
+    let ok = true;
+    api(`/providers/llm/openai/models`)
+      .then((r) => ok && setDelegateModels(r.data.models || []))
+      .catch(() => ok && setDelegateModels([]));
+    return () => {
+      ok = false;
+    };
+  }, [wantsDelegateModels]);
+
   // Fetch the model list live whenever the LLM provider changes.
   const llmProvider = cfg.llm?.provider || "openai";
   useEffect(() => {
@@ -432,6 +447,7 @@ export default function ConfigTab() {
             {s2sProvider === "openai_live" && (
               <Delegation
                 value={cfg.s2s?.delegation}
+                models={delegateModels}
                 hasTools={
                   tools.length > 0 ||
                   customCount > 0 ||

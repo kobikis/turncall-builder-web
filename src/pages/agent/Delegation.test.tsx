@@ -11,9 +11,11 @@ import { Delegation, type DelegationValue } from "./Delegation";
 
 afterEach(cleanup);
 
-function setup(value: DelegationValue | undefined, hasTools = true) {
+function setup(value: DelegationValue | undefined, hasTools = true, models: string[] = []) {
   const onChange = vi.fn();
-  render(<Delegation value={value} hasTools={hasTools} editable onChange={onChange} />);
+  render(
+    <Delegation value={value} models={models} hasTools={hasTools} editable onChange={onChange} />,
+  );
   return onChange;
 }
 
@@ -74,4 +76,19 @@ it("warns that tools will not run when it is off", () => {
 it("says nothing about tools for an agent that has none", () => {
   setup(undefined, false);
   expect(screen.queryByText(/tools will never run/i)).toBeNull();
+});
+
+it("offers the workspace's OpenAI models to choose from", () => {
+  const onChange = setup({ mode: "responses", model: "gpt-5-mini" }, true, ["gpt-5-mini", "gpt-6-astra"]);
+  const select = screen.getByLabelText(/delegate model/i) as HTMLSelectElement;
+  expect(select.tagName).toBe("SELECT");
+  expect([...select.options].map((o) => o.value)).toEqual(["gpt-5-mini", "gpt-6-astra"]);
+  fireEvent.change(select, { target: { value: "gpt-6-astra" } });
+  expect(onChange).toHaveBeenLastCalledWith({ mode: "responses", model: "gpt-6-astra" });
+});
+
+it("keeps a model the list does not carry selectable", () => {
+  setup({ mode: "responses", model: "my-fine-tune" }, true, ["gpt-5-mini"]);
+  const select = screen.getByLabelText(/delegate model/i) as HTMLSelectElement;
+  expect(select.value).toBe("my-fine-tune");
 });

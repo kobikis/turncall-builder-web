@@ -19,13 +19,15 @@ const TIERS = ["auto", "default", "flex", "priority"];
 
 type Props = {
   value: DelegationValue | undefined;
+  /** OpenAI models the workspace's key can use; empty falls back to typing one. */
+  models: string[];
   /** Whether the agent lists any tool — without a delegate none of them run. */
   hasTools: boolean;
   editable: boolean;
   onChange: (next: DelegationValue | undefined) => void;
 };
 
-export function Delegation({ value, hasTools, editable, onChange }: Props) {
+export function Delegation({ value, models, hasTools, editable, onChange }: Props) {
   // A blank optional field is left out, never sent as "": TurnCall refuses an
   // empty reasoning effort, tier or instructions.
   const set = (key: keyof DelegationValue, raw: string | number | undefined) => {
@@ -59,14 +61,29 @@ export function Delegation({ value, hasTools, editable, onChange }: Props) {
           <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
             <div className="field" style={{ flex: 2 }}>
               <label htmlFor="cfg-dlg-model">Delegate model</label>
-              <input
-                id="cfg-dlg-model"
-                className="input"
-                value={value.model}
-                disabled={!editable}
-                placeholder={DEFAULT_MODEL}
-                onChange={(e) => set("model", e.target.value)}
-              />
+              {models.length > 0 ? (
+                <select
+                  id="cfg-dlg-model"
+                  className="input"
+                  value={value.model}
+                  disabled={!editable}
+                  onChange={(e) => set("model", e.target.value)}
+                >
+                  {/* The current model stays selectable even when the list lacks it. */}
+                  {[...new Set([value.model, ...models])].map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  id="cfg-dlg-model"
+                  className="input"
+                  value={value.model}
+                  disabled={!editable}
+                  placeholder={DEFAULT_MODEL}
+                  onChange={(e) => set("model", e.target.value)}
+                />
+              )}
             </div>
             <div className="field" style={{ flex: 1 }}>
               <label htmlFor="cfg-dlg-effort">Reasoning effort</label>
