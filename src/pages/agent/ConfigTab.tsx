@@ -60,7 +60,7 @@ const STATUS_HINTS: Record<string, string> = {
   stopped: "the backend container is not running — calls to this agent's tools and events will fail until it's started",
 };
 
-const BUILTIN_TOOLS = ["end_call", "transfer_call", "send_dtmf"];
+const BUILTIN_TOOLS = ["end_call", "transfer_call", "send_dtmf", "do_not_call"];
 
 const clone = (o: unknown) => JSON.parse(JSON.stringify(o ?? {}));
 
