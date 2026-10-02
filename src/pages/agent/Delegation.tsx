@@ -26,8 +26,6 @@ type Props = {
   models: string[];
   /** Whether the agent lists any tool — without one no delegate is used. */
   hasTools: boolean;
-  /** Ticked call-control built-ins: TurnCall refuses them in client mode (#245). */
-  callControl?: string[];
   /** The agent's LLM provider/model fields — the client-mode delegate. */
   llmPicker?: ReactNode;
   editable: boolean;
@@ -38,7 +36,6 @@ export function Delegation({
   value,
   models,
   hasTools,
-  callControl = [],
   llmPicker,
   editable,
   onChange,
@@ -78,13 +75,6 @@ export function Delegation({
         delegate, then tells the caller what came back.
         {!hasTools && " This agent has no tools, so no delegate is used."}
       </p>
-      {mode === "client" && callControl.length > 0 && (
-        <p className="hint" role="alert" style={{ margin: "4px 0 0", color: "var(--danger, #c0392b)" }}>
-          {callControl.join(", ")} need an OpenAI Responses delegate for now: the agent's own
-          LLM can't end or transfer the call yet, so saving will be refused.
-        </p>
-      )}
-
       {mode === "client" && llmPicker}
 
       {mode === "responses" && value && (

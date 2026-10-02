@@ -338,8 +338,6 @@ export default function ConfigTab() {
       />
     </div>
   );
-  // Built-ins TurnCall refuses with an openai_live client delegate (#245).
-  const callControl = tools.filter((t) => ["end_call", "transfer_call", "do_not_call"].includes(t));
 
   const statusHint = data.backend ? STATUS_HINTS[data.backend.status] : undefined;
   const toolStatuses = data.tool_statuses;
@@ -482,7 +480,6 @@ export default function ConfigTab() {
                   (cfg.mcp_servers || []).length > 0 ||
                   (cfg.workspace_mcp_servers || []).length > 0
                 }
-                callControl={callControl}
                 llmPicker={llmFields}
                 editable={editable}
                 onChange={(d) =>

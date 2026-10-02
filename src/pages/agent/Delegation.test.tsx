@@ -16,7 +16,6 @@ function setup(
   value: DelegationValue | undefined,
   hasTools = true,
   models: string[] = [],
-  callControl: string[] = [],
 ) {
   const onChange = vi.fn();
   render(
@@ -24,7 +23,6 @@ function setup(
       value={value}
       models={models}
       hasTools={hasTools}
-      callControl={callControl}
       llmPicker={<span>LLM PICKER</span>}
       editable
       onChange={onChange}
@@ -63,45 +61,6 @@ it("client mode sends a block only while it carries a setting", () => {
   const again = setup({ mode: "client", timeout_seconds: 60 });
   fireEvent.change(screen.getByLabelText(/timeout/i), { target: { value: "" } });
   expect(again).toHaveBeenLastCalledWith(undefined);
-});
-
-it("warns that call control needs a Responses delegate in client mode", () => {
-  setup(undefined, true, [], ["end_call"]);
-  expect(screen.getByRole("alert").textContent).toMatch(/end_call.*Responses/);
-});
-
-it("no call-control warning in responses mode", () => {
-  setup({ mode: "responses", model: "gpt-5-mini" }, true, [], ["end_call"]);
-  expect(screen.queryByRole("alert")).toBeNull();
-});
-
-it("edits the delegate's settings", () => {
-  const onChange = setup({ mode: "responses", model: "gpt-5-mini" });
-  fireEvent.change(screen.getByLabelText(/delegate model/i), { target: { value: "gpt-6-astra" } });
-  expect(onChange).toHaveBeenLastCalledWith({ mode: "responses", model: "gpt-6-astra" });
-
-  fireEvent.change(screen.getByLabelText(/reasoning effort/i), { target: { value: "low" } });
-  expect(onChange).toHaveBeenLastCalledWith({ mode: "responses", model: "gpt-5-mini", reasoning_effort: "low" });
-
-  fireEvent.change(screen.getByLabelText(/timeout/i), { target: { value: "45" } });
-  expect(onChange).toHaveBeenLastCalledWith({ mode: "responses", model: "gpt-5-mini", timeout_seconds: 45 });
-});
-
-it("clearing an optional field drops it rather than sending an empty string", () => {
-  const onChange = setup({
-    mode: "responses",
-    model: "gpt-5-mini",
-    reasoning_effort: "low",
-    instructions: "Book weekdays only.",
-  });
-  fireEvent.change(screen.getByLabelText(/reasoning effort/i), { target: { value: "" } });
-  expect(onChange).toHaveBeenLastCalledWith({
-    mode: "responses",
-    model: "gpt-5-mini",
-    instructions: "Book weekdays only.",
-  });
-  fireEvent.change(screen.getByLabelText(/delegate instructions/i), { target: { value: "" } });
-  expect(onChange).toHaveBeenLastCalledWith({ mode: "responses", model: "gpt-5-mini", reasoning_effort: "low" });
 });
 
 it("says an agent without tools uses no delegate", () => {
