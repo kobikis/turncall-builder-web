@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Ambience } from "./Ambience";
+import { Delegation } from "./Delegation";
 import { McpServers } from "./McpServers";
 import type { RegisteredServer } from "../integrations/McpRegistry";
 import { ProviderKeyNote, type ProviderCard } from "./ProviderKeyNote";
@@ -388,6 +389,7 @@ export default function ConfigTab() {
           </div>
 
           {isS2S ? (
+            <>
             <div style={{ display: "flex", gap: 12 }}>
               <div className="field" style={{ flex: 1 }}>
                 <label htmlFor="cfg-s2s-p">S2S provider</label>
@@ -395,7 +397,16 @@ export default function ConfigTab() {
                   id="cfg-s2s-p"
                   className="input"
                   value={cfg.s2s?.provider || "openai"}
-                  onChange={(e) => patch((c) => (c.s2s = { ...c.s2s, provider: e.target.value }))}
+                  onChange={(e) =>
+                    patch((c) => {
+                      // Only openai_live delegates; TurnCall refuses the block elsewhere.
+                      const { delegation, ...rest } = c.s2s || {};
+                      const provider = e.target.value;
+                      c.s2s = provider === "openai_live" && delegation
+                        ? { ...rest, provider, delegation }
+                        : { ...rest, provider };
+                    })
+                  }
                 >
                   {providerOptions("s2s", providers.s2s)}
                 </select>
@@ -418,6 +429,25 @@ export default function ConfigTab() {
                 onChange={(v) => patch((c) => (c.s2s = { ...c.s2s, voice: v }))}
               />
             </div>
+            {s2sProvider === "openai_live" && (
+              <Delegation
+                value={cfg.s2s?.delegation}
+                hasTools={
+                  tools.length > 0 ||
+                  customCount > 0 ||
+                  (cfg.mcp_servers || []).length > 0 ||
+                  (cfg.workspace_mcp_servers || []).length > 0
+                }
+                editable={editable}
+                onChange={(d) =>
+                  patch((c) => {
+                    const { delegation: _old, ...rest } = c.s2s || {};
+                    c.s2s = d ? { ...rest, delegation: d } : rest;
+                  })
+                }
+              />
+            )}
+            </>
           ) : (
           <>
           <div style={{ display: "flex", gap: 12 }}>
