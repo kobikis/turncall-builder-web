@@ -313,6 +313,34 @@ export default function ConfigTab() {
   const customCount = (cfg.custom_tools || []).length;
   const topics: string[] = cfg.guardrails?.prohibited_topics || [];
 
+  // The agent's LLM: cascade's middle stage, and openai_live's default delegate.
+  const llmFields = (
+    <div style={{ display: "flex", gap: 12 }}>
+      <div className="field" style={{ flex: 1 }}>
+        <label htmlFor="cfg-llm-p">LLM provider</label>
+        <select
+          id="cfg-llm-p"
+          className="input"
+          value={cfg.llm?.provider || "openai"}
+          onChange={(e) => patch((c) => (c.llm = { ...c.llm, provider: e.target.value }))}
+        >
+          {providerOptions("llm", providers.llm)}
+        </select>
+        <ProviderKeyNote role="llm" provider={llmProvider} cards={cards} pinned={Boolean(cfg.llm?.api_key)} />
+      </div>
+      <PickField
+        id="cfg-llm-m"
+        label="Model"
+        value={cfg.llm?.model || ""}
+        options={models}
+        placeholder="gpt-4o-mini"
+        onChange={(v) => patch((c) => (c.llm = { ...c.llm, model: v }))}
+      />
+    </div>
+  );
+  // Built-ins TurnCall refuses with an openai_live client delegate (#245).
+  const callControl = tools.filter((t) => ["end_call", "transfer_call", "do_not_call"].includes(t));
+
   const statusHint = data.backend ? STATUS_HINTS[data.backend.status] : undefined;
   const toolStatuses = data.tool_statuses;
   const stubs = Object.entries(toolStatuses || {}).filter(([, s]) => s === "stub");
@@ -454,6 +482,8 @@ export default function ConfigTab() {
                   (cfg.mcp_servers || []).length > 0 ||
                   (cfg.workspace_mcp_servers || []).length > 0
                 }
+                callControl={callControl}
+                llmPicker={llmFields}
                 editable={editable}
                 onChange={(d) =>
                   patch((c) => {
@@ -488,28 +518,7 @@ export default function ConfigTab() {
               onChange={(v) => patch((c) => (c.stt = { ...c.stt, model: v }))}
             />
           </div>
-          <div style={{ display: "flex", gap: 12 }}>
-            <div className="field" style={{ flex: 1 }}>
-              <label htmlFor="cfg-llm-p">LLM provider</label>
-              <select
-                id="cfg-llm-p"
-                className="input"
-                value={cfg.llm?.provider || "openai"}
-                onChange={(e) => patch((c) => (c.llm = { ...c.llm, provider: e.target.value }))}
-              >
-                {providerOptions("llm", providers.llm)}
-              </select>
-              <ProviderKeyNote role="llm" provider={llmProvider} cards={cards} pinned={Boolean(cfg.llm?.api_key)} />
-            </div>
-            <PickField
-              id="cfg-llm-m"
-              label="Model"
-              value={cfg.llm?.model || ""}
-              options={models}
-              placeholder="gpt-4o-mini"
-              onChange={(v) => patch((c) => (c.llm = { ...c.llm, model: v }))}
-            />
-          </div>
+          {llmFields}
           <div style={{ display: "flex", gap: 12 }}>
             <div className="field" style={{ flex: 1 }}>
               <label htmlFor="cfg-tts-p">TTS provider</label>
