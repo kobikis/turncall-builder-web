@@ -25,8 +25,8 @@ import { useAgent } from "./AgentPage";
 
 type Providers = { stt: string[]; llm: string[]; tts: string[]; s2s: string[] };
 const FALLBACK_PROVIDERS: Providers = {
-  stt: ["deepgram", "openai", "elevenlabs", "cartesia"],
-  llm: ["openai", "anthropic", "openrouter", "ollama", "custom_openai", "bedrock"],
+  stt: ["deepgram", "openai", "elevenlabs", "cartesia", "assemblyai"],
+  llm: ["openai", "anthropic", "google", "openrouter", "ollama", "custom_openai", "bedrock"],
   tts: ["deepgram", "openai", "elevenlabs", "cartesia"],
   s2s: ["openai", "openai_live", "google", "aws"],
 };
@@ -41,6 +41,7 @@ const PROVIDER_LABELS: Record<keyof Providers, Record<string, string>> = {
   stt: {},
   tts: {},
   llm: {
+    google: "google — Gemini",
     openrouter: "openrouter — multi-model routing with fallback",
     ollama: "ollama — local models",
     custom_openai: "custom_openai — any OpenAI-compatible endpoint",
@@ -330,7 +331,7 @@ export default function ConfigTab() {
             id="cfg-llm-p"
             className="input"
             value={cfg.llm?.provider || "openai"}
-            onChange={(e) => patch((c) => (c.llm = { ...c.llm, provider: e.target.value }))}
+            onChange={(e) => patch((c) => (c.llm = { ...c.llm, provider: e.target.value, model: "" }))}
           >
             {providerOptions("llm", providers.llm)}
           </select>
@@ -515,7 +516,7 @@ export default function ConfigTab() {
                 id="cfg-stt-p"
                 className="input"
                 value={cfg.stt?.provider || "deepgram"}
-                onChange={(e) => patch((c) => (c.stt = { ...c.stt, provider: e.target.value }))}
+                onChange={(e) => patch((c) => (c.stt = { ...c.stt, provider: e.target.value, model: "" }))}
               >
                 {providerOptions("stt", providers.stt)}
               </select>
@@ -543,7 +544,7 @@ export default function ConfigTab() {
                 id="cfg-tts-p"
                 className="input"
                 value={cfg.tts?.provider || "deepgram"}
-                onChange={(e) => patch((c) => (c.tts = { ...c.tts, provider: e.target.value }))}
+                onChange={(e) => patch((c) => (c.tts = { ...c.tts, provider: e.target.value, model: "" }))}
               >
                 {providerOptions("tts", providers.tts)}
               </select>

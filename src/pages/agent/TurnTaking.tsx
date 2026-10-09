@@ -2,7 +2,12 @@
 // settings, all optional: a blank field is TurnCall's default.
 import { NumberField } from "./SettingFields";
 
-type Cfg = Record<string, unknown>;
+type Cfg = Record<string, any>;
+
+// Deepgram Flux (turncall#204) decides the end of a turn itself: TurnCall builds
+// no Smart Turn for it and reads no silence window.
+const isFlux = (cfg: Cfg) =>
+  (cfg.stt?.provider || "deepgram") === "deepgram" && String(cfg.stt?.model ?? "").startsWith("flux");
 
 export function TurnTaking({ cfg, isS2S, editable, onSet }: {
   cfg: Cfg;
@@ -13,6 +18,7 @@ export function TurnTaking({ cfg, isS2S, editable, onSet }: {
 }) {
   const smartTurn = cfg.smart_turn_detection !== false;
   const bargeIn = cfg.interruption_enabled !== false;
+  const flux = isFlux(cfg);
   // A checkbox's "on" is TurnCall's default, so it is the key removed.
   const toggle = (key: string, on: boolean) => onSet(key, on ? undefined : false);
 
@@ -24,31 +30,40 @@ export function TurnTaking({ cfg, isS2S, editable, onSet }: {
         </p>
       ) : (
         <>
+          {flux && (
+            <p className="hint">
+              Deepgram Flux decides when the caller has finished, so Smart Turn and the silence window don't apply.
+            </p>
+          )}
           <div className="radio-row">
-            <label>
-              <input type="checkbox" checked={smartTurn} disabled={!editable}
-                onChange={(e) => toggle("smart_turn_detection", e.target.checked)} />{" "}
-              Smart Turn (an ML model judges whether the caller has finished)
-            </label>
+            {!flux && (
+              <label>
+                <input type="checkbox" checked={smartTurn} disabled={!editable}
+                  onChange={(e) => toggle("smart_turn_detection", e.target.checked)} />{" "}
+                Smart Turn (an ML model judges whether the caller has finished)
+              </label>
+            )}
             <label>
               <input type="checkbox" checked={bargeIn} disabled={!editable}
                 onChange={(e) => toggle("interruption_enabled", e.target.checked)} />{" "}
               Caller can interrupt the agent
             </label>
           </div>
-          <div style={{ display: "flex", gap: 12 }}>
-            {smartTurn ? (
-              <NumberField id="cfg-st-stop" label="Smart Turn wait (s)" step="0.1"
-                value={cfg.smart_turn_stop_secs} placeholder="1.0" disabled={!editable}
-                hint="How long silence lasts before an unsure model ends the turn anyway."
-                onChange={(v) => onSet("smart_turn_stop_secs", v)} />
-            ) : (
-              <NumberField id="cfg-silence" label="Silence window (ms)"
-                value={cfg.silence_timeout_ms} placeholder="800" disabled={!editable}
-                hint="Silence that ends the caller's turn."
-                onChange={(v) => onSet("silence_timeout_ms", v)} />
-            )}
-          </div>
+          {!flux && (
+            <div style={{ display: "flex", gap: 12 }}>
+              {smartTurn ? (
+                <NumberField id="cfg-st-stop" label="Smart Turn wait (s)" step="0.1"
+                  value={cfg.smart_turn_stop_secs} placeholder="1.0" disabled={!editable}
+                  hint="How long silence lasts before an unsure model ends the turn anyway."
+                  onChange={(v) => onSet("smart_turn_stop_secs", v)} />
+              ) : (
+                <NumberField id="cfg-silence" label="Silence window (ms)"
+                  value={cfg.silence_timeout_ms} placeholder="800" disabled={!editable}
+                  hint="Silence that ends the caller's turn."
+                  onChange={(v) => onSet("silence_timeout_ms", v)} />
+              )}
+            </div>
+          )}
         </>
       )}
       <div style={{ display: "flex", gap: 12 }}>

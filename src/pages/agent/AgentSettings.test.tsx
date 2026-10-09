@@ -110,6 +110,16 @@ it("speech-to-speech hides the turn-taking controls and says why", () => {
   expect(screen.getByText(/realtime model decides/i)).toBeTruthy();
 });
 
+it("a Deepgram Flux model owns end-of-turn: Smart Turn and the silence window are not offered", () => {
+  const cfg = { stt: { provider: "deepgram", model: "flux-general-en" }, smart_turn_detection: false };
+  render(<TurnTaking cfg={cfg} isS2S={false} editable onSet={() => {}} />);
+  expect(screen.queryByLabelText(/smart turn \(an ml/i)).toBeNull();
+  expect(screen.queryByLabelText(/silence window/i)).toBeNull();
+  expect(screen.getByText(/flux decides when the caller has finished/i)).toBeTruthy();
+  // Barge-in still applies on Flux.
+  expect(screen.getByLabelText(/caller can interrupt/i)).toBeTruthy();
+});
+
 it("avatar: a Tavus replica, and off removes the block", () => {
   const onChange = vi.fn();
   const { rerender } = render(<Avatar value={undefined} editable onChange={onChange} />);
