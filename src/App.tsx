@@ -14,6 +14,7 @@ import AgentPage from "./pages/agent/AgentPage";
 import ConfigTab from "./pages/agent/ConfigTab";
 import TestTab from "./pages/agent/TestTab";
 import CallsTab from "./pages/agent/CallsTab";
+import CampaignsTab from "./pages/agent/CampaignsTab";
 import KnowledgeTab from "./pages/agent/KnowledgeTab";
 import TakeawaysTab from "./pages/agent/TakeawaysTab";
 import EvalsTab from "./pages/agent/EvalsTab";
@@ -115,6 +116,7 @@ export default function App() {
           <Route index element={<ConfigTab />} />
           <Route path="test" element={<TestTab />} />
           <Route path="calls" element={<CallsTab />} />
+          <Route path="campaigns" element={<CampaignsTab />} />
           <Route path="knowledge" element={<KnowledgeTab />} />
           <Route path="takeaways" element={<TakeawaysTab />} />
           <Route path="evals" element={<EvalsTab />} />

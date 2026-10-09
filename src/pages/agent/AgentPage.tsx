@@ -135,6 +135,7 @@ export default function AgentPage() {
         <NavLink to="." end className={({ isActive }) => `tab${isActive ? " active" : ""}`}>Config</NavLink>
         <NavLink to="test" className={({ isActive }) => `tab${isActive ? " active" : ""}`}>Test</NavLink>
         <NavLink to="calls" className={({ isActive }) => `tab${isActive ? " active" : ""}`}>Calls</NavLink>
+        <NavLink to="campaigns" className={({ isActive }) => `tab${isActive ? " active" : ""}`}>Campaigns</NavLink>
         <NavLink to="knowledge" className={({ isActive }) => `tab${isActive ? " active" : ""}`}>Knowledge</NavLink>
         <NavLink to="takeaways" className={({ isActive }) => `tab${isActive ? " active" : ""}`}>Takeaways</NavLink>
         <NavLink to="evals" className={({ isActive }) => `tab${isActive ? " active" : ""}`}>Evals</NavLink>
