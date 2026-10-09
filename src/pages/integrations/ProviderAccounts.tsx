@@ -9,7 +9,7 @@ import { tint } from "../../apps";
 // back, only its presence and last four characters — and the card says which
 // key a call will actually use, which is the point of the page.
 
-export type Role = "llm" | "stt" | "tts" | "s2s" | "avatar" | "judge";
+export type Role = "llm" | "stt" | "tts" | "s2s" | "avatar" | "judge" | "carrier";
 
 export type AgentProjection = {
   agent_id: string;
@@ -42,13 +42,15 @@ export const ROLE_LABELS: Record<Role, string> = {
   s2s: "Speech-to-speech",
   avatar: "Avatar",
   judge: "Eval judge",
+  carrier: "Carrier",
 };
-const ROLE_ORDER: Role[] = ["llm", "stt", "tts", "s2s", "avatar", "judge"];
+const ROLE_ORDER: Role[] = ["llm", "stt", "tts", "s2s", "avatar", "judge", "carrier"];
 // Which group a multi-role card is browsed under. Voice before Transcription:
 // every TTS provider also transcribes, so the other way round empties Voice.
-const GROUP_ORDER: Role[] = ["llm", "tts", "s2s", "stt", "avatar", "judge"];
+const GROUP_ORDER: Role[] = ["llm", "tts", "s2s", "stt", "avatar", "judge", "carrier"];
 
-const AWS_FIELDS = [
+type Field = { name: string; label: string; secret: boolean; required?: boolean };
+const AWS_FIELDS: Field[] = [
   { name: "access_key_id", label: "Access key ID", secret: false },
   { name: "secret_access_key", label: "Secret access key", secret: true },
   { name: "session_token", label: "Session token (optional)", secret: true },
@@ -58,6 +60,23 @@ const AWS_FIELDS = [
   { name: "region", label: "Region (optional)", secret: false },
 ];
 
+// Accounts whose credential is more than one API key (builder-api#84). The
+// rest take `{api_key}`. Blank fields are left out: TurnCall's default.
+const ACCOUNT_FIELDS: Record<string, Field[]> = {
+  aws: AWS_FIELDS,
+  telnyx: [
+    { name: "api_key", label: "API key", secret: true, required: true },
+    // Not a secret, but required: it verifies the account's webhooks.
+    { name: "public_key", label: "Public key", secret: false, required: true },
+  ],
+};
+
+// Accounts a workspace cannot connect yet, and why (builder-api#84).
+const NOT_YET: Record<string, string> = {
+  asterisk:
+    "A workspace's own Asterisk can't serve more than one agent yet (kobikis/turncall#274): TurnCall would answer only one agent's numbers. Asterisk numbers use the platform's PBX until then.",
+};
+
 /** The sentence a card leads with: which key a call on this provider runs on. */
 export function runsOnText(card: ProviderCard): string {
   switch (card.runs_on) {
@@ -66,7 +85,10 @@ export function runsOnText(card: ProviderCard): string {
     case "platform":
       return "Calls use the platform's key.";
     case "none":
-      return "No key — neither this workspace nor the platform has one, so calls on it will fail.";
+      // A carrier is used through numbers, not agents: nothing fails until one is bound.
+      return card.serves.carrier?.length
+        ? "No account — numbers on this carrier can't be bound or answered until one is connected."
+        : "No key — neither this workspace nor the platform has one, so calls on it will fail.";
     default:
       return "Whether the platform has a key could not be checked.";
   }
@@ -87,6 +109,12 @@ export function webhookNumbersText(card: ProviderCard): string | null {
 
 /** What disconnecting will actually do, in words (#45). */
 export function disconnectText(card: ProviderCard): string {
+  if (card.serves.carrier?.length) {
+    const name = displayName(card.provider);
+    return card.platform_key
+      ? `${name} numbers then use the platform's account.`
+      : `The platform has no ${name} account, so ${name} numbers stop working after disconnecting.`;
+  }
   const n = card.agents_using;
   const who = n === 1 ? "1 agent uses" : `${n} agents use`;
   if (card.platform_key === null)
@@ -112,6 +140,8 @@ const DISPLAY_NAMES: Record<string, string> = {
   deepgram: "Deepgram",
   elevenlabs: "ElevenLabs",
   cartesia: "Cartesia",
+  telnyx: "Telnyx",
+  asterisk: "Asterisk (your PBX)",
   assemblyai: "AssemblyAI",
   heygen: "HeyGen",
   tavus: "Tavus",
@@ -132,7 +162,7 @@ function Card({
   isAdmin: boolean;
   onData: (cards: ProviderCard[] | null) => void;
 }) {
-  const aws = card.provider === "aws";
+  const fields = ACCOUNT_FIELDS[card.provider];
   const [values, setValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -159,13 +189,16 @@ function Card({
     }
   };
 
-  const body = aws
+  const body = fields
     ? Object.fromEntries(Object.entries(values).filter(([, v]) => v.trim()))
     : { api_key: values.api_key || "" };
   // An AWS set has to name a source; a region alone changes nothing.
-  const canSave = aws
-    ? Boolean(body.access_key_id || body.role_arn || body.profile)
-    : Boolean(values.api_key?.trim());
+  const canSave =
+    card.provider === "aws"
+      ? Boolean(body.access_key_id || body.role_arn || body.profile)
+      : fields
+        ? fields.every((f) => !f.required || values[f.name]?.trim())
+        : Boolean(values.api_key?.trim());
 
   const save = () =>
     run(() =>
@@ -310,19 +343,20 @@ function Card({
               </div>
             )}
 
-            {!card.disconnecting && (
+            {NOT_YET[card.provider] && <p className="callout info">{NOT_YET[card.provider]}</p>}
+            {!card.disconnecting && !NOT_YET[card.provider] && (
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   if (canSave) void save();
                 }}
               >
-                {aws ? (
-                  AWS_FIELDS.map((f) => (
+                {fields ? (
+                  fields.map((f) => (
                     <div className="field" key={f.name}>
-                      <label htmlFor={`aws-${f.name}`}>{f.label}</label>
+                      <label htmlFor={`${card.provider}-${f.name}`}>{f.label}</label>
                       <input
-                        id={`aws-${f.name}`}
+                        id={`${card.provider}-${f.name}`}
                         className="input"
                         type={f.secret ? "password" : "text"}
                         autoComplete="off"
