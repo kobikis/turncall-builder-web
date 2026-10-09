@@ -3,6 +3,7 @@ import { Ambience } from "./Ambience";
 import { Avatar } from "./Avatar";
 import { Backups } from "./Backups";
 import { LlmTuning } from "./LlmTuning";
+import { Limits } from "./Limits";
 import { Pronunciations } from "./Pronunciations";
 import { withField } from "./SettingFields";
 import { TurnTaking } from "./TurnTaking";
@@ -603,6 +604,10 @@ export default function ConfigTab() {
           <Section id="turn-taking" title="Turn-taking and call limits">
             <TurnTaking cfg={cfg} isS2S={isS2S} editable={editable}
               onSet={(key, v) => setCfg((c: any) => withField(c, key, v))} />
+          </Section>
+
+          <Section id="limits" title="Usage limits" defaultOpen={false}>
+            <Limits agentId={agentId} editable={editable} />
           </Section>
 
           {!isS2S && (
