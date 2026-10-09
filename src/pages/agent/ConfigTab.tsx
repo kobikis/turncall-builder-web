@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
 import { Ambience } from "./Ambience";
+import { Avatar } from "./Avatar";
+import { Backups } from "./Backups";
+import { LlmTuning } from "./LlmTuning";
+import { Pronunciations } from "./Pronunciations";
+import { withField } from "./SettingFields";
+import { TurnTaking } from "./TurnTaking";
 import { Delegation } from "./Delegation";
 import { McpServers } from "./McpServers";
 import type { RegisteredServer } from "../integrations/McpRegistry";
@@ -524,7 +530,12 @@ export default function ConfigTab() {
               onChange={(v) => patch((c) => (c.stt = { ...c.stt, model: v }))}
             />
           </div>
+          <Backups role="stt" providers={providers.stt} value={cfg.stt?.failover} editable={editable}
+            onChange={(f) => patch((c) => (c.stt = withField(c.stt, "failover", f)))} />
           {llmFields(false)}
+          <LlmTuning value={cfg.llm} onChange={(llm) => patch((c) => (c.llm = llm))} />
+          <Backups role="llm" providers={providers.llm} value={cfg.llm?.failover} editable={editable}
+            onChange={(f) => patch((c) => (c.llm = withField(c.llm, "failover", f)))} />
           <div style={{ display: "flex", gap: 12 }}>
             <div className="field" style={{ flex: 1 }}>
               <label htmlFor="cfg-tts-p">TTS provider</label>
@@ -547,6 +558,16 @@ export default function ConfigTab() {
               onChange={(v) => patch((c) => (c.tts = { ...c.tts, voice: v }))}
             />
           </div>
+          <Backups role="tts" providers={providers.tts} value={cfg.tts?.failover} editable={editable}
+            onChange={(f) => patch((c) => (c.tts = withField(c.tts, "failover", f)))} />
+          <Pronunciations
+            value={cfg.tts?.pronunciations}
+            warnings={(data.turncall_agent?.warnings || [])
+              .filter((w) => w.code.startsWith("pronunciation"))
+              .map((w) => w.message)}
+            editable={editable}
+            onChange={(m) => patch((c) => (c.tts = withField(c.tts, "pronunciations", m)))}
+          />
           </>
           )}
           {usesAws && (
@@ -577,6 +598,18 @@ export default function ConfigTab() {
             </div>
           )}
           </Section>
+
+          <Section id="turn-taking" title="Turn-taking and call limits">
+            <TurnTaking cfg={cfg} isS2S={isS2S} editable={editable}
+              onSet={(key, v) => setCfg((c: any) => withField(c, key, v))} />
+          </Section>
+
+          {!isS2S && (
+            <Section id="avatar" title="Video avatar" hint={cfg.avatar?.enabled ? cfg.avatar.provider : ""}>
+              <Avatar value={cfg.avatar} editable={editable}
+                onChange={(a) => setCfg((c: any) => withField(c, "avatar", a))} />
+            </Section>
+          )}
 
           <Section
             id="builtin-tools"

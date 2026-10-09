@@ -15,6 +15,8 @@ export type AgentData = {
   backend: Backend | null;
   tool_statuses: ToolStatuses | null;
   tool_signing_secret: string | null;
+  /** TurnCall's own read of the agent, as of page load (null if unreachable). */
+  turncall_agent?: { warnings?: { code: string; message: string }[] } | null;
 };
 
 export type AgentCtx = {
