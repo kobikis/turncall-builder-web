@@ -65,12 +65,25 @@ it("connects Telnyx with its API key and public key", async () => {
   expect(JSON.parse(String(put().body))).toEqual({ api_key: "KEY123", public_key: "cHVi" });
 });
 
-it("explains why a workspace's own Asterisk can't be connected yet", async () => {
+it("connects Asterisk with its ARI login, leaving blank options to TurnCall", async () => {
   cards = [card("asterisk")];
   render(<ProviderAccounts isAdmin />);
   fireEvent.click(await screen.findByText("Connect"));
-  expect(screen.getByText(/turncall#274/)).toBeDefined();
-  expect(screen.queryByRole("button", { name: "Save key" })).toBeNull();
+  const save = screen.getByRole("button", { name: "Save key" }) as HTMLButtonElement;
+  fireEvent.change(screen.getByLabelText("asterisk ARI URL"), { target: { value: "https://pbx:8088" } });
+  fireEvent.change(screen.getByLabelText("asterisk Username"), { target: { value: "turncall" } });
+  expect(save.disabled).toBe(true); // no password yet
+  fireEvent.change(screen.getByLabelText("asterisk Password"), { target: { value: "s3cret" } });
+  fireEvent.change(screen.getByLabelText("asterisk Transfer context (optional)"), { target: { value: "to-ops" } });
+  fireEvent.click(save);
+  await waitFor(() => expect(put()).toBeTruthy());
+  expect(put().path).toBe("/integrations/providers/asterisk");
+  expect(JSON.parse(String(put().body))).toEqual({
+    ari_url: "https://pbx:8088",
+    username: "turncall",
+    password: "s3cret",
+    transfer_context: "to-ops",
+  });
 });
 
 it("a carrier with no account warns about numbers, not agents", async () => {
