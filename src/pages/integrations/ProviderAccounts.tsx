@@ -112,6 +112,7 @@ const DISPLAY_NAMES: Record<string, string> = {
   deepgram: "Deepgram",
   elevenlabs: "ElevenLabs",
   cartesia: "Cartesia",
+  assemblyai: "AssemblyAI",
   heygen: "HeyGen",
   tavus: "Tavus",
   typesafe: "TypeSafe (Jev)",
