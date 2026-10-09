@@ -4,6 +4,7 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import { canEdit } from "../roles";
 import Uid from "../components/Uid";
+import { CARRIER_LABELS, type Carrier } from "./PhoneNumberForm";
 import { Agent, ApiResponse, PhoneNumber } from "../types";
 
 type Num = PhoneNumber;
@@ -65,7 +66,7 @@ export default function PhoneNumbersList() {
       <div className="page-head">
         <div>
           <h2>Phone Numbers</h2>
-          <p>Twilio numbers routed to agents or call-init endpoints.</p>
+          <p>Twilio, Telnyx and PBX numbers routed to agents or call-init endpoints.</p>
         </div>
         {editable && (
           <Link to="/phone-numbers/new" className="btn btn-primary">+ Add number</Link>
@@ -92,7 +93,7 @@ export default function PhoneNumbersList() {
                 Number <span className="caret" aria-hidden="true">{sortDesc ? "▾" : "▴"}</span>
               </button>
             </th>
-            <th>ID</th><th>Routing</th><th>Target</th><th>SMS</th><th></th>
+            <th>ID</th><th>Carrier</th><th>Routing</th><th>Target</th><th>SMS</th><th></th>
           </tr>
         </thead>
         <tbody>
@@ -103,6 +104,7 @@ export default function PhoneNumbersList() {
                 {n.label && <div className="hint" style={{ fontWeight: 400 }}>{n.label}</div>}
               </td>
               <td><Uid id={n.id} label="phone_number_id" /></td>
+              <td>{CARRIER_LABELS[(n.carrier || "twilio") as Carrier] ?? n.carrier}</td>
               <td>{ROUTING_LABELS[n.routing_type] || n.routing_type}</td>
        <td className="hint">
                 {n.agent_id ? (
@@ -126,13 +128,13 @@ export default function PhoneNumbersList() {
             </tr>
           ))}
           {numbers === null && !error && (
-            <tr><td colSpan={6} className="muted" style={{ padding: 16 }}>Loading…</td></tr>
+            <tr><td colSpan={7} className="muted" style={{ padding: 16 }}>Loading…</td></tr>
           )}
           {numbers?.length === 0 && (
-            <tr><td colSpan={6} className="muted" style={{ padding: 16 }}>No numbers bound yet.</td></tr>
+            <tr><td colSpan={7} className="muted" style={{ padding: 16 }}>No numbers bound yet.</td></tr>
           )}
           {numbers && numbers.length > 0 && visible.length === 0 && (
-            <tr><td colSpan={6} className="muted" style={{ padding: 16 }}>No numbers match “{q}”.</td></tr>
+            <tr><td colSpan={7} className="muted" style={{ padding: 16 }}>No numbers match “{q}”.</td></tr>
           )}
         </tbody>
       </table>

@@ -7,7 +7,7 @@ export default function AddPhoneNumber() {
       <div className="page-head">
         <div>
           <h2>Add phone number</h2>
-          <p>Bind a Twilio number and choose how inbound calls route.</p>
+          <p>Bind a Twilio, Telnyx or Asterisk number and choose how inbound calls route.</p>
         </div>
       </div>
       <PhoneNumberForm

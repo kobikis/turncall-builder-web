@@ -21,8 +21,9 @@ export function CallANumber({ agentId, onPlaced }: { agentId: string; onPlaced: 
   useEffect(() => {
     api<ApiResponse<{ phone_numbers: PhoneNumber[] }>>("/phone-numbers")
       .then((r) => {
-        // Only a number routed to this agent can call as it.
-        const own = r.data.phone_numbers.filter((n) => n.agent_id === agentId);
+        // Only a number routed to this agent can call as it, and not one on
+        // Asterisk: TurnCall dials out through Twilio and Telnyx only.
+        const own = r.data.phone_numbers.filter((n) => n.agent_id === agentId && n.carrier !== "asterisk");
         setNumbers(own);
         setFrom(own[0]?.id ?? "");
       })
