@@ -69,12 +69,15 @@ const ACCOUNT_FIELDS: Record<string, Field[]> = {
     // Not a secret, but required: it verifies the account's webhooks.
     { name: "public_key", label: "Public key", secret: false, required: true },
   ],
-};
-
-// Accounts a workspace cannot connect yet, and why (builder-api#84).
-const NOT_YET: Record<string, string> = {
-  asterisk:
-    "A workspace's own Asterisk can't serve more than one agent yet (kobikis/turncall#274): TurnCall would answer only one agent's numbers. Asterisk numbers use the platform's PBX until then.",
+  // The PBX's ARI login; one PBX serves every agent (kobikis/turncall#274).
+  asterisk: [
+    { name: "ari_url", label: "ARI URL", secret: false, required: true },
+    { name: "username", label: "Username", secret: false, required: true },
+    { name: "password", label: "Password", secret: true, required: true },
+    { name: "app", label: "Stasis app (optional)", secret: false },
+    { name: "media_connection", label: "Media connection (optional)", secret: false },
+    { name: "transfer_context", label: "Transfer context (optional)", secret: false },
+  ],
 };
 
 /** The sentence a card leads with: which key a call on this provider runs on. */
@@ -343,8 +346,7 @@ function Card({
               </div>
             )}
 
-            {NOT_YET[card.provider] && <p className="callout info">{NOT_YET[card.provider]}</p>}
-            {!card.disconnecting && !NOT_YET[card.provider] && (
+            {!card.disconnecting && (
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
