@@ -226,7 +226,7 @@ export default function PhoneNumberForm(props: {
         </select>
         {carrier === "telnyx" && (
           <p className="hint" style={{ margin: "4px 0 0" }}>
-            Looked up on the Telnyx account by its number — the workspace's Telnyx key, else the platform's.
+            Looked up by its number on the platform's Telnyx account.
           </p>
         )}
         {carrier === "asterisk" && (
