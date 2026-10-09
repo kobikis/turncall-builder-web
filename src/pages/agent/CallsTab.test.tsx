@@ -18,6 +18,8 @@ vi.mock("../../api", () => ({
   api: vi.fn(async (path: string) => {
     requested.push(path);
     if (path.endsWith("/calls")) return { data: calls };
+    if (path === "/phone-numbers") return { data: { phone_numbers: [] } };
+    if (path.endsWith("/do-not-call")) return { data: [] };
     if (path.endsWith("/transcript")) return { data: { entries: transcript } };
     if (path.includes("/events")) return { data: events };
     if (path.endsWith("/tool-invocations")) return { data: tools };
@@ -26,6 +28,7 @@ vi.mock("../../api", () => ({
   getActiveWorkspaceId: () => "w1",
   ApiError: class ApiError extends Error {},
 }));
+vi.mock("../../auth", () => ({ useAuth: () => ({ activeWorkspace: { role: "editor" } }) }));
 vi.mock("./AgentPage", () => ({ useAgent: () => ({ agentId: "a1", data: {} }) }));
 
 import CallsTab from "./CallsTab";

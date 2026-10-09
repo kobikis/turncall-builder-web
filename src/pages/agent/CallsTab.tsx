@@ -7,6 +7,10 @@ import { Call } from "../../types";
 import { fmtTime, inDayRange, localDay } from "../../dates";
 import { fmtDuration } from "./callDetail";
 import CallDrawer from "./CallDrawer";
+import { CallANumber, DoNotCallList } from "./Outbound";
+import { Section } from "./Section";
+import { useAuth } from "../../auth";
+import { canEdit } from "../../roles";
 
 // Long enough for a busy container, short enough that a stuck one is reported
 // before the next tick rather than never.
@@ -64,6 +68,8 @@ function EventsFeed({ browserUrl }: { browserUrl: string }) {
 
 export default function CallsTab() {
   const { agentId, data } = useAgent();
+  const { activeWorkspace } = useAuth();
+  const editable = canEdit(activeWorkspace?.role); // placing a call is editor+
   const [calls, setCalls] = useState<Call[] | null>(null);
   const [error, setError] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -104,6 +110,7 @@ export default function CallsTab() {
   return (
     <div style={{ display: "flex", gap: 20, flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minWidth: 0, overflowY: "auto" }}>
+        {editable && <CallANumber agentId={agentId} onPlaced={load} />}
         {error && <p role="alert" className="error-text">{error}</p>}
         <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center", flexWrap: "wrap" }}>
           <input
@@ -169,6 +176,9 @@ export default function CallsTab() {
             )}
           </tbody>
         </table>
+        <Section id="do-not-call" title="Do-not-call list" defaultOpen={false}>
+          <DoNotCallList agentId={agentId} editable={editable} />
+        </Section>
       </div>
       <div style={{ width: 300, display: "flex", flexDirection: "column" }}>
         <h3>Live events</h3>
