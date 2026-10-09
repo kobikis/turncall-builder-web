@@ -72,23 +72,30 @@ export default function CallsTab() {
   const editable = canEdit(activeWorkspace?.role); // placing a call is editor+
   const [calls, setCalls] = useState<Call[] | null>(null);
   const [error, setError] = useState("");
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [q, setQ] = useState("");
+  // ?call=<id> (a campaign target's link) opens on that call, whatever its day.
+  const linked = new URLSearchParams(window.location.search).get("call");
+  const [openId, setOpenId] = useState<string | null>(linked);
+  const [q, setQ] = useState(linked ?? "");
   // Date range defaults to today (local); inclusive, "" = open bound.
   const today = localDay(new Date().toISOString());
-  const [from, setFrom] = useState(today);
-  const [to, setTo] = useState(today);
+  const [from, setFrom] = useState(linked ? "" : today);
+  const [to, setTo] = useState(linked ? "" : today);
   const [sortDesc, setSortDesc] = useState(true); // newest first by default
 
   const load = useCallback(
     () =>
       api(`/agents/${agentId}/calls`)
-        .then((r) => {
-          setCalls(r.data);
+        .then(async (r) => {
+          // A linked call older than the first page is fetched on its own.
+          const linkedCall =
+            linked && !r.data.some((c: Call) => c.id === linked)
+              ? await api(`/agents/${agentId}/calls/${linked}`).then((one) => one.data).catch(() => null)
+              : null;
+          setCalls(linkedCall ? [linkedCall, ...r.data] : r.data);
           setError("");
         })
         .catch((e) => setError(e.message)),
-    [agentId]
+    [agentId, linked]
   );
   useEffect(() => {
     load();

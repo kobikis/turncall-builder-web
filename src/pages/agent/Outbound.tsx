@@ -7,28 +7,31 @@ import { fmtTime } from "../../dates";
 import type { ApiResponse, PhoneNumber } from "../../types";
 
 type Entry = { id: string; number: string; created_at: string };
+
+/** The agent's numbers that can call out as it: routed to it, and not on
+ * Asterisk (TurnCall dials through Twilio and Telnyx only). null = loading. */
+export function useDialingNumbers(agentId: string): { numbers: PhoneNumber[] | null; error: string } {
+  const [numbers, setNumbers] = useState<PhoneNumber[] | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    api<ApiResponse<{ phone_numbers: PhoneNumber[] }>>("/phone-numbers")
+      .then((r) => setNumbers(r.data.phone_numbers.filter((n) => n.agent_id === agentId && n.carrier !== "asterisk")))
+      .catch((e) => setError(e.message));
+  }, [agentId]);
+  return { numbers, error };
+}
 const E164_PLACEHOLDER = "+15551234567";
 const message = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong.");
 
 export function CallANumber({ agentId, onPlaced }: { agentId: string; onPlaced: () => void }) {
-  const [numbers, setNumbers] = useState<PhoneNumber[] | null>(null);
-  const [from, setFrom] = useState("");
+  const { numbers, error: loadError } = useDialingNumbers(agentId);
+  const [chosen, setFrom] = useState("");
+  const from = chosen || numbers?.[0]?.id || "";
   const [to, setTo] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [callError, setError] = useState("");
+  const error = callError || loadError;
   const [placed, setPlaced] = useState("");
-
-  useEffect(() => {
-    api<ApiResponse<{ phone_numbers: PhoneNumber[] }>>("/phone-numbers")
-      .then((r) => {
-        // Only a number routed to this agent can call as it, and not one on
-        // Asterisk: TurnCall dials out through Twilio and Telnyx only.
-        const own = r.data.phone_numbers.filter((n) => n.agent_id === agentId && n.carrier !== "asterisk");
-        setNumbers(own);
-        setFrom(own[0]?.id ?? "");
-      })
-      .catch((e) => setError(e.message));
-  }, [agentId]);
 
   const call = async () => {
     const toNumber = to.trim();
