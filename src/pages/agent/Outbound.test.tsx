@@ -31,6 +31,7 @@ beforeEach(() => {
   numbers = [
     { id: "pn1", e164: "+15550001111", agent_id: "a1", routing_type: "agent" },
     { id: "pn2", e164: "+15550002222", agent_id: "other", routing_type: "agent" },
+    { id: "pn3", e164: "+15550003333", agent_id: "a1", routing_type: "agent", carrier: "asterisk" },
   ];
   dnc = [{ id: "s1", number: "+15553334444", created_at: "2026-10-09T10:00:00Z" }];
   outbound = () => ({ data: { id: "c9" } });
@@ -47,6 +48,7 @@ it("calls a number from one of the agent's own numbers", async () => {
   render(<CallANumber agentId="a1" onPlaced={onPlaced} />);
   const from = await screen.findByLabelText(/call from/i);
   expect(screen.queryByRole("option", { name: /\+15550002222/ })).toBeNull();
+  expect(screen.queryByRole("option", { name: /\+15550003333/ })).toBeNull(); // Asterisk dials no one
   expect((from as HTMLSelectElement).value).toBe("pn1");
   fireEvent.change(screen.getByLabelText(/number to call/i), { target: { value: "+15552223333" } });
   fireEvent.click(screen.getByRole("button", { name: /^call$/i }));

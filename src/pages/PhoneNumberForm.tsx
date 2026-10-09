@@ -4,7 +4,11 @@ import { api } from "../api";
 import { AgentRef as Agent } from "../types";
 
 type Routing = "agent" | "agent_call_init" | "webhook" | "none";
+// Who the number belongs to (TurnCall ADR-0022). Fixed once bound.
+export type Carrier = "twilio" | "telnyx" | "asterisk";
+export const CARRIER_LABELS: Record<Carrier, string> = { twilio: "Twilio", telnyx: "Telnyx", asterisk: "Asterisk (your PBX)" };
 export type PhoneInitial = {
+  carrier?: Carrier;
   e164?: string;
   label?: string | null;
   sid?: string;
@@ -43,6 +47,9 @@ export default function PhoneNumberForm(props: {
   const nav = useNavigate();
   const i = props.initial || {};
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [carrier, setCarrier] = useState<Carrier>(i.carrier || "twilio");
+  // Twilio's own features — its account, number SID, SMS — apply to Twilio only.
+  const isTwilio = carrier === "twilio";
   const [sid, setSid] = useState(i.sid || "");
   const [e164, setE164] = useState(i.e164 || "");
   const [routing, setRouting] = useState<Routing>(i.routing_type || "agent");
@@ -55,14 +62,15 @@ export default function PhoneNumberForm(props: {
   const [authToken, setAuthToken] = useState(""); // write-only: never prefilled
   // The Workspace's connected Twilio account, if any (Integrations page).
   const [workspaceTwilio, setWorkspaceTwilio] = useState<{ account_sid: string } | null>(null);
-  const [useWorkspace, setUseWorkspace] = useState(i.twilio_credentials === "workspace");
+  const [useWorkspaceChoice, setUseWorkspaceChoice] = useState(i.twilio_credentials === "workspace");
+  const useWorkspace = isTwilio && useWorkspaceChoice;
   const [accountNumbers, setAccountNumbers] = useState<{ sid: string; phone_number: string; friendly_name?: string | null; bound: boolean }[]>([]);
   // Own account = the number runs on these credentials; else the platform's.
-  const ownAccount = !useWorkspace && accountSid.trim() !== "";
+  const ownAccount = isTwilio && !useWorkspace && accountSid.trim() !== "";
   const [voiceHook, setVoiceHook] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [postSubmit, setPostSubmit] = useState<{ secret?: string; twilioWarn?: boolean } | null>(null);
+  const [postSubmit, setPostSubmit] = useState<{ secret?: string; twilioWarn?: boolean; telnyxWarn?: boolean } | null>(null);
 
   useEffect(() => {
     api("/agents")
@@ -77,7 +85,7 @@ export default function PhoneNumberForm(props: {
         if (!r.data?.connected) return;
         setWorkspaceTwilio({ account_sid: r.data.account_sid });
         // A new number defaults to the workspace's account once there is one.
-        if (!i.twilio_credentials) setUseWorkspace(true);
+        if (!i.twilio_credentials) setUseWorkspaceChoice(true);
       })
       .catch(() => {});
   }, []);
@@ -92,6 +100,8 @@ export default function PhoneNumberForm(props: {
 
   function validate(): string {
     if (!E164_RE.test(e164)) return "Number must be E.164, e.g. +15551234567.";
+    // Telnyx is looked up by its number on the account; Asterisk has no SID.
+    if (!isTwilio) return routingError();
     if (useWorkspace) {
       if (!workspaceTwilio) return "This workspace has no Twilio account connected.";
     } else if (ownAccount) {
@@ -102,6 +112,10 @@ export default function PhoneNumberForm(props: {
     } else if (!SID_RE.test(sid)) {
       return "Twilio Phone Number SID should look like PNxxxxxxxx — or enter your Twilio Account SID and Auth Token instead.";
     }
+    return routingError();
+  }
+
+  function routingError(): string {
     if ((routing === "agent" || routing === "agent_call_init") && !agentId)
       return "Pick an agent (or create one first).";
     if (routing === "webhook" && !/^https?:\/\//.test(serverUrl))
@@ -124,7 +138,13 @@ export default function PhoneNumberForm(props: {
       )
     )
       return;
-    const body: any = { sid: ownAccount ? "" : sid, e164, routing_type: routing, sms_enabled: sms };
+    const body: any = {
+      carrier,
+      sid: ownAccount || !isTwilio ? "" : sid,
+      e164,
+      routing_type: routing,
+      sms_enabled: isTwilio && sms,
+    };
     if (useWorkspace) body.use_workspace_twilio = true;
     body.label = label.trim() || null;
     if (ownAccount && authToken.trim()) {
@@ -139,9 +159,10 @@ export default function PhoneNumberForm(props: {
       const secret = r?.data?.server_url_secret;
       const showSecret =
         routing === "webhook" && secret && secret !== i.server_url_secret;
-      const twilioWarn = r?.data?.twilio_webhooks_configured === false;
-      if (showSecret || twilioWarn) {
-        setPostSubmit({ secret: showSecret ? secret : undefined, twilioWarn });
+      const twilioWarn = isTwilio && r?.data?.twilio_webhooks_configured === false;
+      const telnyxWarn = carrier === "telnyx" && r?.data?.webhooks_configured === false;
+      if (showSecret || twilioWarn || telnyxWarn) {
+        setPostSubmit({ secret: showSecret ? secret : undefined, twilioWarn, telnyxWarn });
       } else {
         nav("/phone-numbers");
       }
@@ -168,6 +189,16 @@ export default function PhoneNumberForm(props: {
             <code className="block">{voiceHook || "…"}</code>
           </div>
         )}
+        {postSubmit.telnyxWarn && (
+          <div className="callout error">
+            <strong>Telnyx was NOT configured — this number won't receive calls yet</strong>
+            <p>
+              TurnCall couldn't put the number on its Call Control application (usually{" "}
+              <code>PUBLIC_BASE_URL</code> missing on the TurnCall server, or a Telnyx error).
+              The binding itself is saved; re-save this number once that is fixed.
+            </p>
+          </div>
+        )}
         {postSubmit.secret && (
           <div className="callout warn">
             <strong>Call-init signing secret</strong>
@@ -185,16 +216,36 @@ export default function PhoneNumberForm(props: {
 
   return (
     <div style={{ maxWidth: 460 }}>
-      {workspaceTwilio && (
+      <div className="field">
+        <label htmlFor="pn-carrier">Carrier</label>
+        <select id="pn-carrier" className="input" value={carrier} disabled={props.lockNumber}
+          onChange={(e) => setCarrier(e.target.value as Carrier)}>
+          {(Object.keys(CARRIER_LABELS) as Carrier[]).map((c) => (
+            <option key={c} value={c}>{CARRIER_LABELS[c]}</option>
+          ))}
+        </select>
+        {carrier === "telnyx" && (
+          <p className="hint" style={{ margin: "4px 0 0" }}>
+            Looked up on the Telnyx account by its number — the workspace's Telnyx key, else the platform's.
+          </p>
+        )}
+        {carrier === "asterisk" && (
+          <p className="hint" style={{ margin: "4px 0 0" }}>
+            Your PBX routes it: send the number's calls to <code>Stasis(turncall)</code> in its dialplan.
+          </p>
+        )}
+      </div>
+
+      {isTwilio && workspaceTwilio && (
         <fieldset style={{ border: 0, padding: 0, margin: "0 0 12px" }}>
           <legend style={{ padding: 0, fontWeight: 500, fontSize: 13 }}>Twilio account</legend>
           <div className="radio-row">
             <label>
-              <input type="radio" name="twilio-source" checked={useWorkspace} onChange={() => setUseWorkspace(true)} />{" "}
+              <input type="radio" name="twilio-source" checked={useWorkspace} onChange={() => setUseWorkspaceChoice(true)} />{" "}
               Workspace account ({workspaceTwilio.account_sid.slice(0, 8)}…)
             </label>
             <label>
-              <input type="radio" name="twilio-source" checked={!useWorkspace} onChange={() => setUseWorkspace(false)} />{" "}
+              <input type="radio" name="twilio-source" checked={!useWorkspace} onChange={() => setUseWorkspaceChoice(false)} />{" "}
               Other credentials
             </label>
           </div>
@@ -228,14 +279,14 @@ export default function PhoneNumberForm(props: {
 
       {!(useWorkspace && workspaceTwilio && !props.lockNumber) && (
       <div className="field">
-        <label htmlFor="pn-e164">Twilio Phone Number</label>
+        <label htmlFor="pn-e164">{isTwilio ? "Twilio Phone Number" : "Phone number"}</label>
         <input id="pn-e164" name="phone_number" type="tel" inputMode="tel" className="input" value={e164}
           disabled={props.lockNumber} autoComplete="off"
           onChange={(e) => setE164(e.target.value)} placeholder="+15551234567" />
       </div>
       )}
 
-      {!useWorkspace && !ownAccount && (
+      {isTwilio && !useWorkspace && !ownAccount && (
         <div className="field">
           <label htmlFor="pn-sid">Twilio Phone Number SID</label>
           <input id="pn-sid" name="twilio_sid" className="input" value={sid} disabled={props.lockNumber}
@@ -254,7 +305,7 @@ export default function PhoneNumberForm(props: {
           placeholder="Label for phone number, e.g. Support line" />
       </div>
 
-      {!useWorkspace && (
+      {isTwilio && !useWorkspace && (
       <>
       <div className="field">
         <label htmlFor="pn-account">Twilio Account SID</label>
@@ -344,16 +395,20 @@ export default function PhoneNumberForm(props: {
         </p>
       )}
 
-      <label style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 400, margin: "0 0 16px" }}>
-        <input type="checkbox" checked={sms} onChange={(e) => setSms(e.target.checked)} /> Enable SMS
-      </label>
+      {isTwilio ? (
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 400, margin: "0 0 16px" }}>
+          <input type="checkbox" checked={sms} onChange={(e) => setSms(e.target.checked)} /> Enable SMS
+        </label>
+      ) : (
+        <div style={{ height: 8 }} />
+      )}
 
       <button className="btn btn-primary" onClick={submit} disabled={busy}>
         {busy ? "Saving…" : props.submitLabel}
       </button>
       {err && <p role="alert" className="error-text">{err}</p>}
 
-      {routing !== "none" && (
+      {isTwilio && routing !== "none" && (
         <div className="callout" style={{ marginTop: 20 }}>
           <strong>Twilio voice webhook</strong>
           <p>

@@ -94,6 +94,8 @@ export type Takeaway = {
 
 export type PhoneNumber = {
   label?: string | null;
+  // "twilio" | "telnyx" | "asterisk"; a row from before #65 reads as twilio.
+  carrier?: string;
   id: string;
   e164: string;
   routing_type: string;
