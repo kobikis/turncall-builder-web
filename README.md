@@ -57,7 +57,9 @@ Once an agent exists, its page is a workbench. **Build** opens on a **Setup**
 checklist — what a working agent has that this one does not yet: a prompt, a
 phone number, an eval scenario, a backup model, each with a link to fix it —
 and holds every setting in sections beside it: prompt, speech and models, tools
-and apps, knowledge, takeaways, turn-taking and limits, guardrails, video
+and apps, knowledge (how the agent reads each document — whole in every reply,
+searched each turn, or searched when it decides — with the search box in the
+right rail in place of Test), takeaways, turn-taking and limits, guardrails, video
 avatar, and the raw JSON. Edits stay in a draft across sections and tabs until
 you save.
 
