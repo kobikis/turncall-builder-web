@@ -13,8 +13,13 @@ const icon = (paths: ReactNode) => (
 );
 
 const ICONS = {
-  // A voice waveform — the old person glyph read as Members' twin.
-  agents: icon(<path d="M2.5 7v2M5 5v6M8 2.5v11M11 5v6M13.5 7v2" />),
+  // A bot in a headset: an AI agent that takes calls. (A person read as
+  // Members' twin; a waveform said voice but not agent; a sparkle sat next to
+  // Skills' star.)
+  agents: icon(<>
+    <rect x="3.5" y="4.5" width="9" height="9" rx="2.4" />
+    <path d="M8 4.5V2.2M6.3 8v.4M9.7 8v.4M6.5 11h3M1.5 7.5v3M14.5 7.5v3" />
+  </>),
   phone: icon(<path d="M4 2.5h2l1 3-1.4 1a7 7 0 0 0 3.9 3.9l1-1.4 3 1v2a1.5 1.5 0 0 1-1.6 1.5A11 11 0 0 1 2.5 4.1 1.5 1.5 0 0 1 4 2.5Z" />),
   integrations: icon(<>
     <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" /><rect x="9" y="2.5" width="4.5" height="4.5" rx="1" />
