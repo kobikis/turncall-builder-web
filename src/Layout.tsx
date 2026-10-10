@@ -13,7 +13,8 @@ const icon = (paths: ReactNode) => (
 );
 
 const ICONS = {
-  agents: icon(<><circle cx="8" cy="6" r="2.6" /><path d="M3.2 13c.8-2.2 2.6-3.3 4.8-3.3s4 1.1 4.8 3.3" /></>),
+  // A voice waveform — the old person glyph read as Members' twin.
+  agents: icon(<path d="M2.5 7v2M5 5v6M8 2.5v11M11 5v6M13.5 7v2" />),
   phone: icon(<path d="M4 2.5h2l1 3-1.4 1a7 7 0 0 0 3.9 3.9l1-1.4 3 1v2a1.5 1.5 0 0 1-1.6 1.5A11 11 0 0 1 2.5 4.1 1.5 1.5 0 0 1 4 2.5Z" />),
   integrations: icon(<>
     <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" /><rect x="9" y="2.5" width="4.5" height="4.5" rx="1" />
