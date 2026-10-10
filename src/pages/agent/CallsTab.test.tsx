@@ -18,8 +18,6 @@ vi.mock("../../api", () => ({
   api: vi.fn(async (path: string) => {
     requested.push(path);
     if (path.endsWith("/calls")) return { data: calls };
-    if (path === "/phone-numbers") return { data: { phone_numbers: [] } };
-    if (path.endsWith("/do-not-call")) return { data: [] };
     if (path.endsWith("/transcript")) return { data: { entries: transcript } };
     if (path.includes("/events")) return { data: events };
     if (path.endsWith("/tool-invocations")) return { data: tools };
@@ -68,6 +66,15 @@ async function openCall() {
   const toggle = await screen.findByRole("button", { name: /Expand call/ });
   fireEvent.click(toggle);
 }
+
+it("the Calls tab places no calls and keeps no do-not-call list", async () => {
+  // Outbound calling lives in Campaigns, with the do-not-call list beside it.
+  render(<CallsTab />);
+  await screen.findByRole("button", { name: /Expand call/ });
+  expect(screen.queryByLabelText(/number to call/i)).toBeNull();
+  expect(screen.queryByText(/do-not-call/i)).toBeNull();
+  expect(requested.some((p) => p.endsWith("/do-not-call") || p === "/phone-numbers")).toBe(false);
+});
 
 // ---- #50: header + transcript offsets ---------------------------------------
 

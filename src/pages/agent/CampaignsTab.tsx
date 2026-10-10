@@ -10,6 +10,8 @@ import { canEdit } from "../../roles";
 import { usePoll } from "../../usePoll";
 import { useAgent } from "./AgentPage";
 import { CampaignForm } from "./CampaignForm";
+import { DoNotCallList } from "./Outbound";
+import { Section } from "./Section";
 
 type Campaign = {
   id: string;
@@ -105,6 +107,9 @@ export default function CampaignsTab() {
           )}
         </tbody>
       </table>
+      <Section id="do-not-call" title="Do-not-call list" defaultOpen={false}>
+        <DoNotCallList agentId={agentId} editable={editable} />
+      </Section>
     </div>
   );
 }
