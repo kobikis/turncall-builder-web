@@ -36,12 +36,15 @@ vi.mock("../../api", () => ({
   ApiError: class ApiError extends Error {},
 }));
 
-vi.mock("./AgentPage", () => ({ useAgent: () => ({ agentId: "a1" }) }));
+let draft: unknown = undefined;
+vi.mock("./AgentPage", () => ({ useAgent: () => ({ agentId: "a1", draft }) }));
 
 import TestTab from "./TestTab";
 
 afterEach(() => {
   calls.length = 0;
+  draft = undefined;
+  localStorage.clear();
   cleanup();
 });
 
@@ -90,4 +93,41 @@ it("the session is threaded through the conversation", async () => {
   // The first send opens a session; the second continues it rather than
   // starting a new one, which is what makes the saved scenario a conversation.
   expect(String(calls.filter((c) => c.path.endsWith("/chat"))[1].body)).toContain("sess-7");
+});
+
+it("says how to add a variable when the prompt has no placeholders", () => {
+  draft = { system_prompt: "You are helpful." };
+  render(<TestTab />);
+  expect(screen.getByText("Variables")).toBeDefined();
+  expect(screen.getByText(/has no/)).toBeDefined();
+  expect(screen.queryByRole("textbox", { name: /customer_name/ })).toBeNull();
+});
+
+it("asks for each placeholder and sends the filled ones with the message", async () => {
+  draft = { system_prompt: "Ship to {{address}} for {{name}}." };
+  render(<TestTab />);
+  fireEvent.change(screen.getByLabelText("address"), { target: { value: "12 Herzl St" } });
+  await chat("where is my order?");
+
+  const sent = JSON.parse(String(calls.find((c) => c.path.endsWith("/chat"))!.body));
+  // `name` was left empty, so the agent sees {{name}} as on a call without it.
+  expect(sent.variables).toEqual({ address: "12 Herzl St" });
+});
+
+it("remembers the values for the next visit", () => {
+  draft = { system_prompt: "Hi {{name}}." };
+  const first = render(<TestTab />);
+  fireEvent.change(screen.getByLabelText("name"), { target: { value: "Ada" } });
+  first.unmount();
+
+  render(<TestTab />);
+  expect((screen.getByLabelText("name") as HTMLInputElement).value).toBe("Ada");
+});
+
+it("sends no variables when none are filled", async () => {
+  draft = { system_prompt: "Hi {{name}}." };
+  render(<TestTab />);
+  await chat("hi");
+  const sent = JSON.parse(String(calls.find((c) => c.path.endsWith("/chat"))!.body));
+  expect(sent).not.toHaveProperty("variables");
 });

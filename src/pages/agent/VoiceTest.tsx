@@ -5,7 +5,13 @@ import { useVoiceCall } from "./VoiceCall";
 
 // Thin view over the agent-level voice call (see VoiceCall.tsx). The call itself
 // lives in the provider, so leaving/re-entering this tab doesn't end it.
-export default function VoiceTest({ agentId }: { agentId: string }) {
+export default function VoiceTest({
+  agentId,
+  variables = {},
+}: {
+  agentId: string;
+  variables?: Record<string, string>;
+}) {
   const { data, dirty, save } = useAgent();
   const { activeWorkspace } = useAuth();
   const canTest = canEdit(activeWorkspace?.role); // test calls are editor+ (server 403s viewers)
@@ -32,7 +38,7 @@ export default function VoiceTest({ agentId }: { agentId: string }) {
               className="btn btn-accent"
               onClick={async () => {
                 if (dirty.length > 0 && !(await save())) return;
-                void start(agentId);
+                void start(agentId, variables);
               }}
             >
               {dirty.length > 0 ? "Save and start a test call" : "Start a test call"}

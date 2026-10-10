@@ -6,9 +6,20 @@ import { displayName } from "./pages/integrations/ProviderAccounts";
 // session cookie, and X-Workspace-Id scopes it to the active Workspace (the proxy
 // is editor-gated). The agent is pinned by the path; the proxy strips any routing
 // the client might add.
-export function buildConnectRequest(agentId: string, workspaceId: string | null): Request {
+//
+// A test call's {{variables}} ride in a header for the same reason: the
+// transport replaces this Request's body with the SDP alone. URL-encoded JSON,
+// because a header is ASCII and a value (an address, a name) need not be.
+export function buildConnectRequest(
+  agentId: string,
+  workspaceId: string | null,
+  variables: Record<string, string> = {},
+): Request {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (workspaceId) headers["X-Workspace-Id"] = workspaceId;
+  if (Object.keys(variables).length > 0) {
+    headers["X-Call-Variables"] = encodeURIComponent(JSON.stringify(variables));
+  }
   // Resolve against the page origin (same as a relative URL in the browser, but
   // explicit so it's a valid absolute URL everywhere it's constructed).
   const url = new URL(

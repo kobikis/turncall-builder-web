@@ -331,6 +331,10 @@ textarea.input.code { font-family: var(--mono); font-size: 12.5px; line-height: 
 
 .field { margin-bottom: 14px; }
 
+/* The Test tab's {{placeholder}} values (call-init's job on a real call). */
+.test-variables { margin: 0 0 12px; padding: 10px 14px 12px; border: 1px solid var(--border); border-radius: var(--radius); min-width: 0; }
+.test-variables legend { padding: 0 6px; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+
 .radio-row { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 4px 0 14px; }
 .radio-row label { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; margin: 0; }
 input[type="radio"], input[type="checkbox"] { accent-color: var(--primary); }

@@ -25,6 +25,20 @@ describe("buildConnectRequest", () => {
     expect(r.headers.get("X-Workspace-Id")).toBeNull();
   });
 
+  it("carries a test call's variables as URL-encoded JSON", () => {
+    // The transport replaces the Request's body with the SDP, so a header is
+    // the one way through; a header is ASCII and an address may not be.
+    const r = buildConnectRequest("a1", "ws1", { address: "רחוב הרצל 12" });
+    const header = r.headers.get("X-Call-Variables")!;
+    expect(header).toMatch(/^[\x20-\x7e]+$/);
+    expect(JSON.parse(decodeURIComponent(header))).toEqual({ address: "רחוב הרצל 12" });
+  });
+
+  it("sends no variables header when there are none", () => {
+    expect(buildConnectRequest("a1", "ws1").headers.get("X-Call-Variables")).toBeNull();
+    expect(buildConnectRequest("a1", "ws1", {}).headers.get("X-Call-Variables")).toBeNull();
+  });
+
   it("encodes the agent id into the path", () => {
     const r = buildConnectRequest("a/b", null);
     expect(new URL(r.url).pathname).toBe("/api/agents/a%2Fb/webrtc/connect");

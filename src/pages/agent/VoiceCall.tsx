@@ -12,7 +12,7 @@ export type CallState = "idle" | "connecting" | "connected" | "error";
 type Ctx = {
   state: CallState;
   msg: string;
-  start: (agentId: string) => Promise<void>;
+  start: (agentId: string, variables?: Record<string, string>) => Promise<void>;
   stop: () => Promise<void>;
 };
 
@@ -71,7 +71,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     clientRef.current = null;
   }
 
-  async function start(agentId: string) {
+  async function start(agentId: string, variables: Record<string, string> = {}) {
     if (clientRef.current) return; // a call is already up
     // The proxy is Workspace-scoped; without an active Workspace it would 4xx and
     // the transport would silently retry into a confusing "Call ended".
@@ -143,7 +143,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
         },
       });
       clientRef.current = client;
-      const endpoint = buildConnectRequest(agentId, workspaceId);
+      const endpoint = buildConnectRequest(agentId, workspaceId, variables);
       // A refused connect carries the reason (e.g. a provider with no key);
       // fail() also disconnects, which stops the transport's retries.
       callIdRef.current = null;
