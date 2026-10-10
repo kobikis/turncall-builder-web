@@ -34,7 +34,7 @@ export default function TestTab() {
         <button type="button" aria-pressed={mode === "chat"} onClick={() => setMode("chat")}>Chat</button>
         <button type="button" aria-pressed={mode === "voice"} onClick={() => setMode("voice")}>Voice</button>
       </div>
-      {names.length > 0 && <Variables names={names} values={values} onChange={setValue} />}
+      <Variables names={names} values={values} onChange={setValue} />
       {mode === "chat" ? (
         <ChatTest agentId={agentId} variables={variables} />
       ) : (
@@ -47,7 +47,8 @@ export default function TestTab() {
 }
 
 // One input per {{placeholder}} the agent uses — what call-init would fill on
-// a real call. Shown only when there is one.
+// a real call. Always shown: an agent with none says how to add one, since a
+// box that appears only once you know the syntax is a box nobody finds.
 function Variables({
   names,
   values,
@@ -60,24 +61,34 @@ function Variables({
   return (
     <fieldset className="test-variables">
       <legend>Variables</legend>
-      <p className="muted" style={{ margin: "0 0 8px", fontSize: 13 }}>
-        Fill the prompt's <code>{"{{placeholders}}"}</code> as call-init would on a real call. Chat uses
-        them from the next message, voice from the next call.
-      </p>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-        {names.map((name) => (
-          <div key={name} className="field" style={{ flex: "1 1 160px", marginBottom: 0 }}>
-            <label htmlFor={`test-var-${name}`}>{name}</label>
-            <input
-              id={`test-var-${name}`}
-              className="input"
-              value={values[name] ?? ""}
-              onChange={(e) => onChange(name, e.target.value)}
-              placeholder={`{{${name}}}`}
-            />
+      {names.length === 0 ? (
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+          This agent's prompt has no <code>{"{{placeholders}}"}</code>. Write one — say{" "}
+          <code>{"{{customer_name}}"}</code> — in the prompt or first message, and it appears here to
+          fill for a test.
+        </p>
+      ) : (
+        <>
+          <p className="muted" style={{ margin: "0 0 8px", fontSize: 13 }}>
+            Fill the prompt's <code>{"{{placeholders}}"}</code> as call-init would on a real call. Chat uses
+            them from the next message, voice from the next call.
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            {names.map((name) => (
+              <div key={name} className="field" style={{ flex: "1 1 160px", marginBottom: 0 }}>
+                <label htmlFor={`test-var-${name}`}>{name}</label>
+                <input
+                  id={`test-var-${name}`}
+                  className="input"
+                  value={values[name] ?? ""}
+                  onChange={(e) => onChange(name, e.target.value)}
+                  placeholder={`{{${name}}}`}
+                />
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
     </fieldset>
   );
 }

@@ -95,10 +95,12 @@ it("the session is threaded through the conversation", async () => {
   expect(String(calls.filter((c) => c.path.endsWith("/chat"))[1].body)).toContain("sess-7");
 });
 
-it("shows no variables when the prompt has no placeholders", () => {
+it("says how to add a variable when the prompt has no placeholders", () => {
   draft = { system_prompt: "You are helpful." };
   render(<TestTab />);
-  expect(screen.queryByText("Variables")).toBeNull();
+  expect(screen.getByText("Variables")).toBeDefined();
+  expect(screen.getByText(/has no/)).toBeDefined();
+  expect(screen.queryByRole("textbox", { name: /customer_name/ })).toBeNull();
 });
 
 it("asks for each placeholder and sends the filled ones with the message", async () => {
