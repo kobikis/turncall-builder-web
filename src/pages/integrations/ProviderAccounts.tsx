@@ -38,16 +38,16 @@ export type ProviderCard = {
 
 export const ROLE_LABELS: Record<Role, string> = {
   llm: "Model",
-  stt: "Transcription",
-  tts: "Voice",
+  stt: "STT",
+  tts: "TTS",
   s2s: "Speech-to-speech",
   avatar: "Avatar",
   judge: "Eval judge",
   carrier: "Carrier",
 };
 const ROLE_ORDER: Role[] = ["llm", "stt", "tts", "s2s", "avatar", "judge", "carrier"];
-// Which group a multi-role card is browsed under. Voice before Transcription:
-// every TTS provider also transcribes, so the other way round empties Voice.
+// Which group a multi-role card is browsed under. TTS before STT:
+// every TTS provider also transcribes, so the other way round empties TTS.
 const GROUP_ORDER: Role[] = ["llm", "tts", "s2s", "stt", "avatar", "judge", "carrier"];
 
 type Field = { name: string; label: string; secret: boolean; required?: boolean };

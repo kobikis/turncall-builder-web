@@ -49,7 +49,7 @@ it("shows one card per account, tagged with every role it serves", async () => {
   cards = [card()];
   show();
   const el = await screen.findByTestId("provider-deepgram");
-  expect(within(el).getByText("Transcription · Voice")).toBeDefined();
+  expect(within(el).getByText("STT · TTS")).toBeDefined();
   expect(screen.getAllByTestId(/^provider-/)).toHaveLength(1);
 });
 
@@ -165,7 +165,7 @@ it("files a voice provider under Voice", async () => {
   cards = [card({ provider: "cartesia", serves: { stt: ["cartesia"], tts: ["cartesia"] } })];
   show();
   await screen.findByTestId("provider-cartesia");
-  expect(screen.getByText("Voice", { selector: ".int-group-title" })).toBeDefined();
+  expect(screen.getByText("TTS", { selector: ".int-group-title" })).toBeDefined();
 });
 
 it("says when custom call-init numbers are not on the workspace key (builder-api#65)", () => {
