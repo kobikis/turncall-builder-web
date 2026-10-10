@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import { useAgent } from "./AgentPage";
 import SaveAsScenario from "./SaveAsScenario";
+import { filled, loadValues, placeholders, saveValues } from "./testVariables";
 
 // Voice pulls in the (heavy) pipecat WebRTC client — code-split so it only loads
 // when the Voice tab is actually opened.
@@ -13,8 +14,19 @@ type Msg = { role: "user" | "assistant"; text: string };
 const freshCustomer = () => "+1555" + Math.floor(1000000 + Math.random() * 9000000);
 
 export default function TestTab() {
-  const { agentId } = useAgent();
+  const { agentId, draft } = useAgent();
   const [mode, setMode] = useState<"chat" | "voice">("chat");
+  const names = placeholders(draft);
+  const [values, setValues] = useState(() => loadValues(agentId));
+  const variables = filled(names, values);
+
+  function setValue(name: string, value: string) {
+    setValues((prev) => {
+      const next = { ...prev, [name]: value };
+      saveValues(agentId, next);
+      return next;
+    });
+  }
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
@@ -22,18 +34,55 @@ export default function TestTab() {
         <button type="button" aria-pressed={mode === "chat"} onClick={() => setMode("chat")}>Chat</button>
         <button type="button" aria-pressed={mode === "voice"} onClick={() => setMode("voice")}>Voice</button>
       </div>
+      {names.length > 0 && <Variables names={names} values={values} onChange={setValue} />}
       {mode === "chat" ? (
-        <ChatTest agentId={agentId} />
+        <ChatTest agentId={agentId} variables={variables} />
       ) : (
         <Suspense fallback={<p className="muted">Loading voice…</p>}>
-          <VoiceTest agentId={agentId} />
+          <VoiceTest agentId={agentId} variables={variables} />
         </Suspense>
       )}
     </div>
   );
 }
 
-function ChatTest({ agentId }: { agentId: string }) {
+// One input per {{placeholder}} the agent uses — what call-init would fill on
+// a real call. Shown only when there is one.
+function Variables({
+  names,
+  values,
+  onChange,
+}: {
+  names: string[];
+  values: Record<string, string>;
+  onChange: (name: string, value: string) => void;
+}) {
+  return (
+    <fieldset className="test-variables">
+      <legend>Variables</legend>
+      <p className="muted" style={{ margin: "0 0 8px", fontSize: 13 }}>
+        Fill the prompt's <code>{"{{placeholders}}"}</code> as call-init would on a real call. Chat uses
+        them from the next message, voice from the next call.
+      </p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+        {names.map((name) => (
+          <div key={name} className="field" style={{ flex: "1 1 160px", marginBottom: 0 }}>
+            <label htmlFor={`test-var-${name}`}>{name}</label>
+            <input
+              id={`test-var-${name}`}
+              className="input"
+              value={values[name] ?? ""}
+              onChange={(e) => onChange(name, e.target.value)}
+              placeholder={`{{${name}}}`}
+            />
+          </div>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function ChatTest({ agentId, variables }: { agentId: string; variables: Record<string, string> }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -58,7 +107,14 @@ function ChatTest({ agentId }: { agentId: string }) {
     try {
       const r = await api(`/agents/${agentId}/chat`, {
         method: "POST",
-        body: JSON.stringify({ message: text, session_id: sessionId, customer_number: customer.current }),
+        body: JSON.stringify({
+          message: text,
+          session_id: sessionId,
+          customer_number: customer.current,
+          // Merged into the session's by TurnCall: a value changed here applies
+          // from this message on; Reset starts a session without the old ones.
+          ...(Object.keys(variables).length > 0 && { variables }),
+        }),
       });
       setSessionId(r.data.session_id);
       setMsgs((m) => [...m, { role: "assistant", text: r.data.reply }]);
