@@ -1,17 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api";
+import { useAuth } from "../../auth";
+import { canEdit } from "../../roles";
 import Uid from "../../components/Uid";
 import { usePoll } from "../../usePoll";
 import { useAgent } from "./AgentPage";
 import { Doc } from "../../types";
+import Retrieval, { RetrievalSetting } from "./Retrieval";
 
 type SearchResult = { content: string; similarity: number; document_id: string };
 
 const dateFmt = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
 export default function KnowledgeTab() {
-  const { agentId } = useAgent();
+  const { agentId, draft } = useAgent();
+  const { activeWorkspace } = useAuth();
   const [docs, setDocs] = useState<Doc[] | null>(null);
+  const [retrieval, setRetrieval] = useState<RetrievalSetting | null>(null);
   const [error, setError] = useState("");
   const [busyDoc, setBusyDoc] = useState<string | null>(null); // doc id, or "upload"
   const [docQuery, setDocQuery] = useState(""); // filter the document list by name/id
@@ -25,7 +30,10 @@ export default function KnowledgeTab() {
 
   const load = () =>
     api(`/agents/${agentId}/knowledge/documents`)
-      .then((r) => setDocs(r.data.documents))
+      .then((r) => {
+        setDocs(r.data.documents);
+        setRetrieval(r.data.retrieval ?? null);
+      })
       .catch((e) => setError(e.message));
   useEffect(() => {
     load();
@@ -114,8 +122,7 @@ export default function KnowledgeTab() {
       <div style={{ flex: 1, minWidth: 0, overflowY: "auto" }}>
         <div className="page-head" style={{ marginBottom: 12 }}>
           <p className="muted" style={{ margin: 0 }}>
-            Documents added here are injected into the agent's prompt — it has their full
-            contents available throughout every conversation.
+            Documents the agent answers from — menus, FAQs, policies.
           </p>
           <button className="btn btn-primary" onClick={() => uploadRef.current?.click()} disabled={busyDoc !== null}>
             {busyDoc === "upload" ? "Uploading…" : "+ Upload document"}
@@ -133,6 +140,16 @@ export default function KnowledgeTab() {
           />
         </div>
         {error && <p role="alert" className="error-text">{error}</p>}
+        {retrieval && (
+          <Retrieval
+            agentId={agentId}
+            setting={retrieval}
+            totalChars={(docs || []).reduce((n, d) => n + (d.char_count || 0), 0)}
+            speechToSpeech={(draft?.pipeline_mode || "cascade") === "s2s"}
+            editable={canEdit(activeWorkspace?.role)}
+            onChange={setRetrieval}
+          />
+        )}
         <input
           className="input"
           style={{ marginBottom: 10, maxWidth: 360 }}
