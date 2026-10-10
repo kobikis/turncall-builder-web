@@ -53,22 +53,34 @@
 └───────────────────────────────────────────────────────┘
 ```
 
-Once an agent exists, its Configuration tab is the form above in long form —
-prompt, providers, tools, guardrails, connected apps, MCP servers — in sections
-that collapse and stay collapsed. Most of a settled agent is something nobody
-looks at twice.
+Once an agent exists, its page is a workbench. **Build** opens on a **Setup**
+checklist — what a working agent has that this one does not yet: a prompt, a
+phone number, an eval scenario, a backup model, each with a link to fix it —
+and holds every setting in sections beside it: prompt, speech and models, tools
+and apps, knowledge, takeaways, turn-taking and limits, guardrails, video
+avatar, and the raw JSON. Edits stay in a draft across sections and tabs until
+you save.
 
-An agent's own page carries the rest as tabs: Configuration, a Test tab for
-talking to it, Calls, Knowledge, Takeaways and **Evals** — saved behavioural
-scenarios with a one-click run and an inline verdict. A call that went wrong, or
-a text test you just ran, becomes a scenario draft with one button. Each
-scenario shows the model that judges it — its own, or the platform default it
-inherits — and each run names both models it involved: the **agent** that
-answered, and the **judge** that marked it. A scenario turning red is then a
-regression or a different examiner, and the row says which. Both tables sort and
-filter, and a run carries any warnings it earned — a judge that changed since
-the last verdict, a scenario nothing in which can fail, a worker older than the
-code it runs — as notes beside the status rather than as failures.
+The **Test** pane on the right talks to the saved agent, by text (Chat) or in
+the browser over WebRTC (Voice); a voice call keeps running while you move
+between tabs. Its **Variables** box has an input for each `{{placeholder}}` the
+agent's config uses and fills them the way call-init would on a real call —
+Chat from the next message, Voice from the next call — kept per agent in the
+browser.
+
+The other tabs: **Calls**, each with its transcript, recording and latency;
+**Campaigns**, outbound calls to a list in each target's calling window, beside
+the agent's do-not-call list; **Evals** — saved behavioural scenarios with a
+one-click run and an inline verdict. A call that went wrong, or a text test you
+just ran, becomes a scenario draft with one button. Each scenario shows the
+model that judges it — its own, or the platform default it inherits — and each
+run names both models it involved: the **agent** that answered, and the
+**judge** that marked it. A scenario turning red is then a regression or a
+different examiner, and the row says which. A run carries any warnings it
+earned — a judge that changed since the last verdict, a scenario nothing in
+which can fail, a worker older than the code it runs — as notes beside the
+status rather than as failures. **Code** pushes the agent's generated backend
+to a GitHub repository of yours.
 
 `/integrations` is everything the workspace is connected to, as cards:
 
@@ -77,14 +89,16 @@ code it runs — as notes beside the status rather than as failures.
   account (Deepgram once, for both transcription and voice); the key is entered
   in a dialog, write-only, and the card shows only its last four characters and
   which key a call will actually use — the workspace's, the platform's, or none.
-- **Telephony** — the workspace's Twilio account. Adding a phone number then
-  picks from that account's numbers instead of asking for credentials.
-- **MCP servers** — registered once, opted into per agent on its
-  Configuration tab.
+- **Telephony** — the workspace's carriers: a Twilio account, a Telnyx account,
+  and its own Asterisk PBX over ARI. Adding a phone number then picks from the
+  carrier's numbers instead of asking for credentials (an Asterisk number is
+  typed in: the PBX has no list to pick from).
+- **MCP servers** — registered once, opted into per agent in its Tools and
+  apps section.
 - **Connected apps** — Slack or Google Calendar, authorized through the
   provider's own consent screen, optionally under the workspace's own Pipedream
   project. Each agent chooses when an app runs — during a call, or when a call
-  ends — on its own Configuration tab. Values a person cannot check by eye are
+  ends — in its own Tools and apps section. Values a person cannot check by eye are
   picked from a list rather than typed: a channel is chosen by name and stored
   by id.
 
