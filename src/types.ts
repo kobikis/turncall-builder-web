@@ -72,8 +72,15 @@ export type LatencySummary = {
   slowest_turn: { turn: number; user_to_bot_ms: number };
 };
 
+// How the agent reads a document: whole in every reply, searched each turn,
+// or searched when the model decides (TurnCall's knowledge-base link modes).
+export type RetrievalMode = "prompt" | "auto" | "tool";
+export type RetrievalSetting = { mode: RetrievalMode; top_k?: number; tool_description?: string | null };
+
 export type Doc = {
   id: string;
+  knowledge_base_id?: string;
+  retrieval?: RetrievalSetting | null;
   filename: string;
   content_type: string;
   char_count: number;

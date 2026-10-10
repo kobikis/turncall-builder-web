@@ -5,6 +5,7 @@ import type { ApiResponse, PhoneNumber } from "../../types";
 import { ROUTING_LABELS } from "../PhoneNumbersList";
 import { useAgent } from "./AgentPage";
 import ConfigTab from "./ConfigTab";
+import KnowledgeSearch from "./KnowledgeSearch";
 import KnowledgeTab from "./KnowledgeTab";
 import TakeawaysTab from "./TakeawaysTab";
 import TestTab from "./TestTab";
@@ -86,7 +87,15 @@ export default function Build() {
         )}
       </div>
 
-      <aside aria-label="Test" className="wb-test">
+      {current === "knowledge" && (
+        // The section's search, beside its documents. Test stays mounted
+        // underneath, hidden, so a chat under way survives the visit.
+        <aside aria-label="Search documents" className="wb-test">
+          <h2>Search documents</h2>
+          <KnowledgeSearch />
+        </aside>
+      )}
+      <aside aria-label="Test" className="wb-test" hidden={current === "knowledge"}>
         <h2>Test</h2>
         {dirty.length > 0 && (
           <p className="callout warn">

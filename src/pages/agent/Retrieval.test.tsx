@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { Doc } from "../../types";
 
-// How the agent reads its documents: all of them every turn, a search each
-// turn, or a search when the model decides. Measured on a 16.7k-character
-// menu, reading all of it cost about a second of LLM time a turn — so the
-// picker says when "whole documents" is too big.
+// How the agent reads each document: whole in every reply, a search each
+// turn, or a search when the model decides. Per document, because each has a
+// knowledge base of its own (builder-api ADR-0024). Measured on a
+// 16.7k-character menu, reading it whole cost about a second a turn — so a
+// large document read whole says so.
 
 const calls: { path: string; body?: unknown }[] = [];
 vi.mock("../../api", () => ({
@@ -15,62 +17,74 @@ vi.mock("../../api", () => ({
   }),
 }));
 
-import Retrieval, { RetrievalSetting } from "./Retrieval";
+import DocumentRetrieval from "./Retrieval";
 
 afterEach(() => {
   calls.length = 0;
   cleanup();
 });
 
-function show(over: Partial<Parameters<typeof Retrieval>[0]> = {}) {
+const doc = (over: Partial<Doc> = {}): Doc => ({
+  id: "d1",
+  filename: "menu.pdf",
+  content_type: "application/pdf",
+  char_count: 1200,
+  chunk_count: 3,
+  status: "ready",
+  error_message: null,
+  created_at: "2026-10-10T00:00:00Z",
+  retrieval: { mode: "prompt" },
+  ...over,
+});
+
+function show(over: Partial<Parameters<typeof DocumentRetrieval>[0]> = {}) {
   const onChange = vi.fn();
   render(
-    <Retrieval
-      agentId="a1"
-      setting={{ mode: "prompt" } as RetrievalSetting}
-      totalChars={1200}
-      speechToSpeech={false}
-      editable
-      onChange={onChange}
-      {...over}
-    />,
+    <DocumentRetrieval agentId="a1" doc={doc()} speechToSpeech={false} editable onChange={onChange} {...over} />,
   );
   return onChange;
 }
 
-const button = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
+const picker = () => screen.getByLabelText("How the agent reads menu.pdf") as HTMLSelectElement;
+const option = (label: string) => screen.getByRole("option", { name: label }) as HTMLOptionElement;
 
-it("marks the mode the agent reads its documents in", () => {
-  show({ setting: { mode: "auto" } });
-  expect(button("Search each turn").getAttribute("aria-pressed")).toBe("true");
-  expect(button("Whole documents").getAttribute("aria-pressed")).toBe("false");
+it("shows how this document is read", () => {
+  show({ doc: doc({ retrieval: { mode: "auto" } }) });
+  expect(picker().value).toBe("auto");
 });
 
-it("changes the mode through the agent's retrieval endpoint", async () => {
+it("reads a document with no link yet as whole", () => {
+  show({ doc: doc({ retrieval: null }) });
+  expect(picker().value).toBe("prompt");
+});
+
+it("changes this document's mode, and only through its own endpoint", async () => {
   const onChange = show();
-  fireEvent.click(button("Search each turn"));
+  fireEvent.change(picker(), { target: { value: "auto" } });
   await waitFor(() => expect(onChange).toHaveBeenCalledWith({ mode: "auto" }));
-  expect(calls).toEqual([{ path: "/agents/a1/knowledge/retrieval", body: '{"mode":"auto"}' }]);
+  expect(calls).toEqual([{ path: "/agents/a1/knowledge/documents/d1/retrieval", body: '{"mode":"auto"}' }]);
 });
 
-it("says whole documents are slowing replies once they are large", () => {
-  show({ totalChars: 16652 });
+it("says a large document read whole is slowing replies", () => {
+  show({ doc: doc({ char_count: 16652 }) });
   expect(screen.getByText(/Every reply reads all 16,652 characters/)).toBeDefined();
 });
 
-it("says nothing about size while whole documents are small", () => {
-  show({ totalChars: 1200 });
-  expect(screen.queryByText(/Every reply reads all [0-9]/)).toBeNull();
+it("says nothing while the document is small, or not read whole", () => {
+  show({ doc: doc({ char_count: 1200 }) });
+  expect(screen.queryByText(/Every reply reads all/)).toBeNull();
+  cleanup();
+  show({ doc: doc({ char_count: 16652, retrieval: { mode: "auto" } }) });
+  expect(screen.queryByText(/Every reply reads all/)).toBeNull();
 });
 
 it("offers no per-turn search on a speech-to-speech agent", () => {
-  show({ speechToSpeech: true, totalChars: 16652 });
-  expect(button("Search each turn").disabled).toBe(true);
-  // ...and the size warning points at the mode that does work there.
-  expect(screen.getByText(/Agent searches sends only what the question needs/)).toBeDefined();
+  show({ speechToSpeech: true, doc: doc({ char_count: 16652 }) });
+  expect(option("Search each turn").disabled).toBe(true);
+  expect(screen.getByText(/Agent searches sends only what's needed/)).toBeDefined();
 });
 
 it("is read-only for a viewer", () => {
   show({ editable: false });
-  expect(button("Search each turn").disabled).toBe(true);
+  expect(picker().disabled).toBe(true);
 });
