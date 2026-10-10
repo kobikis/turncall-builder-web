@@ -17,14 +17,10 @@ export default function TestTab() {
   const [mode, setMode] = useState<"chat" | "voice">("chat");
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", maxWidth: 720 }}>
-      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-        <button className={`btn${mode === "chat" ? " btn-primary" : ""}`} onClick={() => setMode("chat")}>
-          Chat
-        </button>
-        <button className={`btn${mode === "voice" ? " btn-primary" : ""}`} onClick={() => setMode("voice")}>
-          Voice
-        </button>
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      <div role="group" aria-label="Test mode" className="seg" style={{ alignSelf: "flex-start", marginBottom: 10 }}>
+        <button type="button" aria-pressed={mode === "chat"} onClick={() => setMode("chat")}>Chat</button>
+        <button type="button" aria-pressed={mode === "voice"} onClick={() => setMode("voice")}>Voice</button>
       </div>
       {mode === "chat" ? (
         <ChatTest agentId={agentId} />

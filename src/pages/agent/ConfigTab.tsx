@@ -18,11 +18,11 @@ import {
   type ConnectedAccount,
   type AutomationRun,
 } from "./ConnectedApps";
-import { Section } from "./Section";
 import { api } from "../../api";
 import { useAuth } from "../../auth";
 import { canEdit } from "../../roles";
 import { useAgent } from "./AgentPage";
+import type { SectionId } from "./sections";
 
 type Providers = { stt: string[]; llm: string[]; tts: string[]; s2s: string[] };
 const FALLBACK_PROVIDERS: Providers = {
@@ -71,8 +71,6 @@ const STATUS_HINTS: Record<string, string> = {
 
 const BUILTIN_TOOLS = ["end_call", "transfer_call", "send_dtmf", "do_not_call"];
 
-const clone = (o: unknown) => JSON.parse(JSON.stringify(o ?? {}));
-
 // An option is either a bare id (models) or {value,label} (voices where the
 // config value is an id but we show a friendly name, e.g. ElevenLabs/Cartesia).
 type Opt = string | { value: string; label: string };
@@ -108,31 +106,33 @@ function PickField({ id, label, value, options, placeholder, onChange }: {
   );
 }
 
-// Order-insensitive custom_tools comparison — mirrors the API's regen trigger.
-function toolsChanged(a: unknown, b: unknown): boolean {
-  const norm = (c: any) =>
-    JSON.stringify(
-      ((c || {}).custom_tools || [])
-        .slice()
-        .sort((x: any, y: any) => String(x.name).localeCompare(String(y.name)))
-    );
-  return norm(a) !== norm(b);
-}
+// What each section is for, under its heading.
+const LEADS: Partial<Record<SectionId, string>> = {
+  prompt: "What the agent knows and how it behaves on every call.",
+  models: "How the agent hears, thinks and speaks.",
+  tools: "What the agent can do during a call.",
+  "turn-taking": "When the caller's turn ends, when the call ends, and how much it may use.",
+  guardrails: "What the agent will not discuss.",
+  avatar: "A lip-synced face for browser calls.",
+  advanced: "The whole configuration. Custom tools, voicemail and analysis are edited here.",
+};
 
-export default function ConfigTab() {
-  const { agentId, data, updateConfig } = useAgent();
+const TITLES: Partial<Record<SectionId, string>> = {
+  prompt: "Prompt",
+  models: "Speech and models",
+  tools: "Tools and apps",
+  "turn-taking": "Turn-taking and limits",
+  guardrails: "Guardrails",
+  avatar: "Video avatar",
+  advanced: "Advanced (JSON)",
+};
+
+// One section of the agent's configuration. The draft and its save live in
+// AgentPage; this edits the part of it the section owns.
+export default function ConfigTab({ section }: { section: SectionId }) {
+  const { agentId, data, draft: cfg, patch, setDraft: setCfg } = useAgent();
   const { activeWorkspace } = useAuth();
   const editable = canEdit(activeWorkspace?.role); // viewers can view but not save
-  const [cfg, setCfg] = useState<any>(() => clone(data.config));
-  const [advanced, setAdvanced] = useState(false);
-  const [jsonText, setJsonText] = useState("");
-  const [jsonError, setJsonError] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState("");
-  // A refusal is not a status line. Save failures say what to fix, and reading
-  // them as grey body text running the width of the page is how a sentence like
-  // "Post the call summary needs a Channel" gets missed.
-  const [err, setErr] = useState("");
   const [providers, setProviders] = useState<Providers>(FALLBACK_PROVIDERS);
   const [sttModels, setSttModels] = useState<string[]>([]); // live, for the selected STT provider
   const [models, setModels] = useState<string[]>([]); // live, for the selected LLM provider
@@ -263,60 +263,6 @@ export default function ConfigTab() {
     };
   }, [ttsProvider]);
 
-  // Immutable nested edit: clone, mutate the copy, set.
-  const patch = (fn: (c: any) => void) =>
-    setCfg((c: any) => {
-      const next = clone(c);
-      fn(next);
-      return next;
-    });
-
-  function enterAdvanced() {
-    setJsonText(JSON.stringify(cfg, null, 2));
-    setJsonError("");
-    setAdvanced(true);
-  }
-  function onJson(text: string) {
-    setJsonText(text);
-    try {
-      setCfg(JSON.parse(text));
-      setJsonError("");
-    } catch (e) {
-      setJsonError(e instanceof Error ? e.message : "invalid JSON");
-    }
-  }
-
-  async function save() {
-    setMsg("");
-    if (advanced && jsonError) {
-      setMsg(`Config is not valid JSON: ${jsonError}`);
-      return;
-    }
-    if (
-      toolsChanged(data.config, cfg) &&
-      !confirm(
-        "Changing tools regenerates the backend's app.py, overwriting handler edits in the generated repo.\n\nYour edits are committed to git first (recoverable with `git log`). Continue?"
-      )
-    )
-      return;
-    setSaving(true);
-    setErr("");
-    try {
-      const r = await api(`/agents/${agentId}`, { method: "PUT", body: JSON.stringify({ config: cfg }) });
-      updateConfig(cfg);
-      setMsg(
-        r.data?.backend_regenerated
-          ? "Saved — backend regenerated (tools changed); previous handler code is in git history."
-          : "Saved."
-      );
-    } catch (e) {
-      setMsg("");
-      setErr(e instanceof Error ? e.message : "Save failed.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   const tools: string[] = Array.isArray(cfg.tools) ? cfg.tools : [];
   const customCount = (cfg.custom_tools || []).length;
   const topics: string[] = cfg.guardrails?.prohibited_topics || [];
@@ -361,399 +307,391 @@ export default function ConfigTab() {
   const stubs = Object.entries(toolStatuses || {}).filter(([, s]) => s === "stub");
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+    <section aria-labelledby="cfg-h" className="wb-section">
+      <h2 id="cfg-h">{TITLES[section]}</h2>
+      {LEADS[section] && <p className="muted lead">{LEADS[section]}</p>}
       {statusHint && <p className="callout warn">{statusHint}</p>}
-      {toolStatuses && Object.keys(toolStatuses).length > 0 && (
-        <div style={{ marginBottom: 10 }}>
-          {Object.entries(toolStatuses).map(([name, s]) => (
-            <span key={name} className={`chip ${s}`}>{name} · {s}</span>
-          ))}
-          {stubs.length > 0 && (
-            <p className="hint" style={{ margin: "2px 0 0" }}>
-              Stub tools return fake data — fill in real logic in the generated repo.
-            </p>
-          )}
-        </div>
-      )}
-      {Object.values(toolStatuses || {}).includes("external") && data.tool_signing_secret && (
-        <div className="callout info">
-          <strong>Tool signing secret</strong>
-          <p>
-            Tools marked <code>external</code> POST to your server, signed with{" "}
-            <code>X-TurnCall-Signature</code> (HMAC-SHA256 over{" "}
-            <code>{"{timestamp}.{body}"}</code>). Verify with this secret:
-          </p>
-          <code className="block">{data.tool_signing_secret}</code>
-        </div>
-      )}
 
-      <div style={{ display: "flex", gap: 6, margin: "2px 0 12px" }}>
-        <button className={`btn${!advanced ? " btn-primary" : ""}`} onClick={() => setAdvanced(false)}>Form</button>
-        <button className={`btn${advanced ? " btn-primary" : ""}`} onClick={enterAdvanced}>Advanced (JSON)</button>
-      </div>
-
-      {advanced ? (
-        <>
+      {section === "prompt" && (<>
+        <div className="field">
+          <label htmlFor="cfg-prompt">System prompt</label>
           <textarea
-            className="input code"
-            style={{ flex: 1 }}
-            aria-label="Agent configuration JSON"
-            value={jsonText}
-            onChange={(e) => onJson(e.target.value)}
+            id="cfg-prompt"
+            className="input"
+            value={cfg.system_prompt || ""}
+            onChange={(e) => patch((c) => (c.system_prompt = e.target.value))}
           />
-     {jsonError && <p className="error-text">Invalid JSON: {jsonError}</p>}
-        </>
-      ) : (
-        <div style={{ flex: 1, overflowY: "auto" }}>
-          <Section id="prompt" title="Prompt">
-          <div className="field">
-            <label htmlFor="cfg-prompt">System prompt</label>
-            <textarea
-              id="cfg-prompt"
-              className="input"
-              style={{ minHeight: 150 }}
-              value={cfg.system_prompt || ""}
-              onChange={(e) => patch((c) => (c.system_prompt = e.target.value))}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="cfg-first">First message</label>
-            <input
-              id="cfg-first"
-              className="input"
-              value={cfg.first_message || ""}
-              onChange={(e) => patch((c) => (c.first_message = e.target.value || null))}
-              placeholder="What the agent says first (blank = caller speaks first)"
-            />
-          </div>
-          </Section>
+        </div>
+        <div className="field">
+          <label htmlFor="cfg-first">First message</label>
+          <input
+            id="cfg-first"
+            className="input"
+            value={cfg.first_message || ""}
+            onChange={(e) => patch((c) => (c.first_message = e.target.value || null))}
+            placeholder="What the agent says first (blank = caller speaks first)"
+          />
+        </div>
+      </>)}
 
-          <Section
-            id="models"
-            title="Speech and models"
-            hint={isS2S ? "speech-to-speech" : "cascade"}
+      {section === "models" && (<>
+        <div className="field">
+          <label htmlFor="cfg-mode">Pipeline mode</label>
+          <select
+            id="cfg-mode"
+            className="input"
+            value={cfg.pipeline_mode || "cascade"}
+            onChange={(e) => patch((c) => (c.pipeline_mode = e.target.value))}
           >
-          <div className="field">
-            <label htmlFor="cfg-mode">Pipeline mode</label>
-            <select
-              id="cfg-mode"
-              className="input"
-              value={cfg.pipeline_mode || "cascade"}
-              onChange={(e) => patch((c) => (c.pipeline_mode = e.target.value))}
-            >
-              <option value="cascade">cascade (STT → LLM → TTS)</option>
-              <option value="s2s">speech-to-speech (single realtime model)</option>
-            </select>
-          </div>
+            <option value="cascade">cascade (STT → LLM → TTS)</option>
+            <option value="s2s">speech-to-speech (single realtime model)</option>
+          </select>
+        </div>
 
-          {isS2S ? (
-            <>
-            <div style={{ display: "flex", gap: 12 }}>
-              <div className="field" style={{ flex: 1 }}>
-                <label htmlFor="cfg-s2s-p">S2S provider</label>
-                <select
-                  id="cfg-s2s-p"
-                  className="input"
-                  value={cfg.s2s?.provider || "openai"}
-                  onChange={(e) =>
-                    patch((c) => {
-                      // Only openai_live delegates; TurnCall refuses the block elsewhere.
-                      const { delegation, ...rest } = c.s2s || {};
-                      const provider = e.target.value;
-                      c.s2s = provider === "openai_live" && delegation
-                        ? { ...rest, provider, delegation }
-                        : { ...rest, provider };
-                    })
-                  }
-                >
-                  {providerOptions("s2s", providers.s2s)}
-                </select>
-                <ProviderKeyNote role="s2s" provider={s2sProvider} cards={cards} />
-              </div>
-              <PickField
-                id="cfg-s2s-m"
-                label="S2S model"
-                value={cfg.s2s?.model || ""}
-                options={s2sModels}
-                placeholder={(S2S_HINTS[s2sProvider] || S2S_HINTS.openai).model}
-                onChange={(v) => patch((c) => (c.s2s = { ...c.s2s, model: v }))}
-              />
-              <PickField
-                id="cfg-s2s-v"
-                label="Voice"
-                value={cfg.s2s?.voice || ""}
-                options={s2sVoices}
-                placeholder={(S2S_HINTS[s2sProvider] || S2S_HINTS.openai).voice}
-                onChange={(v) => patch((c) => (c.s2s = { ...c.s2s, voice: v }))}
-              />
-            </div>
-            {s2sProvider === "openai_live" && (
-              <Delegation
-                value={cfg.s2s?.delegation}
-                models={delegateModels}
-                hasTools={
-                  tools.length > 0 ||
-                  customCount > 0 ||
-                  (cfg.mcp_servers || []).length > 0 ||
-                  (cfg.workspace_mcp_servers || []).length > 0
-                }
-                llmPicker={llmFields(true)}
-                editable={editable}
-                onChange={(d) =>
-                  patch((c) => {
-                    const { delegation: _old, ...rest } = c.s2s || {};
-                    c.s2s = d ? { ...rest, delegation: d } : rest;
-                  })
-                }
-              />
-            )}
-            </>
-          ) : (
+        {isS2S ? (
           <>
           <div style={{ display: "flex", gap: 12 }}>
             <div className="field" style={{ flex: 1 }}>
-              <label htmlFor="cfg-stt-p">STT provider</label>
+              <label htmlFor="cfg-s2s-p">S2S provider</label>
               <select
-                id="cfg-stt-p"
+                id="cfg-s2s-p"
                 className="input"
-                value={cfg.stt?.provider || "deepgram"}
-                onChange={(e) => patch((c) => (c.stt = { ...c.stt, provider: e.target.value, model: "" }))}
+                value={cfg.s2s?.provider || "openai"}
+                onChange={(e) =>
+                  patch((c) => {
+                    // Only openai_live delegates; TurnCall refuses the block elsewhere.
+                    const { delegation, ...rest } = c.s2s || {};
+                    const provider = e.target.value;
+                    c.s2s = provider === "openai_live" && delegation
+                      ? { ...rest, provider, delegation }
+                      : { ...rest, provider };
+                  })
+                }
               >
-                {providerOptions("stt", providers.stt)}
+                {providerOptions("s2s", providers.s2s)}
               </select>
-              <ProviderKeyNote role="stt" provider={sttProvider} cards={cards} />
+              <ProviderKeyNote role="s2s" provider={s2sProvider} cards={cards} />
             </div>
             <PickField
-              id="cfg-stt-m"
-              label="STT model"
-              value={cfg.stt?.model || ""}
-              options={sttModels}
-              placeholder="nova-2"
-              onChange={(v) => patch((c) => (c.stt = { ...c.stt, model: v }))}
+              id="cfg-s2s-m"
+              label="S2S model"
+              value={cfg.s2s?.model || ""}
+              options={s2sModels}
+              placeholder={(S2S_HINTS[s2sProvider] || S2S_HINTS.openai).model}
+              onChange={(v) => patch((c) => (c.s2s = { ...c.s2s, model: v }))}
             />
-          </div>
-          <Backups role="stt" providers={providers.stt} value={cfg.stt?.failover} editable={editable}
-            onChange={(f) => patch((c) => (c.stt = withField(c.stt, "failover", f)))} />
-          {llmFields(false)}
-          <LlmTuning value={cfg.llm} onChange={(llm) => patch((c) => (c.llm = llm))} />
-          <Backups role="llm" providers={providers.llm} value={cfg.llm?.failover} editable={editable}
-            onChange={(f) => patch((c) => (c.llm = withField(c.llm, "failover", f)))} />
-          <div style={{ display: "flex", gap: 12 }}>
-            <div className="field" style={{ flex: 1 }}>
-              <label htmlFor="cfg-tts-p">TTS provider</label>
-              <select
-                id="cfg-tts-p"
-                className="input"
-                value={cfg.tts?.provider || "deepgram"}
-                onChange={(e) => patch((c) => (c.tts = { ...c.tts, provider: e.target.value, model: "" }))}
-              >
-                {providerOptions("tts", providers.tts)}
-              </select>
-              <ProviderKeyNote role="tts" provider={ttsProvider} cards={cards} />
-            </div>
             <PickField
-              id="cfg-tts-v"
+              id="cfg-s2s-v"
               label="Voice"
-              value={cfg.tts?.voice || ""}
-              options={voices}
-              placeholder="aura-2-helena-en"
-              onChange={(v) => patch((c) => (c.tts = { ...c.tts, voice: v }))}
+              value={cfg.s2s?.voice || ""}
+              options={s2sVoices}
+              placeholder={(S2S_HINTS[s2sProvider] || S2S_HINTS.openai).voice}
+              onChange={(v) => patch((c) => (c.s2s = { ...c.s2s, voice: v }))}
             />
           </div>
-          <Backups role="tts" providers={providers.tts} value={cfg.tts?.failover} editable={editable}
-            onChange={(f) => patch((c) => (c.tts = withField(c.tts, "failover", f)))} />
-          <Pronunciations
-            value={cfg.tts?.pronunciations}
-            warnings={(data.turncall_agent?.warnings || [])
-              .filter((w) => w.code.startsWith("pronunciation"))
-              .map((w) => w.message)}
-            editable={editable}
-            onChange={(m) => patch((c) => (c.tts = withField(c.tts, "pronunciations", m)))}
-          />
-          </>
-          )}
-          {usesAws && (
-            <div style={{ display: "flex", gap: 12 }}>
-              <div className="field" style={{ flex: 1 }}>
-                <label htmlFor="cfg-aws-region">AWS region</label>
-                <input
-                  id="cfg-aws-region"
-                  className="input"
-                  value={cfg.aws?.region || ""}
-                  placeholder="us-east-1"
-                  onChange={(e) =>
-                    patch((c) => {
-                      const region = e.target.value.trim();
-                      if (region) c.aws = { ...c.aws, region };
-                      else delete c.aws;
-                    })
-                  }
-                />
-                <p className="hint" style={{ margin: "4px 0 0" }}>
-                  Bedrock model availability is region-specific, and access is granted
-                  per model per region. Leave blank to use the server's AWS_REGION.
-                  Credentials are never entered in this form: an admin connects an
-                  AWS credential set on the Integrations page, and without one the
-                  server's own AWS credentials are used.
-                </p>
-              </div>
-            </div>
-          )}
-          </Section>
-
-          <Section id="turn-taking" title="Turn-taking and call limits">
-            <TurnTaking cfg={cfg} isS2S={isS2S} editable={editable}
-              onSet={(key, v) => setCfg((c: any) => withField(c, key, v))} />
-          </Section>
-
-          <Section id="limits" title="Usage limits" defaultOpen={false}>
-            <Limits agentId={agentId} editable={editable} />
-          </Section>
-
-          {!isS2S && (
-            <Section id="avatar" title="Video avatar" hint={cfg.avatar?.enabled ? cfg.avatar.provider : ""}>
-              <Avatar value={cfg.avatar} editable={editable}
-                onChange={(a) => setCfg((c: any) => withField(c, "avatar", a))} />
-            </Section>
-          )}
-
-          <Section
-            id="builtin-tools"
-            title="Built-in tools"
-            hint={tools.length || ""}
-          >
-            <div className="radio-row">
-              {BUILTIN_TOOLS.map((name) => (
-                <label key={name}>
-                  <input
-                    type="checkbox"
-                    checked={tools.includes(name)}
-                    onChange={(e) =>
-                      patch((c) => {
-                        const set = new Set(Array.isArray(c.tools) ? c.tools : []);
-                        e.target.checked ? set.add(name) : set.delete(name);
-                        c.tools = [...set];
-                      })
-                    }
-                  />{" "}
-                  {name}
-                </label>
-              ))}
-            </div>
-          </Section>
-
-          <Section id="guardrails" title="Guardrails" hint={topics.length || ""}>
-          <div className="field">
-            <label htmlFor="cfg-topics">Prohibited topics</label>
-            <input
-              id="cfg-topics"
-              className="input"
-              value={topics.join(", ")}
-              onChange={(e) =>
+          {s2sProvider === "openai_live" && (
+            <Delegation
+              value={cfg.s2s?.delegation}
+              models={delegateModels}
+              hasTools={
+                tools.length > 0 ||
+                customCount > 0 ||
+                (cfg.mcp_servers || []).length > 0 ||
+                (cfg.workspace_mcp_servers || []).length > 0
+              }
+              llmPicker={llmFields(true)}
+              editable={editable}
+              onChange={(d) =>
                 patch((c) => {
-                  const list = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
-                  c.guardrails = { ...c.guardrails, prohibited_topics: list };
+                  const { delegation: _old, ...rest } = c.s2s || {};
+                  c.s2s = d ? { ...rest, delegation: d } : rest;
                 })
               }
-              placeholder="e.g. medical advice, competitor pricing"
             />
-            <p className="hint" style={{ margin: "4px 0 0" }}>
-              Comma-separated — the agent refuses to discuss these.
-            </p>
-          </div>
-          </Section>
-
-          <ConnectedApps
-            apps={Array.isArray(cfg.integrations) ? (cfg.integrations as AttachmentValue[]) : []}
-            needs={Array.isArray(cfg.needs_integrations) ? (cfg.needs_integrations as string[]) : []}
-            catalog={catalog}
-            connected={connected}
-            runs={runs}
-            editable={editable}
-            onChange={(apps) =>
-              patch((c) => {
-                // Same rule as mcp_servers: omit the key rather than sending an
-                // empty array, so "none" is a removal and not a no-op.
-                if (apps.length) c.integrations = apps;
-                else delete c.integrations;
-              })
-            }
-          />
-          <McpServers
-            servers={Array.isArray(cfg.mcp_servers) ? cfg.mcp_servers : []}
-            registered={registered}
-            selected={Array.isArray(cfg.workspace_mcp_servers) ? cfg.workspace_mcp_servers : []}
-            onSelect={(ids) =>
-              patch((c) => {
-                // Same omit-when-empty rule as mcp_servers below.
-                if (ids.length) c.workspace_mcp_servers = ids;
-                else delete c.workspace_mcp_servers;
-              })
-            }
-            editable={editable}
-            onChange={(servers) =>
-              patch((c) => {
-                // Omit the key entirely when empty rather than sending [] — the
-                // mapper only forwards it when present, so an empty array would
-                // read as "no change" rather than "remove them".
-                if (servers.length) c.mcp_servers = servers;
-                else delete c.mcp_servers;
-              })
-            }
-          />
-          <Ambience
-            agentId={agentId}
-            value={cfg.ambience || undefined}
-            savedSound={(data.config as { ambience?: { sound?: string } } | null)?.ambience?.sound}
-            editable={editable}
-            onChange={(next) =>
-              patch((c) => {
-                // Absence is TurnCall's "off" — never send a null block.
-                if (next) c.ambience = next;
-                else delete c.ambience;
-              })
-            }
-          />
-          <Section
-            id="tool-server"
-            title="Tool server"
-            hint={cfg.server_url ? "your server" : "generated backend"}
-          >
-          <div className="field">
-            <label htmlFor="cfg-server-url">Tool server URL</label>
-            <input
-              id="cfg-server-url"
+          )}
+          </>
+        ) : (
+        <>
+        <div style={{ display: "flex", gap: 12 }}>
+          <div className="field" style={{ flex: 1 }}>
+            <label htmlFor="cfg-stt-p">STT provider</label>
+            <select
+              id="cfg-stt-p"
               className="input"
-              value={cfg.server_url || ""}
-              onChange={(e) => patch((c) => (c.server_url = e.target.value || null))}
-              placeholder="https://your-server.example (blank = generated backend)"
-            />
-            <p className="hint" style={{ margin: "4px 0 0" }}>
-              Where the agent's custom tools POST. Leave blank to use the generated backend.
-            </p>
+              value={cfg.stt?.provider || "deepgram"}
+              onChange={(e) => patch((c) => (c.stt = { ...c.stt, provider: e.target.value, model: "" }))}
+            >
+              {providerOptions("stt", providers.stt)}
+            </select>
+            <ProviderKeyNote role="stt" provider={sttProvider} cards={cards} />
           </div>
-     <p className="hint">
-            {customCount > 0 ? `${customCount} custom tool${customCount > 1 ? "s" : ""}. ` : ""}
-            Custom tools, speech-to-speech, voicemail, and analysis live in{" "}
-            <strong>Advanced (JSON)</strong>.
-          </p>
-          </Section>
+          <PickField
+            id="cfg-stt-m"
+            label="STT model"
+            value={cfg.stt?.model || ""}
+            options={sttModels}
+            placeholder="nova-2"
+            onChange={(v) => patch((c) => (c.stt = { ...c.stt, model: v }))}
+          />
         </div>
-      )}
+        <Backups role="stt" providers={providers.stt} value={cfg.stt?.failover} editable={editable}
+          onChange={(f) => patch((c) => (c.stt = withField(c.stt, "failover", f)))} />
+        {llmFields(false)}
+        <LlmTuning value={cfg.llm} onChange={(llm) => patch((c) => (c.llm = llm))} />
+        <Backups role="llm" providers={providers.llm} value={cfg.llm?.failover} editable={editable}
+          onChange={(f) => patch((c) => (c.llm = withField(c.llm, "failover", f)))} />
+        <div style={{ display: "flex", gap: 12 }}>
+          <div className="field" style={{ flex: 1 }}>
+            <label htmlFor="cfg-tts-p">TTS provider</label>
+            <select
+              id="cfg-tts-p"
+              className="input"
+              value={cfg.tts?.provider || "deepgram"}
+              onChange={(e) => patch((c) => (c.tts = { ...c.tts, provider: e.target.value, model: "" }))}
+            >
+              {providerOptions("tts", providers.tts)}
+            </select>
+            <ProviderKeyNote role="tts" provider={ttsProvider} cards={cards} />
+          </div>
+          <PickField
+            id="cfg-tts-v"
+            label="Voice"
+            value={cfg.tts?.voice || ""}
+            options={voices}
+            placeholder="aura-2-helena-en"
+            onChange={(v) => patch((c) => (c.tts = { ...c.tts, voice: v }))}
+          />
+        </div>
+        <Backups role="tts" providers={providers.tts} value={cfg.tts?.failover} editable={editable}
+          onChange={(f) => patch((c) => (c.tts = withField(c.tts, "failover", f)))} />
+        <Pronunciations
+          value={cfg.tts?.pronunciations}
+          warnings={(data.turncall_agent?.warnings || [])
+            .filter((w) => w.code.startsWith("pronunciation"))
+            .map((w) => w.message)}
+          editable={editable}
+          onChange={(m) => patch((c) => (c.tts = withField(c.tts, "pronunciations", m)))}
+        />
+        </>
+        )}
+        {usesAws && (
+          <div style={{ display: "flex", gap: 12 }}>
+            <div className="field" style={{ flex: 1 }}>
+              <label htmlFor="cfg-aws-region">AWS region</label>
+              <input
+                id="cfg-aws-region"
+                className="input"
+                value={cfg.aws?.region || ""}
+                placeholder="us-east-1"
+                onChange={(e) =>
+                  patch((c) => {
+                    const region = e.target.value.trim();
+                    if (region) c.aws = { ...c.aws, region };
+                    else delete c.aws;
+                  })
+                }
+              />
+              <p className="hint" style={{ margin: "4px 0 0" }}>
+                Bedrock model availability is region-specific, and access is granted
+                per model per region. Leave blank to use the server's AWS_REGION.
+                Credentials are never entered in this form: an admin connects an
+                AWS credential set on the Integrations page, and without one the
+                server's own AWS credentials are used.
+              </p>
+            </div>
+          </div>
+        )}
+        <Ambience
+          agentId={agentId}
+          value={cfg.ambience || undefined}
+          savedSound={(data.config as { ambience?: { sound?: string } } | null)?.ambience?.sound}
+          editable={editable}
+          onChange={(next) =>
+            patch((c) => {
+              // Absence is TurnCall's "off" — never send a null block.
+              if (next) c.ambience = next;
+              else delete c.ambience;
+            })
+          }
+        />
+      </>)}
 
-      <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10 }}>
-        <button className="btn btn-primary" onClick={save} disabled={saving || !editable}>
-          {saving ? "Saving…" : "Save"}
-        </button>
-        <span aria-live="polite" className="muted" style={{ fontSize: 13 }}>
-          {editable ? msg : "Read-only — viewers can't edit agents."}
-        </span>
-      </div>
-      {err && (
-        <div className="callout error" role="alert" style={{ marginTop: 10 }}>
-          <strong>Not saved.</strong> {err}
+      {section === "tools" && (<>
+        {toolStatuses && Object.keys(toolStatuses).length > 0 && (
+          <div style={{ marginBottom: 10 }}>
+            {Object.entries(toolStatuses).map(([name, s]) => (
+              <span key={name} className={`chip ${s}`}>{name} · {s}</span>
+            ))}
+            {stubs.length > 0 && (
+              <p className="hint" style={{ margin: "2px 0 0" }}>
+                Stub tools return fake data — fill in real logic in the generated repo.
+              </p>
+            )}
+          </div>
+        )}
+        {Object.values(toolStatuses || {}).includes("external") && data.tool_signing_secret && (
+          <div className="callout info">
+            <strong>Tool signing secret</strong>
+            <p>
+              Tools marked <code>external</code> POST to your server, signed with{" "}
+              <code>X-TurnCall-Signature</code> (HMAC-SHA256 over{" "}
+              <code>{"{timestamp}.{body}"}</code>). Verify with this secret:
+            </p>
+            <code className="block">{data.tool_signing_secret}</code>
+          </div>
+        )}
+
+        <h3>Built-in tools</h3>
+        <div className="radio-row">
+          {BUILTIN_TOOLS.map((name) => (
+            <label key={name}>
+              <input
+                type="checkbox"
+                checked={tools.includes(name)}
+                onChange={(e) =>
+                  patch((c) => {
+                    const set = new Set(Array.isArray(c.tools) ? c.tools : []);
+                    e.target.checked ? set.add(name) : set.delete(name);
+                    c.tools = [...set];
+                  })
+                }
+              />{" "}
+              {name}
+            </label>
+          ))}
         </div>
-      )}
-    </div>
+        <ConnectedApps
+          apps={Array.isArray(cfg.integrations) ? (cfg.integrations as AttachmentValue[]) : []}
+          needs={Array.isArray(cfg.needs_integrations) ? (cfg.needs_integrations as string[]) : []}
+          catalog={catalog}
+          connected={connected}
+          runs={runs}
+          editable={editable}
+          onChange={(apps) =>
+            patch((c) => {
+              // Same rule as mcp_servers: omit the key rather than sending an
+              // empty array, so "none" is a removal and not a no-op.
+              if (apps.length) c.integrations = apps;
+              else delete c.integrations;
+            })
+          }
+        />
+        <McpServers
+          servers={Array.isArray(cfg.mcp_servers) ? cfg.mcp_servers : []}
+          registered={registered}
+          selected={Array.isArray(cfg.workspace_mcp_servers) ? cfg.workspace_mcp_servers : []}
+          onSelect={(ids) =>
+            patch((c) => {
+              // Same omit-when-empty rule as mcp_servers below.
+              if (ids.length) c.workspace_mcp_servers = ids;
+              else delete c.workspace_mcp_servers;
+            })
+          }
+          editable={editable}
+          onChange={(servers) =>
+            patch((c) => {
+              // Omit the key entirely when empty rather than sending [] — the
+              // mapper only forwards it when present, so an empty array would
+              // read as "no change" rather than "remove them".
+              if (servers.length) c.mcp_servers = servers;
+              else delete c.mcp_servers;
+            })
+          }
+        />
+        <h3>Tool server</h3>
+        <div className="field">
+          <label htmlFor="cfg-server-url">Tool server URL</label>
+          <input
+            id="cfg-server-url"
+            className="input"
+            value={cfg.server_url || ""}
+            onChange={(e) => patch((c) => (c.server_url = e.target.value || null))}
+            placeholder="https://your-server.example (blank = generated backend)"
+          />
+          <p className="hint" style={{ margin: "4px 0 0" }}>
+            Where the agent's custom tools POST. Leave blank to use the generated backend.
+          </p>
+        </div>
+        <p className="hint">
+          {customCount > 0 ? `${customCount} custom tool${customCount > 1 ? "s" : ""}. ` : ""}
+          Custom tools are edited in <strong>Advanced (JSON)</strong>.
+        </p>
+      </>)}
+
+      {section === "turn-taking" && (<>
+        <TurnTaking cfg={cfg} isS2S={isS2S} editable={editable}
+          onSet={(key, v) => setCfg((c: any) => withField(c, key, v))} />
+        <h3>Usage limits</h3>
+        <Limits agentId={agentId} editable={editable} />
+      </>)}
+
+      {section === "guardrails" && (<>
+        <div className="field">
+          <label htmlFor="cfg-topics">Prohibited topics</label>
+          <input
+            id="cfg-topics"
+            className="input"
+            value={topics.join(", ")}
+            onChange={(e) =>
+              patch((c) => {
+                const list = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
+                c.guardrails = { ...c.guardrails, prohibited_topics: list };
+              })
+            }
+            placeholder="e.g. medical advice, competitor pricing"
+          />
+          <p className="hint" style={{ margin: "4px 0 0" }}>
+            Comma-separated — the agent refuses to discuss these.
+          </p>
+        </div>
+      </>)}
+
+      {section === "avatar" && (isS2S ? (
+        <p className="hint">Video avatars need the cascade pipeline (STT → LLM → TTS); this agent is speech-to-speech.</p>
+      ) : (
+        <>
+          <Avatar value={cfg.avatar} editable={editable}
+            onChange={(a) => setCfg((c: any) => withField(c, "avatar", a))} />
+        </>
+      ))}
+
+      {section === "advanced" && <AdvancedJson />}
+    </section>
+  );
+}
+
+// The whole config as JSON. Its text is its own state: a half-typed edit that
+// does not parse yet leaves the draft as it was, and blocks Save until it does.
+function AdvancedJson() {
+  const { draft, setDraft, setJsonError } = useAgent();
+  const [text, setText] = useState(() => JSON.stringify(draft, null, 2));
+  const [error, setError] = useState("");
+  // Leaving the section discards unparsed text, so it must stop blocking Save.
+  useEffect(() => () => setJsonError(""), [setJsonError]);
+
+  function onJson(next: string) {
+    setText(next);
+    try {
+      setDraft(JSON.parse(next));
+      setError("");
+      setJsonError("");
+    } catch (e) {
+      const m = e instanceof Error ? e.message : "invalid JSON";
+      setError(m);
+      setJsonError(m);
+    }
+  }
+
+  return (
+    <>
+      <textarea
+        className="input code"
+        style={{ minHeight: "60vh" }}
+        aria-label="Agent configuration JSON"
+        value={text}
+        onChange={(e) => onJson(e.target.value)}
+      />
+      {error && <p className="error-text">Invalid JSON: {error}</p>}
+    </>
   );
 }
