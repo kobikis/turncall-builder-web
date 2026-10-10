@@ -5,9 +5,11 @@ import { isAdmin } from "./roles";
 import WorkspaceSwitcher from "./components/WorkspaceSwitcher";
 import { applyThemePref, getThemePref, ThemePref } from "./theme";
 
-const icon = (paths: ReactNode) => (
-  <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor"
-    strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+// `box` lets a 24-unit icon (Lucide's grid) sit beside the 16-unit ones at the
+// same stroke weight.
+const icon = (paths: ReactNode, box = 16) => (
+  <svg width="18" height="18" viewBox={`0 0 ${box} ${box}`} aria-hidden="true" fill="none" stroke="currentColor"
+    strokeWidth={(1.3 * box) / 16} strokeLinecap="round" strokeLinejoin="round">
     {paths}
   </svg>
 );
@@ -29,7 +31,12 @@ const ICONS = {
     <circle cx="6" cy="6" r="2.2" /><circle cx="11.5" cy="7" r="1.7" />
     <path d="M2 13c.6-2 2.1-3 4-3s3.4 1 4 3M10.5 10.2c1.6 0 2.8.9 3.3 2.6" />
   </>),
-  skills: icon(<path d="M8 2.5 9.6 6l3.9.4-2.9 2.6.8 3.8L8 10.9l-3.4 1.9.8-3.8-2.9-2.6L6.4 6 8 2.5Z" />),
+  // A scroll (Lucide scroll-text): the icon Claude gives Skills, where the
+  // SKILL.md format comes from — written instructions the model reads.
+  skills: icon(<>
+    <path d="M15 12h-5M15 8h-5M19 17V5a2 2 0 0 0-2-2H4" />
+    <path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3" />
+  </>, 24),
 };
 
 function RailLink({ to, label, children }: { to: string; label: string; children: ReactNode }) {
