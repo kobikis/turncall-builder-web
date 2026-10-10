@@ -9,7 +9,7 @@ import { Agent, ApiResponse, PhoneNumber } from "../types";
 
 type Num = PhoneNumber;
 
-const ROUTING_LABELS: Record<string, string> = {
+export const ROUTING_LABELS: Record<string, string> = {
   agent: "agent",
   agent_call_init: "agent + caller info",
   webhook: "custom call-init",

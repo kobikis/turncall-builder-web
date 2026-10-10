@@ -11,12 +11,9 @@ import Members from "./pages/Members";
 import AgentsList from "./pages/AgentsList";
 import NewAgent from "./pages/NewAgent";
 import AgentPage from "./pages/agent/AgentPage";
-import ConfigTab from "./pages/agent/ConfigTab";
-import TestTab from "./pages/agent/TestTab";
+import Build from "./pages/agent/Build";
 import CallsTab from "./pages/agent/CallsTab";
 import CampaignsTab from "./pages/agent/CampaignsTab";
-import KnowledgeTab from "./pages/agent/KnowledgeTab";
-import TakeawaysTab from "./pages/agent/TakeawaysTab";
 import EvalsTab from "./pages/agent/EvalsTab";
 import CodeTab from "./pages/agent/CodeTab";
 import GitHubSettings from "./pages/GitHubSettings";
@@ -113,12 +110,14 @@ export default function App() {
           }
         />
         <Route path="agents/:id" element={<AgentPage />}>
-          <Route index element={<ConfigTab />} />
-          <Route path="test" element={<TestTab />} />
+          <Route index element={<Build />} />
+          <Route path="build/:section" element={<Build />} />
+          {/* Test is Build's side panel now; Knowledge and Takeaways are sections. */}
+          <Route path="test" element={<Navigate to=".." replace />} />
+          <Route path="knowledge" element={<Navigate to="../build/knowledge" replace />} />
+          <Route path="takeaways" element={<Navigate to="../build/takeaways" replace />} />
           <Route path="calls" element={<CallsTab />} />
           <Route path="campaigns" element={<CampaignsTab />} />
-          <Route path="knowledge" element={<KnowledgeTab />} />
-          <Route path="takeaways" element={<TakeawaysTab />} />
           <Route path="evals" element={<EvalsTab />} />
           <Route path="code" element={<CodeTab />} />
         </Route>
