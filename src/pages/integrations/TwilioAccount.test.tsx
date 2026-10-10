@@ -15,7 +15,7 @@ vi.mock("../../api", () => ({
   ApiError: class ApiError extends Error {},
 }));
 
-import { TwilioAccount } from "./TwilioAccount";
+import { TwilioCard } from "./TwilioAccount";
 
 const AC = "AC" + "e".repeat(32);
 
@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 it("connects with a masked token and never shows it again", async () => {
-  render(<TwilioAccount isAdmin />);
+  render(<TwilioCard isAdmin />);
   fireEvent.click(await screen.findByText("Connect"));
   fireEvent.change(screen.getByLabelText("Twilio Account SID"), { target: { value: AC } });
   const token = screen.getByLabelText("Twilio Auth Token") as HTMLInputElement;
@@ -49,7 +49,7 @@ it("connects with a masked token and never shows it again", async () => {
 it("says which numbers a rotation could not reach", async () => {
   status = { connected: true, account_sid: AC, last4: "1234", numbers: [{ id: "pn-1", e164: "+1555" }] };
   putResult = { numbers: [{ id: "pn-1", e164: "+1555", state: "failed", error: "not on this account" }] };
-  render(<TwilioAccount isAdmin />);
+  render(<TwilioCard isAdmin />);
   fireEvent.click(await screen.findByText("Manage"));
   fireEvent.change(screen.getByLabelText("Twilio Auth Token"), { target: { value: "new" } });
   fireEvent.click(screen.getByText("Replace"));
@@ -58,7 +58,7 @@ it("says which numbers a rotation could not reach", async () => {
 
 it("shows a non-admin the status only", async () => {
   status = { connected: true, account_sid: AC, last4: "1234", numbers: [] };
-  render(<TwilioAccount isAdmin={false} />);
+  render(<TwilioCard isAdmin={false} />);
   await screen.findByText(/token ····1234/);
   expect(screen.queryByLabelText("Twilio Auth Token")).toBeNull();
   expect(screen.queryByText("Disconnect")).toBeNull();

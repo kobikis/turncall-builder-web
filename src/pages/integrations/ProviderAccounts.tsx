@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../api";
+import { TwilioCard } from "./TwilioAccount";
 import { tint } from "../../apps";
 
 // A Workspace's own provider accounts (ADR-0023, #44-#46).
@@ -450,35 +451,58 @@ export function ProviderAccounts({ isAdmin }: { isAdmin: boolean }) {
 
   const onData = (next: ProviderCard[] | null) => (next ? setCards(next) : void load());
 
-  const groups = GROUP_ORDER.map((role) => ({
+  // Carrier cards are not a group here: they are under Telephony, with Twilio's.
+  const groups = GROUP_ORDER.filter((role) => role !== "carrier").map((role) => ({
     role,
     cards: cards.filter((c) => primaryRole(c) === role),
   })).filter((g) => g.cards.length);
+  const carriers = cards.filter((c) => primaryRole(c) === "carrier");
 
   return (
-    <section aria-labelledby="provider-accounts" className="int-section">
-      <h3 id="provider-accounts">Provider accounts</h3>
-      <p className="lead">
-        Your own keys for the services an agent's calls run on — stored encrypted,
-        checked when you save, never shown again. Without one, calls use the
-        platform's key.
-      </p>
-      {!isAdmin && <p className="muted">Only workspace admins can enter or remove a key.</p>}
-      {error && (
-        <div className="callout error" role="alert">
-          {error}
-        </div>
-      )}
-      {groups.map((g) => (
-        <div key={g.role}>
-          <div className="int-group-title">{ROLE_LABELS[g.role]}</div>
-          <div className="integration-grid">
-            {g.cards.map((card) => (
-              <Card key={card.provider} card={card} isAdmin={isAdmin} onData={onData} />
-            ))}
+    <>
+      <section aria-labelledby="provider-accounts" className="int-section">
+        <h3 id="provider-accounts">Provider accounts</h3>
+        <p className="lead">
+          Your own keys for the services an agent's calls run on — stored encrypted,
+          checked when you save, never shown again. Without one, calls use the
+          platform's key.
+        </p>
+        {!isAdmin && <p className="muted">Only workspace admins can enter or remove a key.</p>}
+        {error && (
+          <div className="callout error" role="alert">
+            {error}
           </div>
+        )}
+        {groups.map((g) => (
+          <div key={g.role}>
+            <div className="int-group-title">{ROLE_LABELS[g.role]}</div>
+            <div className="integration-grid">
+              {g.cards.map((card) => (
+                <Card key={card.provider} card={card} isAdmin={isAdmin} onData={onData} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </section>
+
+      {/* Every account a phone number runs on, whichever way it is stored: a
+          Twilio account rides on each number TurnCall binds (ADR-0023), a
+          Telnyx or Asterisk one is a project credential like the keys above. */}
+      <section aria-labelledby="telephony" className="int-section">
+        <h3 id="telephony">Telephony</h3>
+        <p className="lead">
+          The accounts your phone numbers call and answer on. Connect Twilio once,
+          then pick its numbers when adding a phone number; a Telnyx or Asterisk
+          account serves every number on that carrier.
+        </p>
+        {!isAdmin && <p className="muted">Only workspace admins can connect or remove an account.</p>}
+        <div className="integration-grid">
+          <TwilioCard isAdmin={isAdmin} />
+          {carriers.map((card) => (
+            <Card key={card.provider} card={card} isAdmin={isAdmin} onData={onData} />
+          ))}
         </div>
-      ))}
-    </section>
+      </section>
+    </>
   );
 }

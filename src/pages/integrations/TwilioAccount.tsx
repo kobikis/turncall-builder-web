@@ -3,7 +3,8 @@ import { api } from "../../api";
 
 // The Workspace's Twilio account (ADR-0023). Connected once here and chosen on
 // the add-number form, instead of pasting a token for every number. Saving it
-// again re-sends the new pair to every number bound with it.
+// again re-sends the new pair to every number bound with it. A card in the
+// Telephony section, beside the Telnyx and Asterisk accounts (ProviderAccounts).
 
 export type TwilioStatus = {
   connected: boolean;
@@ -15,7 +16,7 @@ export type TwilioStatus = {
 
 type Resent = { id: string; e164: string; state: string; error?: string | null };
 
-export function TwilioAccount({ isAdmin }: { isAdmin: boolean }) {
+export function TwilioCard({ isAdmin }: { isAdmin: boolean }) {
   const [status, setStatus] = useState<TwilioStatus | null>(null);
   const [sid, setSid] = useState("");
   const [token, setToken] = useState("");
@@ -83,41 +84,34 @@ export function TwilioAccount({ isAdmin }: { isAdmin: boolean }) {
   };
 
   return (
-    <section aria-labelledby="twilio-account" className="int-section">
-      <h3 id="twilio-account">Telephony</h3>
-      <p className="lead">
-        Connect your Twilio account once, then pick its numbers when adding a phone
-        number instead of entering credentials each time.
-      </p>
-      <div className="integration-grid">
-        <div className="integration-card provider-card" data-testid="twilio-card">
-          <div className="head">
-            <span className="app-tile" aria-hidden="true" style={{ background: "#f22f46" }}>T</span>
-            <div className="title">
-              <div className="name">Twilio</div>
-              <div className="roles">Phone numbers · Voice · SMS</div>
-            </div>
+    <>
+      <div className="integration-card provider-card" data-testid="twilio-card">
+        <div className="head">
+          <span className="app-tile" aria-hidden="true" style={{ background: "#f22f46" }}>T</span>
+          <div className="title">
+            <div className="name">Twilio</div>
+            <div className="roles">Phone numbers · Voice · SMS</div>
           </div>
-          <p className="desc">
-            {status.connected
-              ? `Account ${status.account_sid?.slice(0, 10)}… · token ····${status.last4} · ${status.numbers.length} number(s)`
-              : "Numbers use per-number credentials or the platform's account."}
+        </div>
+        <p className="desc">
+          {status.connected
+            ? `Account ${status.account_sid?.slice(0, 10)}… · token ····${status.last4} · ${status.numbers.length} number(s)`
+            : "Numbers use per-number credentials or the platform's account."}
+        </p>
+        {failed.length > 0 && (
+          <p className="desc meta danger">
+            Not updated: {failed.map((n) => n.e164).join(", ")}
           </p>
-          {failed.length > 0 && (
-            <p className="desc meta danger">
-              Not updated: {failed.map((n) => n.e164).join(", ")}
-            </p>
+        )}
+        <div className="foot">
+          <span className={`badge app-status ${status.connected ? "connected" : "disconnected"}`}>
+            {status.connected ? "Connected" : "Not connected"}
+          </span>
+          {isAdmin && (
+            <button type="button" className="btn" onClick={() => setOpen(true)}>
+              {status.connected ? "Manage" : "Connect"}
+            </button>
           )}
-          <div className="foot">
-            <span className={`badge app-status ${status.connected ? "connected" : "disconnected"}`}>
-              {status.connected ? "Connected" : "Not connected"}
-            </span>
-            {isAdmin && (
-              <button type="button" className="btn" onClick={() => setOpen(true)}>
-                {status.connected ? "Manage" : "Connect"}
-              </button>
-            )}
-          </div>
         </div>
       </div>
 
@@ -213,6 +207,6 @@ export function TwilioAccount({ isAdmin }: { isAdmin: boolean }) {
           </div>
         </div>
       )}
-    </section>
+    </>
   );
 }
