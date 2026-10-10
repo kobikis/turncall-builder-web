@@ -7,7 +7,6 @@ import { describe, tint, type CatalogApp } from "../apps";
 import { McpRegistry } from "./integrations/McpRegistry";
 import { PipedreamProject } from "./integrations/PipedreamProject";
 import { ProviderAccounts } from "./integrations/ProviderAccounts";
-import { TwilioAccount } from "./integrations/TwilioAccount";
 
 // Everything this Workspace is connected to, on one page (ADR-0023): its own
 // provider accounts, its registered MCP servers, and its Connected apps. The
@@ -133,7 +132,6 @@ export default function Integrations() {
       </div>
 
       <ProviderAccounts isAdmin={isAdmin} />
-      <TwilioAccount isAdmin={isAdmin} />
       <McpRegistry isAdmin={isAdmin} />
 
       <section aria-labelledby="connected-apps" className="int-section">
