@@ -29,7 +29,13 @@ const ICONS = {
     <circle cx="6" cy="6" r="2.2" /><circle cx="11.5" cy="7" r="1.7" />
     <path d="M2 13c.6-2 2.1-3 4-3s3.4 1 4 3M10.5 10.2c1.6 0 2.8.9 3.3 2.6" />
   </>),
-  skills: icon(<path d="M8 2.5 9.6 6l3.9.4-2.9 2.6.8 3.8L8 10.9l-3.4 1.9.8-3.8-2.9-2.6L6.4 6 8 2.5Z" />),
+  // A document with a sparkle: a skill is written guidance the builder's model
+  // loads when it applies. (A book read as the Knowledge base; a mortarboard as
+  // training, which a skill is not; a wand as a "generate" button.)
+  skills: icon(<>
+    <path d="M9.5 2h-5A1.5 1.5 0 0 0 3 3.5v9A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5V5.5L9.5 2ZM9.5 2v3.5H13" />
+    <path d="M8 7.2 8.55 9 10.3 9.55 8.55 10.1 8 11.9 7.45 10.1 5.7 9.55 7.45 9Z" />
+  </>),
 };
 
 function RailLink({ to, label, children }: { to: string; label: string; children: ReactNode }) {
