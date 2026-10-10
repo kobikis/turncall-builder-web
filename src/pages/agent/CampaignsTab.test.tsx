@@ -16,6 +16,8 @@ vi.mock("../../api", () => ({
     sent.push({ path, init });
     if (path === "/phone-numbers")
       return { data: { phone_numbers: [{ id: "pn1", e164: "+15550001111", agent_id: "a1", routing_type: "agent" }] } };
+    if (path.endsWith("/do-not-call") && !init)
+      return { data: [{ id: "s1", number: "+15553334444", created_at: "2026-10-09T10:00:00Z" }], total: 1 };
     if (/\/campaigns\/c\d\/targets/.test(path)) return { data: targets, total: targets.length };
     if (/\/campaigns\/c\d$/.test(path)) return { data: campaigns[0] };
     if (path.startsWith("/agents/a1/campaigns") && !init) return { data: campaigns, total: campaigns.length };
@@ -55,6 +57,14 @@ it("lists campaigns with their progress", async () => {
   show();
   expect(await screen.findByText("Renewals")).toBeTruthy();
   expect(screen.getByText("1 pending · 1 calling · 2 done · 1 failed")).toBeTruthy();
+});
+
+it("the campaigns list carries the agent's do-not-call list", async () => {
+  show();
+  const section = await screen.findByRole("group", { name: "Do-not-call list" });
+  expect(await within(section).findByText("+15553334444")).toBeTruthy();
+  expect(within(section).getByText(/campaigns never call/i)).toBeTruthy();
+  expect(within(section).getByLabelText(/add a number/i)).toBeTruthy(); // an editor can change it
 });
 
 it("opens a campaign: its targets and outcomes, and pause / cancel", async () => {

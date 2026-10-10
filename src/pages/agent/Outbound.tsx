@@ -1,6 +1,7 @@
-// Calling a number from an agent, and the agent's do-not-call list (#66).
-// The list is TurnCall's suppression list for the agent's project: every
-// outbound call checks it, and the do_not_call tool adds to it during calls.
+// What an agent's campaigns dial from, and the numbers they never dial (#66).
+// The do-not-call list is TurnCall's suppression list for the agent's project:
+// every outbound call checks it, and the do_not_call tool adds to it during
+// calls. Campaigns are the console's only way to call out.
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../api";
 import { fmtTime } from "../../dates";
@@ -22,67 +23,6 @@ export function useDialingNumbers(agentId: string): { numbers: PhoneNumber[] | n
 }
 const E164_PLACEHOLDER = "+15551234567";
 const message = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong.");
-
-export function CallANumber({ agentId, onPlaced }: { agentId: string; onPlaced: () => void }) {
-  const { numbers, error: loadError } = useDialingNumbers(agentId);
-  const [chosen, setFrom] = useState("");
-  const from = chosen || numbers?.[0]?.id || "";
-  const [to, setTo] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [callError, setError] = useState("");
-  const error = callError || loadError;
-  const [placed, setPlaced] = useState("");
-
-  const call = async () => {
-    const toNumber = to.trim();
-    setBusy(true);
-    setError("");
-    setPlaced("");
-    try {
-      await api(`/agents/${agentId}/calls/outbound`, {
-        method: "POST",
-        body: JSON.stringify({ from_number_id: from, to_number: toNumber }),
-      });
-      setPlaced(`Calling ${toNumber} — it shows in the list below.`);
-      onPlaced();
-    } catch (e) {
-      setError(message(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (numbers === null) return error ? <p role="alert" className="error-text">{error}</p> : null;
-  if (numbers.length === 0) {
-    return (
-      <p className="hint">
-        No phone number routed to this agent — bind one on the Phone Numbers page to call out from it.
-      </p>
-    );
-  }
-  return (
-    <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 10 }}>
-      <div className="field">
-        <label htmlFor="out-from">Call from</label>
-        <select id="out-from" className="input" value={from} onChange={(e) => setFrom(e.target.value)}>
-          {numbers.map((n) => (
-            <option key={n.id} value={n.id}>{n.label ? `${n.e164} — ${n.label}` : n.e164}</option>
-          ))}
-        </select>
-      </div>
-      <div className="field">
-        <label htmlFor="out-to">Number to call</label>
-        <input id="out-to" className="input" value={to} placeholder={E164_PLACEHOLDER}
-          onChange={(e) => setTo(e.target.value)} />
-      </div>
-      <button className="btn btn-primary" disabled={busy || !from || !to.trim()} onClick={call}>
-        Call
-      </button>
-      {error && <p role="alert" className="error-text" style={{ flexBasis: "100%" }}>{error}</p>}
-      {placed && <p className="hint" style={{ flexBasis: "100%", margin: 0 }}>{placed}</p>}
-    </div>
-  );
-}
 
 export function DoNotCallList({ agentId, editable }: { agentId: string; editable: boolean }) {
   const [entries, setEntries] = useState<Entry[] | null>(null);
@@ -126,7 +66,8 @@ export function DoNotCallList({ agentId, editable }: { agentId: string; editable
   return (
     <div>
       <p className="hint" style={{ marginTop: 0 }}>
-        Numbers this agent never calls. The do_not_call tool adds callers who ask not to be called again.
+        Numbers this agent's campaigns never call — a target on the list ends suppressed. The do_not_call
+        tool adds callers who ask not to be called again.
       </p>
       {editable && (
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 8 }}>
