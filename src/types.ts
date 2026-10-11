@@ -15,7 +15,8 @@ export type Invite = { id: string; email: string; role: Role; token: string };
 export type Backend = {
   port: number;
   status: string; // running | degraded | failed | stopped | generating | deleted
-  browser_url?: string;
+  browser_url?: string; // the API's relay to the backend, under /api
+
   logs?: string;
   error?: string;
 };

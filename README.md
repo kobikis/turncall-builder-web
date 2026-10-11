@@ -128,6 +128,12 @@ Other targets: `make build` (type-check + prod build), `make preview`,
 
 > The dev port is pinned to 5173 so the Google OAuth redirect URI stays stable.
 
+### Container image
+
+`Dockerfile` builds the console and serves it with nginx, which proxies `/api`
+to `BUILDER_API_URL` (default `http://builder-api:8000`) the way Vite's dev
+proxy does. The Helm chart in [turncall-charts](https://github.com/kobikis/turncall-charts) runs it (`builder.enabled`).
+
 ### Log in (local dev)
 
 Skip Google OAuth: in `turncall-builder-api`, run `make seed-guest` once, then
