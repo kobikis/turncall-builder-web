@@ -132,7 +132,7 @@ Other targets: `make build` (type-check + prod build), `make preview`,
 
 `Dockerfile` builds the console and serves it with nginx, which proxies `/api`
 to `BUILDER_API_URL` (default `http://builder-api:8000`) the way Vite's dev
-proxy does. builder-api's Helm chart (`charts/turncall-builder`) runs it.
+proxy does. The Helm chart in [turncall-charts](https://github.com/kobikis/turncall-charts) runs it (`builder.enabled`).
 
 ### Log in (local dev)
 
