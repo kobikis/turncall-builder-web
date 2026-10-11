@@ -134,6 +134,11 @@ Other targets: `make build` (type-check + prod build), `make preview`,
 to `BUILDER_API_URL` (default `http://builder-api:8000`) the way Vite's dev
 proxy does. The Helm chart in [turncall-charts](https://github.com/kobikis/turncall-charts) runs it (`builder.enabled`).
 
+Published to `ghcr.io/kobikis/turncall-builder-web` (amd64 + arm64,
+`.github/workflows/publish.yml`): `:main` and `:sha-<commit>` on every merge to
+`main`; `:1.2.3`, `:1.2` and `:latest` on a release (`gh release create v1.2.3
+--generate-notes`).
+
 ### Log in (local dev)
 
 Skip Google OAuth: in `turncall-builder-api`, run `make seed-guest` once, then
