@@ -19,17 +19,16 @@ function EventsFeed({ browserUrl }: { browserUrl: string }) {
 
   const poll = useCallback(async () => {
     try {
-      // A timeout, because this one goes straight to the agent's container
-      // rather than through the proxy. A container that accepts the connection
-      // and never answers — one starting, wedged, or paused — leaves the
-      // promise pending forever, `usePoll` never starts another (its in-flight
-      // guard is doing its job), and the feed stops for good: no new events,
-      // no error, because the catch below never runs.
-      const r = await fetch(`${browserUrl}/events`, {
+      // A timeout, because the API relays this to the agent's backend
+      // (browser_url is that relay). A backend that accepts the connection and
+      // never answers — one starting, wedged, or paused — leaves the promise
+      // pending forever, `usePoll` never starts another (its in-flight guard
+      // is doing its job), and the feed stops for good: no new events, no
+      // error, because the catch below never runs. api(), not fetch: the relay
+      // is a builder route, scoped by the workspace header like the rest.
+      const body = await api(`${browserUrl}/events`, {
         signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
       });
-      if (!r.ok) throw new Error(`events ${r.status}`);
-      const body = await r.json();
       setEvents(body.data.events);
       setPollError(false);
       fails.current = 0;
@@ -48,7 +47,7 @@ function EventsFeed({ browserUrl }: { browserUrl: string }) {
     <div className="card" style={{ flex: 1, overflowY: "auto", padding: "6px 12px" }}>
       {pollError && (
         <p role="alert" className="error-text">
-          Can't reach the backend at {browserUrl}. Is its container running?
+          Can't reach this agent's backend. Is it running?
         </p>
       )}
       {!pollError && events.length === 0 && <p className="muted">Waiting for call events…</p>}

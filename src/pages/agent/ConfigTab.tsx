@@ -163,9 +163,9 @@ export default function ConfigTab({ section }: { section: SectionId }) {
       .catch(() => {});
   }, []);
 
-  // What this agent's Automations actually did (#47). Straight from the
-  // generated backend, the way the Calls tab reads its `/events` — the builder
-  // is not in the event path, so nothing here knows but that container.
+  // What this agent's Automations actually did (#47). From the generated
+  // backend, relayed by the API the way the Calls tab reads its `/events` —
+  // the builder is not in the event path, so nothing but the backend knows.
   //
   // Unreachable stays empty rather than becoming an error: this is a status line
   // beside a setting, and a backend that is merely stopped must not make the
@@ -174,10 +174,9 @@ export default function ConfigTab({ section }: { section: SectionId }) {
   useEffect(() => {
     if (!browserUrl) return;
     let live = true;
-    // Same trap as the Calls tab's event feed: a direct hop to the agent's
-    // container, which can accept a connection and never answer.
-    fetch(`${browserUrl}/automations`, { signal: AbortSignal.timeout(5000) })
-      .then((r) => (r.ok ? r.json() : null))
+    // Same trap as the Calls tab's event feed: relayed to the agent's
+    // backend, which can accept a connection and never answer.
+    api(`${browserUrl}/automations`, { signal: AbortSignal.timeout(5000) })
       .then((b) => { if (live && b) setRuns(b.data.runs); })
       .catch(() => {});
     return () => { live = false; };
