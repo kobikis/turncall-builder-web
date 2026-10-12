@@ -26,7 +26,7 @@ export const SECTIONS: { id: SectionId; title: string; keys?: string[] }[] = [
     id: "turn-taking",
     title: "Turn-taking and limits",
     keys: [
-      "smart_turn_detection", "interruption_enabled", "smart_turn_stop_secs", "silence_timeout_ms",
+      "smart_turn_detection", "interruption_enabled", "greeting_interruptible", "smart_turn_stop_secs", "silence_timeout_ms",
       "user_idle_timeout_ms", "max_call_duration_seconds", "idle_message", "language",
     ],
   },
