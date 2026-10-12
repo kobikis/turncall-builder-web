@@ -45,7 +45,7 @@ afterEach(() => {
   cleanup();
 });
 
-const feed = () => Array.from(document.querySelectorAll(".event-row code")).map((e) => e.textContent);
+const feed = () => Array.from(document.querySelectorAll(".event-row summary code")).map((e) => e.textContent);
 
 it("follows the newest call, then the one opened", async () => {
   render(<CallsTab />);
@@ -59,4 +59,15 @@ it("follows the newest call, then the one opened", async () => {
   await screen.findByText("transcript.final");
   expect(feed()).toEqual(["call.started", "transcript.final"]);
   expect(requested).toContain("/relay/events?call_id=old");
+});
+
+it("a row reads time first, and opening it shows the whole event", async () => {
+  render(<CallsTab />);
+  const row = (await screen.findByText("tool.result")).closest("details")!;
+  const summary = row.querySelector("summary")!;
+  expect(summary.firstElementChild?.tagName).toBe("SPAN"); // the time, then the type
+  expect((row as HTMLDetailsElement).open).toBe(false);
+  fireEvent.click(summary);
+  expect((row as HTMLDetailsElement).open).toBe(true);
+  expect(row.querySelector(".event-data")?.textContent).toContain('"event_id": "tool.result-new-5"');
 });

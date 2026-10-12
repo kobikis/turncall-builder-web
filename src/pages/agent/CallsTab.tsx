@@ -59,10 +59,13 @@ export function EventsFeed({ browserUrl, callId }: { browserUrl: string; callId:
       {!callId && <p className="muted">No calls yet.</p>}
       {callId && !pollError && shown.length === 0 && <p className="muted">Waiting for this call's events…</p>}
       {shown.map((e, i) => (
-        <div key={e.event_id ?? i} className="event-row">
-          <code>{e.event}</code>
-          <span className="muted">{e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : ""}</span>
-        </div>
+        <details key={e.event_id ?? i} className="event-row">
+          <summary>
+            <span className="muted">{e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : ""}</span>
+            <code>{e.event}</code>
+          </summary>
+          <pre className="event-data">{JSON.stringify(e, null, 2)}</pre>
+        </details>
       ))}
     </div>
   );
