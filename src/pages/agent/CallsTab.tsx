@@ -12,12 +12,16 @@ import CallDrawer from "./CallDrawer";
 // before the next tick rather than never.
 const POLL_TIMEOUT_MS = 5000;
 
-function EventsFeed({ browserUrl }: { browserUrl: string }) {
+// One call's events, as the agent's backend received them: the open call, else
+// the newest. Events with no call (a call refused over the limit, chat
+// sessions) are not shown here.
+export function EventsFeed({ browserUrl, callId }: { browserUrl: string; callId: string | null }) {
   const [events, setEvents] = useState<any[]>([]);
   const [pollError, setPollError] = useState(false);
   const fails = useRef(0);
 
   const poll = useCallback(async () => {
+    if (!callId) return;
     try {
       // A timeout, because the API relays this to the agent's backend
       // (browser_url is that relay). A backend that accepts the connection and
@@ -26,7 +30,7 @@ function EventsFeed({ browserUrl }: { browserUrl: string }) {
       // is doing its job), and the feed stops for good: no new events, no
       // error, because the catch below never runs. api(), not fetch: the relay
       // is a builder route, scoped by the workspace header like the rest.
-      const body = await api(`${browserUrl}/events`, {
+      const body = await api(`${browserUrl}/events?call_id=${encodeURIComponent(callId)}`, {
         signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
       });
       setEvents(body.data.events);
@@ -37,12 +41,14 @@ function EventsFeed({ browserUrl }: { browserUrl: string }) {
       fails.current += 1;
       if (fails.current >= 2) setPollError(true);
     }
-  }, [browserUrl]);
+  }, [browserUrl, callId]);
   useEffect(() => {
     poll();
   }, [poll]);
   usePoll(poll, 10000); // visibility-paused, non-overlapping (no stacked retries)
 
+  // A backend generated before `?call_id=` existed answers every event.
+  const shown = events.filter((e) => e.call_id === callId);
   return (
     <div className="card" style={{ flex: 1, overflowY: "auto", padding: "6px 12px" }}>
       {pollError && (
@@ -50,11 +56,12 @@ function EventsFeed({ browserUrl }: { browserUrl: string }) {
           Can't reach this agent's backend. Is it running?
         </p>
       )}
-      {!pollError && events.length === 0 && <p className="muted">Waiting for call events…</p>}
-      {events.map((e, i) => (
-        <div key={i} className="event-row">
+      {!callId && <p className="muted">No calls yet.</p>}
+      {callId && !pollError && shown.length === 0 && <p className="muted">Waiting for this call's events…</p>}
+      {shown.map((e, i) => (
+        <div key={e.event_id ?? i} className="event-row">
           <code>{e.event}</code>
-          <span className="muted">{e.call_id || "—"}</span>
+          <span className="muted">{e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : ""}</span>
         </div>
       ))}
     </div>
@@ -106,6 +113,15 @@ export default function CallsTab() {
       const d = (a.started_at ? Date.parse(a.started_at) : 0) - (b.started_at ? Date.parse(b.started_at) : 0);
       return sortDesc ? -d : d;
     });
+
+  // The feed follows the open call; with none open, the newest one — the call
+  // that is live, when one is.
+  const at = (c: Call) => Date.parse(c.started_at ?? "") || 0;
+  const newest = (calls || []).reduce<Call | null>(
+    (a, c) => (!a || at(c) > at(a) ? c : a),
+    null
+  );
+  const feedCallId = openId ?? newest?.id ?? null;
 
   return (
     <div style={{ display: "flex", gap: 20, flex: 1, minHeight: 0 }}>
@@ -177,9 +193,16 @@ export default function CallsTab() {
         </table>
       </div>
       <div style={{ width: 300, display: "flex", flexDirection: "column" }}>
-        <h3>Live events</h3>
+        <h3>
+          Live events{" "}
+          {feedCallId && (
+            <span className="muted" style={{ fontWeight: "normal", fontSize: "0.8em" }}>
+              {openId ? "call" : "latest call"} <Uid id={feedCallId} label="call_id" />
+            </span>
+          )}
+        </h3>
         {data.backend?.browser_url ? (
-          <EventsFeed browserUrl={data.backend.browser_url} />
+          <EventsFeed browserUrl={data.backend.browser_url} callId={feedCallId} />
         ) : (
           <p className="muted">No backend.</p>
         )}
