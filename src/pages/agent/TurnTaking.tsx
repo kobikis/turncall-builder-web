@@ -18,6 +18,7 @@ export function TurnTaking({ cfg, isS2S, editable, onSet }: {
 }) {
   const smartTurn = cfg.smart_turn_detection !== false;
   const bargeIn = cfg.interruption_enabled !== false;
+  const greetingInterruptible = cfg.greeting_interruptible !== false;
   const flux = isFlux(cfg);
   // A checkbox's "on" is TurnCall's default, so it is the key removed.
   const toggle = (key: string, on: boolean) => onSet(key, on ? undefined : false);
@@ -47,6 +48,11 @@ export function TurnTaking({ cfg, isS2S, editable, onSet }: {
               <input type="checkbox" checked={bargeIn} disabled={!editable}
                 onChange={(e) => toggle("interruption_enabled", e.target.checked)} />{" "}
               Caller can interrupt the agent
+            </label>
+            <label>
+              <input type="checkbox" checked={greetingInterruptible} disabled={!editable}
+                onChange={(e) => toggle("greeting_interruptible", e.target.checked)} />{" "}
+              Caller can interrupt the greeting (off: a noise as the call connects can't cut it off, but anything said over it is lost)
             </label>
           </div>
           {!flux && (

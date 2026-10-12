@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Ambience } from "./Ambience";
 import { Avatar } from "./Avatar";
 import { Backups } from "./Backups";
+import { PickControl, type Opt } from "./PickControl";
 import { LlmTuning } from "./LlmTuning";
 import { Limits } from "./Limits";
 import { Pronunciations } from "./Pronunciations";
@@ -71,37 +72,14 @@ const STATUS_HINTS: Record<string, string> = {
 
 const BUILTIN_TOOLS = ["end_call", "transfer_call", "send_dtmf", "do_not_call"];
 
-// An option is either a bare id (models) or {value,label} (voices where the
-// config value is an id but we show a friendly name, e.g. ElevenLabs/Cartesia).
-type Opt = string | { value: string; label: string };
-
-// Live options -> real <select> (a datalist gave no visible dropdown to choose from).
-// Empty list (ollama/custom, or a provider with no key) -> free text.
 function PickField({ id, label, value, options, placeholder, onChange }: {
   id: string; label: string; value: string; options: Opt[];
   placeholder: string; onChange: (v: string) => void;
 }) {
-  if (options.length === 0) {
-    return (
-      <div className="field" style={{ flex: 1 }}>
-        <label htmlFor={id}>{label}</label>
-        <input id={id} className="input" value={value}
-          onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
-      </div>
-    );
-  }
-  const norm = options.map((o) => (typeof o === "string" ? { value: o, label: o } : o));
-  // Keep the current value selectable even if it's not in the fetched list.
-  const opts = value && !norm.some((o) => o.value === value)
-    ? [{ value, label: value }, ...norm]
-    : norm;
   return (
     <div className="field" style={{ flex: 1 }}>
       <label htmlFor={id}>{label}</label>
-      <select id={id} className="input" value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">— select —</option>
-        {opts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
+      <PickControl id={id} value={value} options={options} placeholder={placeholder} onChange={onChange} />
     </div>
   );
 }
@@ -137,6 +115,7 @@ export default function ConfigTab({ section }: { section: SectionId }) {
   const [sttModels, setSttModels] = useState<string[]>([]); // live, for the selected STT provider
   const [models, setModels] = useState<string[]>([]); // live, for the selected LLM provider
   const [voices, setVoices] = useState<Opt[]>([]); // live, for the selected TTS provider
+  const [ttsModels, setTtsModels] = useState<string[]>([]); // for the selected TTS provider
   const [s2sModels, setS2sModels] = useState<string[]>([]); // live, for the selected S2S provider
   const [s2sVoices, setS2sVoices] = useState<Opt[]>([]);
   const [catalog, setCatalog] = useState<CatalogApp[]>([]);
@@ -257,6 +236,9 @@ export default function ConfigTab({ section }: { section: SectionId }) {
     api(`/providers/tts/${ttsProvider}/voices`)
       .then((r) => ok && setVoices(r.data.voices || []))
       .catch(() => ok && setVoices([]));
+    api(`/providers/tts/${ttsProvider}/models`)
+      .then((r) => ok && setTtsModels(r.data.models || []))
+      .catch(() => ok && setTtsModels([]));
     return () => {
       ok = false;
     };
@@ -446,12 +428,23 @@ export default function ConfigTab({ section }: { section: SectionId }) {
               id="cfg-tts-p"
               className="input"
               value={cfg.tts?.provider || "deepgram"}
-              onChange={(e) => patch((c) => (c.tts = { ...c.tts, provider: e.target.value, model: "" }))}
+              onChange={(e) => patch((c) => (c.tts = { ...c.tts, provider: e.target.value, model: "", voice: "" }))}
             >
               {providerOptions("tts", providers.tts)}
             </select>
             <ProviderKeyNote role="tts" provider={ttsProvider} cards={cards} />
           </div>
+          {/* Deepgram's voice is its model, so it has no model to pick. */}
+          {ttsProvider !== "deepgram" && (
+            <PickField
+              id="cfg-tts-m"
+              label="TTS model"
+              value={cfg.tts?.model || ""}
+              options={ttsModels}
+              placeholder="provider default"
+              onChange={(v) => patch((c) => (c.tts = { ...c.tts, model: v }))}
+            />
+          )}
           <PickField
             id="cfg-tts-v"
             label="Voice"

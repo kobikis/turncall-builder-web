@@ -6,6 +6,18 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
+// Only Deepgram's voices and OpenAI's TTS models are live here; every other list is unavailable, which
+// leaves that field free text.
+vi.mock("../../api", () => ({
+  api: vi.fn(async (path: string) => {
+    if (path === "/providers/tts/deepgram/voices") {
+      return { data: { voices: [{ value: "aura-2-thalia-en", label: "Thalia" }] } };
+    }
+    if (path === "/providers/tts/openai/models") return { data: { models: ["tts-1", "gpt-4o-mini-tts"] } };
+    throw new Error("unavailable");
+  }),
+}));
+
 import { Avatar } from "./Avatar";
 import { Backups } from "./Backups";
 import { LlmTuning } from "./LlmTuning";
@@ -60,9 +72,25 @@ it("backups: added, edited, and the last one removed drops the key", () => {
   expect(onChange).toHaveBeenLastCalledWith(undefined);
 });
 
-it("a TTS backup names a voice", () => {
-  render(<Backups role="tts" providers={["deepgram"]} value={[{ provider: "deepgram" }]} editable onChange={() => {}} />);
-  expect(screen.getByLabelText(/backup tts 1 voice/i)).toBeTruthy();
+it("a TTS backup picks its voice from its provider's live list", async () => {
+  const onChange = vi.fn();
+  render(<Backups role="tts" providers={["deepgram", "openai"]} value={[{ provider: "deepgram", voice: "alloy" }]} editable onChange={onChange} />);
+  await screen.findByRole("option", { name: "Thalia" });
+  fireEvent.change(screen.getByLabelText(/backup tts 1 voice/i), { target: { value: "aura-2-thalia-en" } });
+  expect(onChange).toHaveBeenLastCalledWith([{ provider: "deepgram", voice: "aura-2-thalia-en" }]);
+  // A voice belongs to its provider, so switching drops it.
+  fireEvent.change(screen.getByLabelText(/backup tts 1 provider/i), { target: { value: "openai" } });
+  expect(onChange).toHaveBeenLastCalledWith([{ provider: "openai" }]);
+});
+
+it("a TTS backup picks a model too, except on Deepgram, whose voice is its model", async () => {
+  const onChange = vi.fn();
+  const { rerender } = render(<Backups role="tts" providers={["deepgram", "openai"]} value={[{ provider: "deepgram" }]} editable onChange={onChange} />);
+  expect(screen.queryByLabelText(/backup tts 1 model/i)).toBeNull();
+  rerender(<Backups role="tts" providers={["deepgram", "openai"]} value={[{ provider: "openai" }]} editable onChange={onChange} />);
+  await screen.findByRole("option", { name: "tts-1" });
+  fireEvent.change(screen.getByLabelText(/backup tts 1 model/i), { target: { value: "tts-1" } });
+  expect(onChange).toHaveBeenLastCalledWith([{ provider: "openai", model: "tts-1" }]);
 });
 
 it("pronunciations: one `word: ipa` per line, half-written lines skipped", () => {
@@ -97,6 +125,16 @@ it("turn-taking: off is false, back on is TurnCall's default (the key removed)",
   expect(onSet).toHaveBeenLastCalledWith("smart_turn_detection", undefined);
 });
 
+it("the greeting can be made uninterruptible, and back is the key removed", () => {
+  const onSet = vi.fn();
+  const { rerender } = render(<TurnTaking cfg={{}} isS2S={false} editable onSet={onSet} />);
+  fireEvent.click(screen.getByLabelText(/interrupt the greeting/i));
+  expect(onSet).toHaveBeenLastCalledWith("greeting_interruptible", false);
+  rerender(<TurnTaking cfg={{ greeting_interruptible: false }} isS2S={false} editable onSet={onSet} />);
+  fireEvent.click(screen.getByLabelText(/interrupt the greeting/i));
+  expect(onSet).toHaveBeenLastCalledWith("greeting_interruptible", undefined);
+});
+
 it("an idle check-in of 0 turns the guard off rather than reading as blank", () => {
   const onSet = vi.fn();
   render(<TurnTaking cfg={{}} isS2S={false} editable onSet={onSet} />);
@@ -117,7 +155,7 @@ it("a Deepgram Flux model owns end-of-turn: Smart Turn and the silence window ar
   expect(screen.queryByLabelText(/silence window/i)).toBeNull();
   expect(screen.getByText(/flux decides when the caller has finished/i)).toBeTruthy();
   // Barge-in still applies on Flux.
-  expect(screen.getByLabelText(/caller can interrupt/i)).toBeTruthy();
+  expect(screen.getByLabelText(/caller can interrupt the agent/i)).toBeTruthy();
 });
 
 it("avatar: a Tavus replica, and off removes the block", () => {
