@@ -3,7 +3,7 @@
 // Live events are one call's: the open call, else the newest. The backend
 // keeps every event it ever received, and since it hears every event type
 // (builder-api#94) one list of all of them stopped being readable.
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 const requested: string[] = [];
@@ -40,7 +40,15 @@ vi.mock("./AgentPage", () => ({
 
 import CallsTab from "./CallsTab";
 
+// The calls list opens on today, so the fixture's day has to be today. Only
+// Date is faked: the findBy* polling still runs on real timers.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-12T18:00:00Z"));
+});
+
 afterEach(() => {
+  vi.useRealTimers();
   requested.length = 0;
   cleanup();
 });
