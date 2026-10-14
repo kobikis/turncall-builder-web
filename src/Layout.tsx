@@ -3,6 +3,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "./auth";
 import { isAdmin } from "./roles";
 import WorkspaceSwitcher from "./components/WorkspaceSwitcher";
+import { BrandMark } from "./components/BrandMark";
 import { applyThemePref, getThemePref, ThemePref } from "./theme";
 
 // `box` lets a 24-unit icon (Lucide's grid) sit beside the 16-unit ones at the
@@ -61,10 +62,7 @@ export default function Layout() {
   return (
     <div className="shell">
       <nav className="rail" aria-label="Main">
-        <svg className="rail-logo" viewBox="0 0 22 22" role="img" aria-label="TurnCall">
-          <rect width="22" height="22" rx="6" fill="#e8702a" />
-          <path d="M7 11a4 4 0 0 1 4-4M5 11a6 6 0 0 1 6-6M11 15a4 4 0 0 0 4-4" stroke="#fff" strokeWidth="1.6" fill="none" strokeLinecap="round" />
-        </svg>
+        <BrandMark className="rail-logo" label="TurnCall" />
         <RailLink to="/agents" label="Agents">{ICONS.agents}</RailLink>
         <RailLink to="/phone-numbers" label="Phone numbers">{ICONS.phone}</RailLink>
         <RailLink to="/integrations" label="Integrations">{ICONS.integrations}</RailLink>

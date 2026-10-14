@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, ApiError } from "../api";
 import { useAuth } from "../auth";
+import { Wordmark } from "../components/BrandMark";
 import { takePendingInvite } from "../pendingInvite";
 import type { ApiResponse, User } from "../types";
 
@@ -58,12 +59,12 @@ export default function Login() {
   return (
     <div className="auth-screen">
       <aside className="auth-brand">
-        <img className="wordmark" src="/wordmark.svg" alt="TurnCall" />
+        <Wordmark />
         <p className="auth-tagline">Voice AI infrastructure you can self-host</p>
       </aside>
       <div className="auth-main">
       <form className="auth-card" onSubmit={submit}>
-        <img className="wordmark" src="/wordmark.svg" alt="TurnCall" />
+        <Wordmark />
         <h1>{mode === "login" ? "Sign in" : "Create your account"}</h1>
 
         {error && <div className="callout error">{error}</div>}

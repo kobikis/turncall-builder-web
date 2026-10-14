@@ -646,7 +646,17 @@ table.list.latency-table tr.slowest td { background: var(--danger-soft); white-s
   box-shadow: var(--shadow);
 }
 .auth-card h1 { margin: 4px 0 8px; font-size: 20px; }
-.auth-card .wordmark { align-self: flex-start; height: 22px; }
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  align-self: flex-start;
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.wordmark-mark { width: 1.5em; height: 1.5em; flex: none; }
 .auth-card .btn { justify-content: center; }
 
 @media (min-width: 768px) {
@@ -660,7 +670,7 @@ table.list.latency-table tr.slowest td { background: var(--danger-soft); white-s
     background: var(--bg-subtle);
     border-right: 1px solid var(--border);
   }
-  .auth-brand .wordmark { height: 30px; align-self: flex-start; }
+  .auth-brand .wordmark { font-size: 20px; gap: 11px; }
   .auth-tagline {
     margin: 0;
     max-width: 22ch;
