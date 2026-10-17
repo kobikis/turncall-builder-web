@@ -12,6 +12,42 @@ export type Workspace = { id: string; name: string; role: Role };
 export type Member = { user_id: string; email: string; role: Role };
 export type Invite = { id: string; email: string; role: Role; token: string };
 
+// The audit log of people (builder-api ADR-0028, GET /audit). `changes` maps a
+// JSON Pointer to what it was and became; a secret reads "***" on both sides,
+// and a "before" nobody read is `before_unknown` rather than a null it never was.
+export type AuditChange = { before?: unknown; after?: unknown; before_unknown?: boolean };
+export type AuditChanges = Record<string, AuditChange>;
+// One TurnCall request the change made: TurnCall's own entries live there.
+export type EngineLink = { project_id: string | null; engine_audit_id: string };
+export type AuditEntry = {
+  id: string;
+  user_id: string;
+  user_email: string; // as it was when they acted
+  role: Role; // the role they acted under
+  resource_type: string;
+  resource_id: string;
+  resource_name: string | null;
+  action: string;
+  agent_ids: string[];
+  changes: AuditChanges;
+  request_id: string;
+  engine_links: EngineLink[];
+  outcome: "completed" | "partial";
+  error: string | null;
+  created_at: string;
+};
+// GET /audit/{id}/engine: per link, TurnCall's entries, or why they can't be read.
+export type EngineAuditEntry = {
+  id: string;
+  actor?: string;
+  resource_type: string;
+  resource_id: string;
+  action: string;
+  changes?: AuditChanges;
+  created_at?: string;
+};
+export type EngineLinkEntries = EngineLink & { entries: EngineAuditEntry[] | null; error: string | null };
+
 export type Backend = {
   port: number;
   status: string; // running | degraded | failed | stopped | generating | deleted

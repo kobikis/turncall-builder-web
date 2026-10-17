@@ -8,6 +8,7 @@ import Layout from "./Layout";
 import Login from "./pages/Login";
 import AcceptInvite from "./pages/AcceptInvite";
 import Members from "./pages/Members";
+import AuditLog from "./pages/AuditLog";
 import AgentsList from "./pages/AgentsList";
 import NewAgent from "./pages/NewAgent";
 import AgentPage from "./pages/agent/AgentPage";
@@ -154,6 +155,14 @@ export default function App() {
           element={
             <RequireRole min="admin">
               <Members />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="members/audit"
+          element={
+            <RequireRole min="admin">
+              <AuditLog />
             </RequireRole>
           }
         />

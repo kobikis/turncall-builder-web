@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, ApiError } from "../api";
 import { useAuth } from "../auth";
+import MembersNav from "./MembersNav";
 import type { ApiResponse, Invite, Member, Role } from "../types";
 
 const ROLES: Role[] = ["admin", "editor", "viewer"];
@@ -103,7 +104,10 @@ export default function Members() {
 
   return (
     <div className="page">
-      <h1>Members</h1>
+      <div className="page-head">
+        <h1>Members</h1>
+        <MembersNav />
+      </div>
       {error && <div className="callout error">{error}</div>}
 
       <section className="block">

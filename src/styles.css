@@ -1122,3 +1122,22 @@ table.list a:focus-visible {
   .wb-number { margin: 8px 4px 0; flex-basis: 100%; }
   .wb-test { flex: 1 1 100%; border-left: 0; border-top: 1px solid var(--border); }
 }
+
+/* ---------- audit log (Members › Audit log) ---------- */
+
+.audit-intro { margin: -8px 0 14px; font-size: 13px; }
+.audit-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.audit-filters .input { width: auto; }
+.audit-pager { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 10px; }
+.audit-action { font-weight: 500; }
+table.list td.audit-drawer { padding: 12px 14px 16px; background: var(--bg-subtle); }
+.audit-meta { margin-bottom: 8px; }
+.audit-diff { box-shadow: none; }
+.audit-diff td { vertical-align: top; padding: 7px 12px; }
+.audit-value { font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; word-break: break-word; }
+.audit-before .audit-value { color: var(--danger); }
+.audit-after .audit-value { color: var(--ok); }
+.chip.audit-secret { margin: 0; font-family: var(--font); color: var(--text-muted); }
+.audit-engine { margin-top: 6px; }
+.audit-engine-link { margin-top: 10px; }
+.audit-engine-entry { margin-top: 8px; padding-left: 10px; border-left: 2px solid var(--border); }
