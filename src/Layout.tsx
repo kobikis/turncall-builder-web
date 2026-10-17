@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "./auth";
 import { isAdmin } from "./roles";
+import ErrorBoundary from "./components/ErrorBoundary";
 import WorkspaceSwitcher from "./components/WorkspaceSwitcher";
 import { BrandMark } from "./components/BrandMark";
 import { applyThemePref, getThemePref, ThemePref } from "./theme";
@@ -38,6 +39,8 @@ const ICONS = {
     <path d="M15 12h-5M15 8h-5M19 17V5a2 2 0 0 0-2-2H4" />
     <path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3" />
   </>, 24),
+  // A shield: the Workspace's redaction and retention policy.
+  compliance: icon(<path d="M8 1.8 13 3.6v4.1c0 3.1-2.1 5.4-5 6.5-2.9-1.1-5-3.4-5-6.5V3.6Z" />),
 };
 
 function RailLink({ to, label, children }: { to: string; label: string; children: ReactNode }) {
@@ -53,6 +56,7 @@ function RailLink({ to, label, children }: { to: string; label: string; children
 export default function Layout() {
   const [theme, setTheme] = useState<ThemePref>(getThemePref);
   const { user, activeWorkspaceId, activeWorkspace, logout } = useAuth();
+  const { pathname } = useLocation();
 
   function pickTheme(pref: ThemePref) {
     setTheme(pref);
@@ -74,6 +78,10 @@ export default function Layout() {
           // A skill is prompt text in the builder that holds the deployment's
           // LLM key — authoring one is an admin's, like membership.
           <RailLink to="/skills" label="Skills">{ICONS.skills}</RailLink>
+        )}
+        {isAdmin(activeWorkspace?.role) && (
+          // Even reading it is an admin's: it lists every agent's state.
+          <RailLink to="/compliance" label="Compliance">{ICONS.compliance}</RailLink>
         )}
         {/* Workspace, account and theme: per-user, so they sit together behind
             the account button rather than in the nav above. */}
@@ -107,7 +115,9 @@ export default function Layout() {
           data (#28). */}
       <main className="main" key={activeWorkspaceId ?? "none"}>
         <div className="main-content">
-          <Outlet />
+          <ErrorBoundary resetKey={pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </div>
       </main>
     </div>

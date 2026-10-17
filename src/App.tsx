@@ -4,10 +4,12 @@ import { useAuth } from "./auth";
 import { stashPendingInvite, takePendingInvite } from "./pendingInvite";
 import { atLeast } from "./roles";
 import type { Role } from "./types";
+import ErrorBoundary from "./components/ErrorBoundary";
 import Layout from "./Layout";
 import Login from "./pages/Login";
 import AcceptInvite from "./pages/AcceptInvite";
 import Members from "./pages/Members";
+import AuditLog from "./pages/AuditLog";
 import AgentsList from "./pages/AgentsList";
 import NewAgent from "./pages/NewAgent";
 import AgentPage from "./pages/agent/AgentPage";
@@ -18,6 +20,7 @@ import EvalsTab from "./pages/agent/EvalsTab";
 import CodeTab from "./pages/agent/CodeTab";
 import GitHubSettings from "./pages/GitHubSettings";
 import Skills from "./pages/Skills";
+import Compliance from "./pages/Compliance";
 import Integrations from "./pages/Integrations";
 import PhoneNumbersList from "./pages/PhoneNumbersList";
 import AddPhoneNumber from "./pages/AddPhoneNumber";
@@ -70,8 +73,9 @@ export function RequireRole({ min, children }: { min: Role; children: React.Reac
 }
 
 export default function App() {
+  const { pathname } = useLocation();
   return (
-    <>
+    <ErrorBoundary resetKey={pathname}>
       <ResumePendingInvite />
       <Routes>
         <Route path="/login" element={<Login />} />
@@ -150,6 +154,14 @@ export default function App() {
           }
         />
         <Route
+          path="compliance"
+          element={
+            <RequireRole min="admin">
+              <Compliance />
+            </RequireRole>
+          }
+        />
+        <Route
           path="members"
           element={
             <RequireRole min="admin">
@@ -157,8 +169,16 @@ export default function App() {
             </RequireRole>
           }
         />
+        <Route
+          path="members/audit"
+          element={
+            <RequireRole min="admin">
+              <AuditLog />
+            </RequireRole>
+          }
+        />
       </Route>
       </Routes>
-    </>
+    </ErrorBoundary>
   );
 }

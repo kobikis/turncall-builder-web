@@ -3,13 +3,14 @@
 // A section owns the top-level config keys its form writes. A key no section
 // owns belongs to Advanced (JSON) — the only place it can be edited — so an
 // unsaved change is always attributed somewhere, never lost from the count.
-// Knowledge and Takeaways save through their own endpoints and own no keys.
+// Knowledge, Takeaways and Redaction and retention save through their own
+// endpoints and own no keys.
 
 type Cfg = Record<string, unknown>;
 
 export type SectionId =
   | "setup" | "prompt" | "models" | "tools" | "knowledge" | "takeaways"
-  | "turn-taking" | "guardrails" | "avatar" | "advanced";
+  | "turn-taking" | "guardrails" | "compliance" | "avatar" | "advanced";
 
 export const SECTIONS: { id: SectionId; title: string; keys?: string[] }[] = [
   { id: "setup", title: "Setup" },
@@ -31,6 +32,8 @@ export const SECTIONS: { id: SectionId; title: string; keys?: string[] }[] = [
     ],
   },
   { id: "guardrails", title: "Guardrails", keys: ["guardrails"] },
+  // The agent's TurnCall project setting, saved on its own (like limits).
+  { id: "compliance", title: "Redaction and retention" },
   { id: "avatar", title: "Video avatar", keys: ["avatar"] },
   { id: "advanced", title: "Advanced (JSON)" },
 ];

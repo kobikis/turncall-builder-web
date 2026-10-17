@@ -4,6 +4,7 @@ import { api } from "../../api";
 import type { ApiResponse, PhoneNumber } from "../../types";
 import { ROUTING_LABELS } from "../PhoneNumbersList";
 import { useAgent } from "./AgentPage";
+import AgentCompliance from "./AgentCompliance";
 import ConfigTab from "./ConfigTab";
 import KnowledgeSearch from "./KnowledgeSearch";
 import KnowledgeTab from "./KnowledgeTab";
@@ -82,6 +83,8 @@ export default function Build() {
           <KnowledgeTab />
         ) : current === "takeaways" ? (
           <TakeawaysTab />
+        ) : current === "compliance" ? (
+          <AgentCompliance agentId={agentId} />
         ) : (
           <ConfigTab section={current} />
         )}
