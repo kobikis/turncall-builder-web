@@ -19,6 +19,7 @@ import EvalsTab from "./pages/agent/EvalsTab";
 import CodeTab from "./pages/agent/CodeTab";
 import GitHubSettings from "./pages/GitHubSettings";
 import Skills from "./pages/Skills";
+import Compliance from "./pages/Compliance";
 import Integrations from "./pages/Integrations";
 import PhoneNumbersList from "./pages/PhoneNumbersList";
 import AddPhoneNumber from "./pages/AddPhoneNumber";
@@ -147,6 +148,14 @@ export default function App() {
           element={
             <RequireRole min="editor">
               <EditPhoneNumber />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="compliance"
+          element={
+            <RequireRole min="admin">
+              <Compliance />
             </RequireRole>
           }
         />
