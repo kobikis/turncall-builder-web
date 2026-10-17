@@ -24,7 +24,7 @@ export type WorkspaceReport = WorkspaceView & {
   // The Workspace's webhook project (custom call-init numbers), when it has one.
   webhook_numbers: Projection | null;
   complete: boolean;
-  entity_types: { supported: string[]; default: string[] };
+  entity_types: EntityTypes;
 };
 
 export type AgentReport = {
@@ -32,18 +32,13 @@ export type AgentReport = {
   override: { redaction: Redaction | null; retention: Retention | null };
   effective: Setting;
   projection: Projection;
+  entity_types: EntityTypes;
 };
 
-// The engine's own lists (TurnCall services/redaction.py, copied by builder-api).
-// The Workspace page reads them from GET /compliance; an Agent's report does not
-// carry them, so the override form uses these.
-export const DEFAULT_ENTITIES = ["PHONE_NUMBER", "EMAIL_ADDRESS", "CREDIT_CARD", "US_SSN", "IBAN_CODE"];
-export const SUPPORTED_ENTITIES = [
-  "AGE", "CREDIT_CARD", "CRYPTO", "DATE_TIME", "EMAIL_ADDRESS", "IBAN_CODE",
-  "IP_ADDRESS", "LOCATION", "MAC_ADDRESS", "MEDICAL_LICENSE", "NRP",
-  "ORGANIZATION", "PERSON", "PHONE_NUMBER", "UK_NHS", "URL", "US_BANK_NUMBER",
-  "US_DRIVER_LICENSE", "US_ITIN", "US_PASSPORT", "US_SSN",
-];
+// The engine's lists, as builder-api reports them on both reports: every type
+// it can redact, and those it redacts when a setting names none. The console
+// keeps no copy, so it never offers a type the API would refuse.
+export type EntityTypes = { supported: string[]; default: string[] };
 
 export const MAX_DAYS = 36500;
 
@@ -58,19 +53,18 @@ export const KINDS: { key: RetentionKind; label: string; hint: string }[] = [
 ];
 
 /** The entity types a redaction block names: null is the default set. */
-export const entitiesOf = (r: Redaction, defaults: string[] = DEFAULT_ENTITIES): string[] =>
-  r.entities ?? defaults;
+export const entitiesOf = (r: Redaction, defaults: string[]): string[] => r.entities ?? defaults;
 
 /** What to send for a picked set: the default set exactly is null, so it keeps
  *  following the engine's default. */
-export function entitiesToSend(picked: string[], defaults: string[] = DEFAULT_ENTITIES): string[] | null {
+export function entitiesToSend(picked: string[], defaults: string[]): string[] | null {
   const a = [...new Set(picked)].sort();
   const b = [...defaults].sort();
   if (a.length === b.length && a.every((e, i) => e === b[i])) return null;
   return a;
 }
 
-export function describeRedaction(r: Redaction, defaults: string[] = DEFAULT_ENTITIES): string {
+export function describeRedaction(r: Redaction, defaults: string[]): string {
   if (!r.enabled) return "Off";
   return r.entities === null ? `On, the default types (${defaults.join(", ")})` : `On (${r.entities.join(", ")})`;
 }

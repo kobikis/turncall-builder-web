@@ -15,7 +15,8 @@ export type Invite = { id: string; email: string; role: Role; token: string };
 // The audit log of people (builder-api ADR-0028, GET /audit). `changes` maps a
 // JSON Pointer to what it was and became; a secret reads "***" on both sides,
 // and a "before" nobody read is `before_unknown` rather than a null it never was.
-export type AuditChange = { before?: unknown; after?: unknown; before_unknown?: boolean };
+// `secret`: the value was a secret, shown masked (`***`) and never stored.
+export type AuditChange = { before?: unknown; after?: unknown; before_unknown?: boolean; secret?: boolean };
 export type AuditChanges = Record<string, AuditChange>;
 // One TurnCall request the change made: TurnCall's own entries live there.
 export type EngineLink = { project_id: string | null; engine_audit_id: string };

@@ -1,11 +1,15 @@
 // The redaction and retention controls the Workspace page and an Agent's
-// override share, and the copy that says what each one does and does not do.
+// override share, the copy that says what each one does and does not do, and
+// the form -> wire translation and save plumbing behind both pages.
+import { useState } from "react";
 import {
   KINDS,
   MAX_DAYS,
+  entitiesToSend,
   parseDays,
   describeDays,
   type Projection,
+  type Redaction,
   type Retention,
   type RetentionKind,
 } from "../../compliance";
@@ -134,7 +138,9 @@ export function RetentionEditor({ value, onChange, inherited, disabled, idPrefix
                 max={MAX_DAYS}
                 style={{ maxWidth: 200 }}
                 value={row.forever ? "" : row.days}
-                placeholder={inherited ? `Workspace: ${describeDays(inherited[k.key])}` : row.forever ? "kept for good" : "days"}
+                placeholder={
+                  row.forever ? "kept for good" : inherited ? `Workspace: ${describeDays(inherited[k.key])}` : "days"
+                }
                 disabled={disabled || row.forever}
                 onChange={(e) => set(k.key, { days: e.target.value })}
               />
@@ -160,9 +166,22 @@ export function RetentionEditor({ value, onChange, inherited, disabled, idPrefix
   );
 }
 
+/** The wire value of a redaction form, or why it cannot be sent. The default
+ *  set exactly is sent as null, so it keeps following the engine's default. */
+export function redactionToSend(form: RedactionForm, defaults: string[]): { redaction: Redaction; error?: string } {
+  const redaction = {
+    enabled: form.enabled,
+    entities: form.picked.length ? entitiesToSend(form.picked, defaults) : null,
+  };
+  if (form.enabled && form.picked.length === 0)
+    return { redaction, error: "Redaction: pick at least one entity type, or turn redaction off." };
+  return { redaction };
+}
+
 /** The wire value of a retention form, or the first field's error. On the
  *  Workspace (`override` false) a blank field that is not kept for good is an
- *  error; on an override it is null, the Workspace's. */
+ *  error, and "for good" (the box, or 36500 days) is null; on an override a
+ *  blank field is null, the Workspace's, and "for good" is 36500 days. */
 export function retentionToSend(
   form: RetentionForm,
   override: boolean,
@@ -178,20 +197,49 @@ export function retentionToSend(
     if (parsed.error) return { retention, error: parsed.error };
     if (parsed.days === null && !override)
       return { retention, error: `${k.label}: enter a number of days, or keep them for good.` };
-    retention[k.key] = parsed.days;
+    retention[k.key] = !override && parsed.days !== null && parsed.days >= MAX_DAYS ? null : parsed.days;
   }
   return { retention };
 }
 
+/** A retention setting as its form. 36500 days is "for good" on both pages,
+ *  as describeDays says; on the Workspace so is null, while on an override
+ *  null is a blank field (the Workspace's). */
 export function retentionForm(r: Retention | null, override: boolean): RetentionForm {
   const form = {} as RetentionForm;
   for (const k of KINDS) {
     const days = r?.[k.key] ?? null;
-    form[k.key] = override
-      ? { days: days === null || days >= MAX_DAYS ? "" : String(days), forever: days !== null && days >= MAX_DAYS }
-      : { days: days === null ? "" : String(days), forever: days === null };
+    const forever = days === null ? !override : days >= MAX_DAYS;
+    form[k.key] = { days: forever || days === null ? "" : String(days), forever };
   }
   return form;
+}
+
+/** A page's save plumbing: one action at a time, its error, and what it
+ *  reports when done. `run` clears both first; `fn` returns the notice. */
+export function useRun() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const run = async (fn: () => Promise<string | void>) => {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const done = await fn();
+      if (done) setNotice(done);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  /** Refuse before sending: the reason, and nothing announced. */
+  const refuse = (reason: string) => {
+    setNotice("");
+    setError(reason);
+  };
+  return { busy, error, notice, run, refuse, setNotice };
 }
 
 const BADGE: Record<string, string> = { applied: "running", failed: "failed", pending: "degraded" };

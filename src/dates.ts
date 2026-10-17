@@ -18,6 +18,23 @@ const timeFmt = new Intl.DateTimeFormat(undefined, {
 export const fmtTime = (iso: string | null | undefined): string =>
   iso ? timeFmt.format(new Date(iso)) : "—";
 
+const stampFmt = new Intl.DateTimeFormat(undefined, {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+/** `fmtTime` with the year, for a list that spans years: the audit log keeps
+ *  entries for good by default, and "when did this happen" there is often
+ *  "which year". A value that is not a date reads as given. */
+export const fmtStamp = (iso: string | null | undefined): string => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : stampFmt.format(d);
+};
+
 /** A timestamp as a local `YYYY-MM-DD`, or "" when there is none.
  *
  * The format `<input type="date">` holds, so a range filter is two string

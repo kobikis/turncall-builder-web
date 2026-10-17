@@ -1,20 +1,23 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../api";
 import Uid from "../components/Uid";
-import { fmtTime } from "../dates";
+import { fmtStamp } from "../dates";
 import type {
   AgentRef,
   ApiResponse,
+  AuditChange,
   AuditChanges,
   AuditEntry,
   EngineLinkEntries,
   Member,
 } from "../types";
 import MembersNav from "./MembersNav";
-import { dayRangeToQuery, MASK, pointerLabel, resourceLabel } from "./auditFormat";
+import { dayRangeToQuery, isCompleteDay, MASK, pointerLabel, resourceLabel, validDay } from "./auditFormat";
 
 const PAGE_SIZE = 50;
+// How long a date field waits for the next keystroke before filtering.
+const DATE_COMMIT_MS = 600;
 
 type AuditPage = { success: boolean; data: AuditEntry[]; total: number; page: number; limit: number };
 
@@ -30,11 +33,15 @@ export default function AuditLog() {
   const [params, setParams] = useSearchParams();
   const member = params.get("member") ?? "";
   const agent = params.get("agent") ?? "";
-  const from = params.get("from") ?? "";
-  const to = params.get("to") ?? "";
-  const page = Math.max(1, Number(params.get("page")) || 1);
+  // A pasted or hand-edited link may hold anything: a value that is not a day
+  // is no filter, and a page that is not a whole number from 1 is page 1.
+  const from = validDay(params.get("from"));
+  const to = validDay(params.get("to"));
+  const asked = Math.floor(Number(params.get("page")));
+  const page = Number.isSafeInteger(asked) && asked >= 1 ? asked : 1;
 
-  const [result, setResult] = useState<AuditPage | null>(null); // null = loading
+  // The page asked for rides along, so a stale answer is never taken for this page's.
+  const [result, setResult] = useState<(AuditPage & { asked: number }) | null>(null); // null = loading
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   // For the pickers and to name an entry's agents. Not fatal when they fail:
@@ -64,12 +71,20 @@ export default function AuditLog() {
     setResult(null);
     setError(null);
     api<AuditPage>(`/audit?${query}`)
-      .then((r) => live && setResult(r))
+      .then((r) => live && setResult({ ...r, asked: page }))
       .catch((e) => live && setError(errMsg(e, "Could not load the audit log")));
     return () => {
       live = false;
     };
-  }, [query]);
+  }, [query]); // `query` holds `page`
+
+  // Past the last page (a bookmark from when there were more entries, or a
+  // narrower filter): go to the last one there is, in place of this one.
+  const lastPage = result ? Math.max(1, Math.ceil(result.total / PAGE_SIZE)) : 1;
+  const beyond = result !== null && result.asked === page && page > lastPage;
+  useEffect(() => {
+    if (beyond) goTo(lastPage, true);
+  }, [beyond, lastPage]);
 
   // Any filter change starts again at page 1; paging keeps the filters.
   function setFilter(name: "member" | "agent" | "from" | "to", value: string) {
@@ -80,16 +95,16 @@ export default function AuditLog() {
     setParams(next);
     setOpenId(null);
   }
-  function goTo(p: number) {
+  function goTo(p: number, replace = false) {
     const next = new URLSearchParams(params);
     if (p > 1) next.set("page", String(p));
     else next.delete("page");
-    setParams(next);
+    setParams(next, { replace });
     setOpenId(null);
   }
 
   const agentName = (id: string) => agents.find((a) => a.agent_id === id)?.name;
-  const entries = result?.data ?? [];
+  const entries = beyond ? [] : (result?.data ?? []);
   const total = result?.total ?? 0;
   const first = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const last = Math.min(page * PAGE_SIZE, total);
@@ -128,23 +143,9 @@ export default function AuditLog() {
           ))}
           {agentGone && <option value={agent}>Deleted agent ({agent.slice(0, 8)})</option>}
         </select>
-        <input
-          type="date"
-          className="input"
-          aria-label="From date"
-          value={from}
-          max={to || undefined}
-          onChange={(e) => setFilter("from", e.target.value)}
-        />
+        <DayInput label="From date" value={from} max={to} onCommit={(v) => setFilter("from", v)} />
         <span className="muted">→</span>
-        <input
-          type="date"
-          className="input"
-          aria-label="To date"
-          value={to}
-          min={from || undefined}
-          onChange={(e) => setFilter("to", e.target.value)}
-        />
+        <DayInput label="To date" value={to} min={from} onCommit={(v) => setFilter("to", v)} />
         {filtered && (
           <button className="btn" type="button" style={{ padding: "3px 10px" }} onClick={() => setParams(new URLSearchParams())}>
             clear filters
@@ -177,14 +178,14 @@ export default function AuditLog() {
               agentName={agentName}
             />
           ))}
-          {result === null && !error && (
+          {(result === null || beyond) && !error && (
             <tr>
               <td colSpan={4} className="muted" style={{ padding: 16 }}>
                 Loading…
               </td>
             </tr>
           )}
-          {result && entries.length === 0 && (
+          {result && !beyond && entries.length === 0 && (
             <tr>
               <td colSpan={4} className="muted" style={{ padding: 16 }}>
                 {filtered ? "No entries match these filters." : "Nothing recorded yet."}
@@ -194,7 +195,7 @@ export default function AuditLog() {
         </tbody>
       </table>
 
-      {result && total > 0 && (
+      {result && !beyond && total > 0 && (
         <div className="audit-pager">
           <span className="muted num">
             {first}–{last} of {total}
@@ -208,6 +209,45 @@ export default function AuditLog() {
         </div>
       )}
     </div>
+  );
+}
+
+/** A date filter that sends a day once it is whole: on leaving the field, on
+ *  Enter, or after a pause in typing. Each keystroke alone sends nothing, so
+ *  typing a year never asks the API for 0020 on the way to 2026. */
+function DayInput({ label, value, min, max, onCommit }: {
+  label: string;
+  value: string;
+  min?: string;
+  max?: string;
+  onCommit: (day: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const commitRef = useRef(onCommit);
+  commitRef.current = onCommit;
+  // The URL changed under it (clear filters, back): show what applies.
+  useEffect(() => setDraft(value), [value]);
+  const pending = draft !== value && isCompleteDay(draft);
+  useEffect(() => {
+    if (!pending) return;
+    const t = setTimeout(() => commitRef.current(draft), DATE_COMMIT_MS);
+    return () => clearTimeout(t);
+  }, [pending, draft]);
+  const commit = () => {
+    if (pending) commitRef.current(draft);
+  };
+  return (
+    <input
+      type="date"
+      className="input"
+      aria-label={label}
+      value={draft}
+      min={min || undefined}
+      max={max || undefined}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => e.key === "Enter" && commit()}
+    />
   );
 }
 
@@ -227,7 +267,7 @@ function EntryRows(props: {
             className="row-toggle"
             type="button"
             aria-expanded={open}
-            aria-label={`${open ? "Collapse" : "Expand"} entry from ${fmtTime(e.created_at)}`}
+            aria-label={`${open ? "Collapse" : "Expand"} entry from ${fmtStamp(e.created_at)}`}
             title={e.created_at}
             onClick={(ev) => {
               ev.stopPropagation();
@@ -237,7 +277,7 @@ function EntryRows(props: {
             <span className="caret" aria-hidden="true">
               {open ? "▾" : "▸"}
             </span>
-            {fmtTime(e.created_at)}
+            {fmtStamp(e.created_at)}
           </button>
         </td>
         <td>
@@ -318,9 +358,9 @@ function ChangesTable({ changes }: { changes: AuditChanges | undefined }) {
               <td>
                 <code title={pointer}>{pointerLabel(pointer)}</code>
               </td>
-              <td className="audit-before">{c.before_unknown ? <Unknown /> : <Value v={c.before} />}</td>
+              <td className="audit-before">{c.before_unknown ? <Unknown /> : <Value v={c.before} change={c} />}</td>
               <td className="audit-after">
-                <Value v={c.after} />
+                <Value v={c.after} change={c} />
               </td>
             </tr>
           ))}
@@ -336,12 +376,21 @@ const Unknown = () => (
   </em>
 );
 
-function Value({ v }: { v: unknown }) {
+function Value({ v, change }: { v: unknown; change: AuditChange }) {
   if (v === null || v === undefined) return <span className="muted" title="unset">—</span>;
-  if (v === MASK)
+  // The API marks a masked secret itself; the text alone is not proof.
+  if (change.secret)
     return (
       <span className="chip audit-secret" title="A secret: the log records that it changed, never its value">
         hidden
+      </span>
+    );
+  // An entry from before that mark (or one of TurnCall's): `***` was most
+  // likely a secret, but could be the text itself. Say neither.
+  if (v === MASK && change.secret === undefined)
+    return (
+      <span className="audit-value" title="Masked, or the text *** itself: this entry predates marking secrets">
+        {MASK}
       </span>
     );
   const text = typeof v === "string" ? v : JSON.stringify(v);
@@ -399,7 +448,7 @@ function EngineEntries({ entry: e }: { entry: AuditEntry }) {
                     <span className="muted">{resourceLabel(x.resource_type)}</span>{" "}
                     <Uid id={x.resource_id} label="resource_id" />
                     {x.actor && <span className="hint"> by {x.actor === "platform" ? "the platform" : "API key"}</span>}
-                    {x.created_at && <span className="hint"> · {fmtTime(x.created_at)}</span>}
+                    {x.created_at && <span className="hint"> · {fmtStamp(x.created_at)}</span>}
                   </div>
                   <ChangesTable changes={x.changes} />
                 </div>

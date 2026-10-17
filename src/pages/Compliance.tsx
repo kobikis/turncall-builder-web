@@ -1,13 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
-import {
-  DEFAULT_ENTITIES,
-  SUPPORTED_ENTITIES,
-  entitiesOf,
-  entitiesToSend,
-  type WorkspaceReport,
-} from "../compliance";
+import { entitiesOf, type WorkspaceReport } from "../compliance";
 import { fmtTime } from "../dates";
 import {
   ProjectionBadge,
@@ -15,8 +9,10 @@ import {
   RedactionEditor,
   RetentionCopy,
   RetentionEditor,
+  redactionToSend,
   retentionForm,
   retentionToSend,
+  useRun,
   type RedactionForm,
   type RetentionForm,
 } from "./compliance/Fields";
@@ -28,63 +24,36 @@ import {
 
 export default function Compliance() {
   const [report, setReport] = useState<WorkspaceReport | null>(null);
-  const [redaction, setRedaction] = useState<RedactionForm>({ enabled: false, picked: DEFAULT_ENTITIES });
+  // The entity types come with the report; until it is in, the form is disabled.
+  const [redaction, setRedaction] = useState<RedactionForm>({ enabled: false, picked: [] });
   const [retention, setRetention] = useState<RetentionForm>(() => retentionForm(null, false));
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { busy, error, notice, run, refuse, setNotice } = useRun();
 
-  const supported = report?.entity_types.supported ?? SUPPORTED_ENTITIES;
-  const defaults = report?.entity_types.default ?? DEFAULT_ENTITIES;
+  const supported = report?.entity_types.supported ?? [];
+  const defaults = report?.entity_types.default ?? [];
 
   const take = (r: WorkspaceReport) => {
     setReport(r);
-    const defs = r.entity_types?.default ?? DEFAULT_ENTITIES;
-    setRedaction({ enabled: r.redaction.enabled, picked: entitiesOf(r.redaction, defs) });
+    setRedaction({ enabled: r.redaction.enabled, picked: entitiesOf(r.redaction, r.entity_types.default) });
     setRetention(retentionForm(r.retention, false));
   };
 
   useEffect(() => {
     api<{ data: WorkspaceReport }>("/compliance")
       .then((r) => take(r.data))
-      .catch((e) => setError(e instanceof Error ? e.message : "Could not load the compliance settings."));
+      .catch((e) => refuse(e instanceof Error ? e.message : "Could not load the compliance settings."));
   }, []);
 
-  const run = async (fn: () => Promise<void>) => {
-    setBusy(true);
-    setError("");
-    setNotice("");
-    try {
-      await fn();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const save = () => {
-    setNotice("");
-    if (redaction.enabled && redaction.picked.length === 0) {
-      setError("Redaction: pick at least one entity type, or turn redaction off.");
-      return;
-    }
+    const red = redactionToSend(redaction, defaults);
     const ret = retentionToSend(retention, false);
-    if (ret.error) {
-      setError(ret.error);
-      return;
-    }
-    const body = {
-      redaction: {
-        enabled: redaction.enabled,
-        entities: redaction.picked.length ? entitiesToSend(redaction.picked, defaults) : null,
-      },
-      retention: ret.retention,
-    };
+    const invalid = red.error ?? ret.error;
+    if (invalid) return refuse(invalid);
+    const body = { redaction: red.redaction, retention: ret.retention };
     return run(async () => {
       const r = await api<{ data: WorkspaceReport }>("/compliance", { method: "PUT", body: JSON.stringify(body) });
       take(r.data);
-      setNotice(r.data.complete ? "Saved, and written into every agent." : "Saved. Not every agent holds it yet; see below.");
+      return r.data.complete ? "Saved, and written into every agent." : "Saved. Not every agent holds it yet; see below.";
     });
   };
 
@@ -92,7 +61,7 @@ export default function Compliance() {
     run(async () => {
       const r = await api<{ data: WorkspaceReport }>("/compliance/apply", { method: "POST" });
       take(r.data);
-      setNotice(r.data.complete ? "Every agent holds the setting now." : "Some agents still do not hold it; see below.");
+      return r.data.complete ? "Every agent holds the setting now." : "Some agents still do not hold it; see below.";
     });
 
   const loaded = report !== null;

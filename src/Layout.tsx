@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "./auth";
 import { isAdmin } from "./roles";
+import ErrorBoundary from "./components/ErrorBoundary";
 import WorkspaceSwitcher from "./components/WorkspaceSwitcher";
 import { BrandMark } from "./components/BrandMark";
 import { applyThemePref, getThemePref, ThemePref } from "./theme";
@@ -55,6 +56,7 @@ function RailLink({ to, label, children }: { to: string; label: string; children
 export default function Layout() {
   const [theme, setTheme] = useState<ThemePref>(getThemePref);
   const { user, activeWorkspaceId, activeWorkspace, logout } = useAuth();
+  const { pathname } = useLocation();
 
   function pickTheme(pref: ThemePref) {
     setTheme(pref);
@@ -113,7 +115,9 @@ export default function Layout() {
           data (#28). */}
       <main className="main" key={activeWorkspaceId ?? "none"}>
         <div className="main-content">
-          <Outlet />
+          <ErrorBoundary resetKey={pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </div>
       </main>
     </div>

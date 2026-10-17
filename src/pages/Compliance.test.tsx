@@ -137,6 +137,29 @@ it("refuses a bad period or an empty type list before sending, and shows the ser
   await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/less than or equal to 36500/));
 });
 
+it("36500 days reads as kept for good, as on every agent page, and saves as null", async () => {
+  current = report({
+    set: true,
+    retention: { recordings_days: 30, transcripts_days: 36500, events_days: null },
+  });
+  page();
+  await loaded();
+  await waitFor(() => expect(box(/keep transcripts for good/i).checked).toBe(true));
+  expect(box(/transcripts \(days\)/i).value).toBe("");
+  expect(box(/transcripts \(days\)/i).placeholder).toBe("kept for good");
+  expect(box(/keep events for good/i).checked).toBe(true);
+  expect(box(/recordings \(days\)/i).value).toBe("30");
+  // Typed rather than ticked, it means the same.
+  fireEvent.change(box(/recordings \(days\)/i), { target: { value: "36500" } });
+  save();
+  await waitFor(() => expect(put()).toBeTruthy());
+  expect((put()!.body as { retention: unknown }).retention).toEqual({
+    recordings_days: null,
+    transcripts_days: null,
+    events_days: null,
+  });
+});
+
 it("shows each agent's projection state with its reason, and retries the failures", async () => {
   current = report({
     set: true,

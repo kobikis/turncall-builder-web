@@ -13,6 +13,9 @@ const workspace = {
   retention: { recordings_days: 30, transcripts_days: null, events_days: 365 },
 };
 type Override = { redaction: unknown; retention: Record<string, number | null> | null };
+// What the API reports, not a list of the console's own: a type the console
+// never heard of is offered, and one the API left out is not.
+const ENTITY_TYPES = { supported: ["EMAIL_ADDRESS", "NEW_TYPE", "PHONE_NUMBER"], default: ["PHONE_NUMBER"] };
 
 // What the API answers: the effective setting is the Workspace's, then the
 // override (redaction whole, retention per non-null field).
@@ -26,6 +29,7 @@ const reportFor = (override: Override, projection = { state: "applied", error: n
     ),
   },
   projection,
+  entity_types: ENTITY_TYPES,
 });
 
 const calls: { path: string; method?: string; body?: unknown }[] = [];
@@ -39,9 +43,8 @@ vi.mock("../../api", () => ({
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
     calls.push({ path, method: init?.method, body });
     if (init?.method === "PUT") current = reportFor(body);
-    if (path === "/compliance/apply") {
+    if (path.endsWith("/compliance/apply")) {
       if (afterApply) current = afterApply;
-      return { data: {} };
     }
     return { data: current };
   }),
@@ -68,7 +71,7 @@ it("an inheriting agent shows the Workspace's setting as what applies", async ()
   render(<AgentCompliance agentId="a1" />);
   await ready();
   expect(field(/use the workspace's/i).checked).toBe(true);
-  expect(applies()).toMatch(/Redaction: On, the default types.*\(the Workspace's\)/);
+  expect(applies()).toMatch(/Redaction: On, the default types \(PHONE_NUMBER\) \(the Workspace's\)/);
   expect(applies()).toMatch(/Recordings: 30 days \(the Workspace's\)/);
   expect(applies()).toMatch(/Transcripts: kept for good/);
   expect(field(/recordings \(days\)/i).placeholder).toBe("Workspace: 30 days");
@@ -99,6 +102,28 @@ it("an admin overrides redaction whole and one retention field, leaving the othe
   expect(applies()).toMatch(/Events: 365 days \(the Workspace's\)/);
 });
 
+it("offers the entity types the API reports, and no others", async () => {
+  render(<AgentCompliance agentId="a1" />);
+  await ready();
+  fireEvent.click(field(/override for this agent/i));
+  expect(field("NEW_TYPE").checked).toBe(false);
+  expect(field("PHONE_NUMBER").checked).toBe(true); // the API's default set
+  expect(screen.queryByLabelText("PERSON")).toBeNull();
+  fireEvent.click(field("NEW_TYPE"));
+  fireEvent.click(screen.getByRole("button", { name: /save override/i }));
+  await waitFor(() => expect(put()).toBeTruthy());
+  expect(put()!.body).toMatchObject({ redaction: { enabled: true, entities: ["NEW_TYPE", "PHONE_NUMBER"] } });
+});
+
+it("a kind kept for good says so, not the Workspace's value", async () => {
+  current = reportFor({ redaction: null, retention: { recordings_days: 36500, transcripts_days: null, events_days: null } });
+  render(<AgentCompliance agentId="a1" />);
+  await ready();
+  expect(field(/keep recordings for good/i).checked).toBe(true);
+  expect(field(/recordings \(days\)/i).placeholder).toBe("kept for good");
+  expect(field(/events \(days\)/i).placeholder).toBe("Workspace: 365 days");
+});
+
 it("going back to inherit clears the override", async () => {
   current = reportFor({ redaction: { enabled: false, entities: null }, retention: { recordings_days: 7, transcripts_days: null, events_days: null } });
   render(<AgentCompliance agentId="a1" />);
@@ -121,14 +146,25 @@ it("refuses an out-of-range period before sending", async () => {
   expect(put()).toBeUndefined();
 });
 
-it("a failed projection says why, and an admin retries it", async () => {
+it("a failed projection says why, and an admin retries this agent alone", async () => {
   current = reportFor({ redaction: null, retention: null }, { state: "failed", error: "TurnCall refused: 503" });
   afterApply = reportFor({ redaction: null, retention: null });
   render(<AgentCompliance agentId="a1" />);
   expect(await screen.findByText(/could not be written: TurnCall refused: 503/i)).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-  await waitFor(() => expect(screen.getByText(/written into this agent's project/i)).toBeTruthy());
-  expect(calls.some((c) => c.path === "/compliance/apply" && c.method === "POST")).toBe(true);
+  expect((await screen.findByRole("status")).textContent).toMatch(/written into this agent's project now/i);
+  expect(applies()).toMatch(/Written into this agent's project\./);
+  const posts = calls.filter((c) => c.method === "POST").map((c) => c.path);
+  expect(posts).toEqual(["/agents/a1/compliance/apply"]); // never the Workspace's
+});
+
+it("a retry that fails again says so", async () => {
+  const failed = reportFor({ redaction: null, retention: null }, { state: "failed", error: "TurnCall refused: 503" });
+  current = failed;
+  afterApply = failed;
+  render(<AgentCompliance agentId="a1" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
+  expect((await screen.findByRole("status")).textContent).toMatch(/still could not be written: TurnCall refused: 503/i);
 });
 
 it("a non-admin reads what applies but cannot override it", async () => {

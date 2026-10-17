@@ -7,22 +7,15 @@ import { useEffect, useState } from "react";
 import { api } from "../../api";
 import { useAuth } from "../../auth";
 import { isAdmin } from "../../roles";
-import {
-  DEFAULT_ENTITIES,
-  KINDS,
-  SUPPORTED_ENTITIES,
-  describeDays,
-  describeRedaction,
-  entitiesOf,
-  entitiesToSend,
-  type AgentReport,
-} from "../../compliance";
+import { KINDS, describeDays, describeRedaction, entitiesOf, type AgentReport } from "../../compliance";
 import {
   ProjectionBadge,
   RedactionEditor,
   RetentionEditor,
+  redactionToSend,
   retentionForm,
   retentionToSend,
+  useRun,
   type RedactionForm,
   type RetentionForm,
 } from "../compliance/Fields";
@@ -32,11 +25,10 @@ export default function AgentCompliance({ agentId }: { agentId: string }) {
   const admin = isAdmin(activeWorkspace?.role);
   const [report, setReport] = useState<AgentReport | null>(null);
   const [overrideRedaction, setOverrideRedaction] = useState(false);
-  const [redaction, setRedaction] = useState<RedactionForm>({ enabled: false, picked: DEFAULT_ENTITIES });
+  const [redaction, setRedaction] = useState<RedactionForm>({ enabled: false, picked: [] });
   const [retention, setRetention] = useState<RetentionForm>(() => retentionForm(null, true));
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { busy, error, notice, run, refuse } = useRun();
+  const defaults = report?.entity_types.default ?? [];
 
   const take = (r: AgentReport) => {
     setReport(r);
@@ -45,64 +37,46 @@ export default function AgentCompliance({ agentId }: { agentId: string }) {
     // Overriding starts from the Workspace's, so a switch to "override" is not
     // also a silent change of what is redacted.
     const start = own ?? r.workspace.redaction;
-    setRedaction({ enabled: start.enabled, picked: entitiesOf(start) });
+    setRedaction({ enabled: start.enabled, picked: entitiesOf(start, r.entity_types.default) });
     setRetention(retentionForm(r.override.retention, true));
   };
 
   useEffect(() => {
     api<{ data: AgentReport }>(`/agents/${agentId}/compliance`)
       .then((r) => take(r.data))
-      .catch((e) => setError(e instanceof Error ? e.message : "Could not load the compliance settings."));
+      .catch((e) => refuse(e instanceof Error ? e.message : "Could not load the compliance settings."));
   }, [agentId]);
 
-  const run = async (fn: () => Promise<void>) => {
-    setBusy(true);
-    setError("");
-    setNotice("");
-    try {
-      await fn();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const save = () => {
-    setNotice("");
-    if (overrideRedaction && redaction.enabled && redaction.picked.length === 0) {
-      setError("Redaction: pick at least one entity type, or turn redaction off.");
-      return;
-    }
+    const red = overrideRedaction ? redactionToSend(redaction, defaults) : null;
     const ret = retentionToSend(retention, true);
-    if (ret.error) {
-      setError(ret.error);
-      return;
-    }
+    const invalid = red?.error ?? ret.error;
+    if (invalid) return refuse(invalid);
     const anyRetention = KINDS.some((k) => ret.retention[k.key] !== null);
-    const body = {
-      redaction: overrideRedaction
-        ? { enabled: redaction.enabled, entities: redaction.picked.length ? entitiesToSend(redaction.picked) : null }
-        : null,
-      retention: anyRetention ? ret.retention : null,
-    };
+    const body = { redaction: red?.redaction ?? null, retention: anyRetention ? ret.retention : null };
     return run(async () => {
       const r = await api<{ data: AgentReport }>(`/agents/${agentId}/compliance`, {
         method: "PUT",
         body: JSON.stringify(body),
       });
       take(r.data);
-      setNotice(r.data.projection.state === "applied" ? "Saved, and written into this agent." : "Saved, but not written into this agent yet; see below.");
+      return r.data.projection.state === "applied"
+        ? "Saved, and written into this agent."
+        : "Saved, but not written into this agent yet; see below.";
     });
   };
 
-  // The Workspace's retry: it writes only targets not holding their setting,
-  // this agent among them.
+  // This agent's projection alone; every other agent is left as it stands.
   const retry = () =>
     run(async () => {
-      await api("/compliance/apply", { method: "POST" });
-      const r = await api<{ data: AgentReport }>(`/agents/${agentId}/compliance`);
+      const r = await api<{ data: AgentReport }>(`/agents/${agentId}/compliance/apply`, { method: "POST" });
       take(r.data);
+      const p = r.data.projection;
+      return p.state === "applied"
+        ? "Written into this agent's project now."
+        : p.state === "failed"
+          ? `Still could not be written: ${p.error ?? "unknown error"}`
+          : "Not written into this agent's project yet.";
     });
 
   const loaded = report !== null;
@@ -127,7 +101,7 @@ export default function AgentCompliance({ agentId }: { agentId: string }) {
         <div className="callout" aria-label="What applies">
           <strong>What applies to this agent's calls</strong>
           <p>
-            Redaction: {describeRedaction(report.effective.redaction)}
+            Redaction: {describeRedaction(report.effective.redaction, defaults)}
             <span className="muted"> ({own?.redaction ? "this agent's" : "the Workspace's"})</span>
           </p>
           {KINDS.map((k) => (
@@ -159,7 +133,7 @@ export default function AgentCompliance({ agentId }: { agentId: string }) {
         <label>
           <input type="radio" name="agc-redaction" checked={!overrideRedaction} disabled={disabled}
             onChange={() => setOverrideRedaction(false)} />
-          Use the Workspace's{ws ? `: ${describeRedaction(ws.redaction)}` : ""}
+          Use the Workspace's{ws ? `: ${describeRedaction(ws.redaction, defaults)}` : ""}
         </label>
         <label>
           <input type="radio" name="agc-redaction" checked={overrideRedaction} disabled={disabled}
@@ -172,8 +146,8 @@ export default function AgentCompliance({ agentId }: { agentId: string }) {
           idPrefix="agc"
           value={redaction}
           onChange={setRedaction}
-          supported={SUPPORTED_ENTITIES}
-          defaults={DEFAULT_ENTITIES}
+          supported={report?.entity_types.supported ?? []}
+          defaults={defaults}
           disabled={disabled}
         />
       )}

@@ -33,7 +33,9 @@ const ENTRIES: AuditEntry[] = [
     id: "e1",
     changes: {
       "/config/llm/model": { before: "gpt-4o", after: "gpt-4.1" },
-      "/providers/deepgram_api_key": { before: "***", after: "***" },
+      "/providers/deepgram_api_key": { before: "***", after: "***", secret: true },
+      // Not a secret: the text itself, and no flag says otherwise.
+      "/config/greeting": { before: "Hi", after: "***", secret: false },
     },
     engine_links: [
       { project_id: "p1", engine_audit_id: "eng-1" },
@@ -84,7 +86,7 @@ const ENGINE: EngineLinkEntries[] = [
 let fetched: string[] = [];
 let auditTotal = ENTRIES.length;
 
-function stubApi(role: Role) {
+function stubApi(role: Role, entries: AuditEntry[] = ENTRIES) {
   fetched = [];
   vi.stubGlobal(
     "fetch",
@@ -115,7 +117,7 @@ function stubApi(role: Role) {
         if (path === "/agent-activity") return { data: { activity: [] } };
         if (path === "/audit/e1/engine") return { success: true, data: ENGINE };
         if (path.startsWith("/audit?"))
-          return { success: true, data: ENTRIES, total: auditTotal, page: 1, limit: 50 };
+          return { success: true, data: entries, total: auditTotal, page: 1, limit: 50 };
         return { data: {} };
       })();
       return { ok: true, status: 200, json: async () => body };
@@ -190,7 +192,10 @@ describe("Audit log, as an admin", () => {
     expect(screen.getByText("gpt-4.1")).toBeTruthy();
     expect(screen.getByText("providers › deepgram_api_key")).toBeTruthy();
     expect(screen.getAllByText("hidden")).toHaveLength(2);
-    expect(screen.queryByText("***")).toBeNull();
+    // Only the flag makes a secret: a greeting of "***" is that greeting.
+    const greeting = screen.getByText("config › greeting").closest("tr")!;
+    expect(within(greeting).queryByText("hidden")).toBeNull();
+    expect(within(greeting).getByText("***")).toBeTruthy();
 
     // The partial one: its error in the drawer, a "before" nobody read as unknown.
     const partialRow = screen.getByText("+15550100").closest("tr")!;
@@ -222,12 +227,77 @@ describe("Audit log, as an admin", () => {
     // A local day range: since is that morning's midnight, until the midnight
     // after the last day (the API's until is exclusive).
     fireEvent.change(screen.getByLabelText("From date"), { target: { value: "2026-10-01" } });
+    fireEvent.blur(screen.getByLabelText("From date"));
     fireEvent.change(screen.getByLabelText("To date"), { target: { value: "2026-10-03" } });
+    fireEvent.blur(screen.getByLabelText("To date"));
     await waitFor(() => expect(lastAuditQuery()!.get("until")).toBe(new Date(2026, 9, 4).toISOString()));
     expect(lastAuditQuery()!.get("since")).toBe(new Date(2026, 9, 1).toISOString());
 
     fireEvent.click(screen.getByRole("button", { name: "clear filters" }));
     await waitFor(() => expect(Object.fromEntries(lastAuditQuery()!)).toEqual({ page: "1", limit: "50" }));
+  });
+
+  it("an old entry's *** reads neutrally: maybe a secret, maybe the text", async () => {
+    stubApi("admin", [entry({ id: "old", changes: { "/headers": { before: "***", after: "***" } } })]);
+    renderAt("/members/audit");
+    const row = (await screen.findByText(/^ann@x\.com/, { selector: "td" })).closest("tr")!;
+    fireEvent.click(within(row).getByRole("button", { name: /Expand entry/ }));
+    const cells = await screen.findAllByText("***");
+    expect(cells).toHaveLength(2);
+    expect(cells[0].getAttribute("title")).toMatch(/predates marking secrets/);
+    expect(screen.queryByText("hidden")).toBeNull();
+  });
+
+  it("shows the year with each time, since the log is kept for good", async () => {
+    stubApi("admin");
+    renderAt("/members/audit");
+    const row = (await screen.findByText(/^ann@x\.com/, { selector: "td" })).closest("tr")!;
+    expect(within(row).getByRole("button", { name: /Expand entry/ }).textContent).toMatch(/2026/);
+  });
+
+  it("a date being typed filters once, with the day typed, not each keystroke", async () => {
+    stubApi("admin");
+    renderAt("/members/audit?from=2026-10-01");
+    await screen.findByText(/^bob@x\.com/, { selector: "td" });
+    const to = screen.getByLabelText("To date");
+    // A date input reports the year as its digits arrive.
+    for (const v of ["0002-10-17", "0020-10-17", "0202-10-17", "2026-10-17"]) fireEvent.change(to, { target: { value: v } });
+    fireEvent.blur(to);
+    await waitFor(() => expect(lastAuditQuery()!.get("until")).toBe(new Date(2026, 9, 18).toISOString()));
+    const untils = fetched
+      .filter((u) => u.startsWith("/api/audit?"))
+      .map((u) => new URLSearchParams(u.split("?")[1]).get("until"))
+      .filter(Boolean);
+    expect(untils).toEqual([new Date(2026, 9, 18).toISOString()]);
+  });
+
+  it("a whole day filters after a pause in typing, without leaving the field", async () => {
+    stubApi("admin");
+    renderAt("/members/audit");
+    await screen.findByText(/^bob@x\.com/, { selector: "td" });
+    fireEvent.change(screen.getByLabelText("From date"), { target: { value: "2026-10-05" } });
+    expect(lastAuditQuery()!.get("since")).toBeNull(); // not yet
+    await waitFor(() => expect(lastAuditQuery()!.get("since")).toBe(new Date(2026, 9, 5).toISOString()), {
+      timeout: 2000,
+    });
+  });
+
+  it("a malformed link reads as no filter, and a page that is not a whole number as the nearest one", async () => {
+    auditTotal = 120;
+    stubApi("admin");
+    renderAt("/members/audit?from=abc&to=2026-1&page=2.5");
+    expect(await screen.findByText("51–100 of 120")).toBeTruthy();
+    expect(Object.fromEntries(lastAuditQuery()!)).toEqual({ page: "2", limit: "50" });
+    expect(screen.queryByText(/could not be shown/i)).toBeNull();
+  });
+
+  it("a page past the last one goes to the last one", async () => {
+    auditTotal = 120;
+    stubApi("admin");
+    renderAt("/members/audit?page=9");
+    expect(await screen.findByText("101–120 of 120")).toBeTruthy();
+    expect(lastAuditQuery()!.get("page")).toBe("3");
+    expect(screen.queryByText(/nothing recorded yet/i)).toBeNull();
   });
 
   it("reads TurnCall's own entries on demand, and says why a link can't be read", async () => {

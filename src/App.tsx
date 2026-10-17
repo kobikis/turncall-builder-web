@@ -4,6 +4,7 @@ import { useAuth } from "./auth";
 import { stashPendingInvite, takePendingInvite } from "./pendingInvite";
 import { atLeast } from "./roles";
 import type { Role } from "./types";
+import ErrorBoundary from "./components/ErrorBoundary";
 import Layout from "./Layout";
 import Login from "./pages/Login";
 import AcceptInvite from "./pages/AcceptInvite";
@@ -72,8 +73,9 @@ export function RequireRole({ min, children }: { min: Role; children: React.Reac
 }
 
 export default function App() {
+  const { pathname } = useLocation();
   return (
-    <>
+    <ErrorBoundary resetKey={pathname}>
       <ResumePendingInvite />
       <Routes>
         <Route path="/login" element={<Login />} />
@@ -177,6 +179,6 @@ export default function App() {
         />
       </Route>
       </Routes>
-    </>
+    </ErrorBoundary>
   );
 }
