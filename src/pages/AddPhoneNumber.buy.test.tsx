@@ -265,8 +265,9 @@ it("the edit page says a pending Telnyx order can be bound once it lands", async
     </MemoryRouter>,
   );
   expect((await screen.findByRole("status")).textContent).toContain("Ordered, waiting on Telnyx");
-  // Binding stays offered: the pending mark clears with the first bind that succeeds.
-  expect(screen.getByRole("button", { name: "Save" })).toBeDefined();
+  // Binding stays offered, as an attempt: the pending mark clears with the first
+  // bind that succeeds (#104; EditPhoneNumber.pending.test.tsx has the rest).
+  expect(screen.getByRole("button", { name: "Try binding now" })).toBeDefined();
 });
 
 it("drops a search that comes back after the carrier changed, and the confirmation names the number's carrier", async () => {
