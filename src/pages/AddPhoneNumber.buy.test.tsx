@@ -51,7 +51,7 @@ vi.mock("../api", () => ({
   api: vi.fn(async (path: string, init?: RequestInit) => {
     const method = init?.method || "GET";
     calls.push({ path, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
-    if (path === "/agents") return { data: { agents: [{ agent_id: "a1", name: "Support" }] } };
+    if (path === "/agents") return { data: { agents: [{ agent_id: "a1", name: "Support" }, { agent_id: "a2", name: "Sales" }] } };
     if (path === "/integrations/twilio") return { data: { connected: true, account_sid: AC, numbers: [] } };
     if (path === "/integrations/twilio/numbers") return { data: [] };
     if (path === "/phone-numbers" && method === "GET") return { data: { phone_numbers: listed } };
@@ -96,6 +96,25 @@ const renderPage = () =>
       <AddPhoneNumber />
     </MemoryRouter>,
   );
+
+// The Agent picker (the Agent routing radio has the same label).
+const agentPicker = () => screen.getByLabelText("Agent", { selector: "select" }) as HTMLSelectElement;
+
+// A bind form starts on "Choose an agent…" with the submit disabled (#106);
+// picking the agent enables it.
+async function pickAgent(submit: string, agentId = "a1") {
+  await waitFor(() => expect(agentPicker().options.length).toBe(3));
+  const button = screen.getByRole("button", { name: submit }) as HTMLButtonElement;
+  expect(agentPicker().value).toBe("");
+  expect(agentPicker().selectedOptions[0].textContent).toBe("Choose an agent…");
+  expect(button.disabled).toBe(true);
+  expect(screen.getByText("Choose an agent to bind the number to.")).toBeDefined();
+  fireEvent.click(button);
+  expect(calls.some((c) => c.method === "PUT")).toBe(false);
+  fireEvent.change(agentPicker(), { target: { value: agentId } });
+  expect(button.disabled).toBe(false);
+  return button;
+}
 
 async function openBuy() {
   renderPage();
@@ -161,8 +180,7 @@ it("searches, buys and binds a Twilio number in one flow", async () => {
     body: { carrier: "twilio", e164: "+13125550100" },
   });
 
-  await waitFor(() => expect(screen.getByText("Support")).toBeDefined());
-  fireEvent.click(screen.getByRole("button", { name: "Bind number" }));
+  fireEvent.click(await pickAgent("Bind number"));
   await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
   expect(calls.find((c) => c.method === "PUT")).toMatchObject({
     path: "/phone-numbers/local-1",
@@ -187,8 +205,7 @@ it("shows Telnyx's price and binds a Telnyx number once bought", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Buy +13125550199" }));
 
   expect(await screen.findByText(/Bought \+13125550199 on Telnyx/)).toBeDefined();
-  await waitFor(() => expect(screen.getByText("Support")).toBeDefined());
-  fireEvent.click(screen.getByRole("button", { name: "Bind number" }));
+  fireEvent.click(await pickAgent("Bind number"));
   await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
   // Telnyx binds by E.164: no SID is sent.
   expect(calls.find((c) => c.method === "PUT")?.body).toMatchObject({ carrier: "telnyx", sid: "", routing_type: "agent" });
@@ -255,7 +272,7 @@ it("a pending Telnyx order is listed as ordered, waiting on Telnyx", async () =>
   expect(active.textContent).not.toContain("ordered");
 });
 
-it("the edit page says a pending Telnyx order can be bound once it lands", async () => {
+it("the edit page says a pending Telnyx order can be bound once it lands, and links to the bind form", async () => {
   listed = [row({ e164: "+13125550199", sid: "", carrier: "telnyx", twilio_credentials: "platform", purchase_status: "pending" })];
   render(
     <MemoryRouter initialEntries={["/phone-numbers/local-1/edit"]}>
@@ -265,9 +282,11 @@ it("the edit page says a pending Telnyx order can be bound once it lands", async
     </MemoryRouter>,
   );
   expect((await screen.findByRole("status")).textContent).toContain("Ordered, waiting on Telnyx");
-  // Binding stays offered, as an attempt: the pending mark clears with the first
-  // bind that succeeds (#104; EditPhoneNumber.pending.test.tsx has the rest).
-  expect(screen.getByRole("button", { name: "Try binding now" })).toBeDefined();
+  // Like any unassigned number, it opens on Unassigned without ?bind (#106);
+  // binding is a link away, as an attempt: the pending mark clears with the
+  // first bind that succeeds (#104; EditPhoneNumber.pending.test.tsx has the rest).
+  expect(screen.getByRole("button", { name: "Save" })).toBeDefined();
+  expect(screen.getByRole("link", { name: "Bind it" }).getAttribute("href")).toBe("/phone-numbers/local-1/edit?bind");
 });
 
 it("drops a search that comes back after the carrier changed, and the confirmation names the number's carrier", async () => {
@@ -332,9 +351,10 @@ const routingChoice = (name: string) =>
 it("the edit page opened to bind an unassigned number starts on Agent routing", async () => {
   listed = [row()];
   renderEdit("/phone-numbers/local-1/edit?bind");
-  fireEvent.click(await screen.findByRole("button", { name: "Bind number" }));
+  await screen.findByRole("button", { name: "Bind number" });
+  fireEvent.click(await pickAgent("Bind number", "a2"));
   await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
-  expect(calls.find((c) => c.method === "PUT")?.body).toMatchObject({ routing_type: "agent", agent_id: "a1" });
+  expect(calls.find((c) => c.method === "PUT")?.body).toMatchObject({ routing_type: "agent", agent_id: "a2" });
 });
 
 it("editing an unassigned number without ?bind keeps it unassigned", async () => {

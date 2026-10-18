@@ -62,6 +62,9 @@ export default function PhoneNumberForm(props: {
   const [routing, setRouting] = useState<Routing>(
     !i.routing_type || (props.bind && i.routing_type === "none") ? "agent" : i.routing_type,
   );
+  // No agent is preselected: the user picks one, so a submit can't route the
+  // number to an agent nobody chose (#106, #107). A bound number keeps its
+  // agent, and a workspace with exactly one agent gets it, as there's no choice.
   const [agentId, setAgentId] = useState(i.agent_id || "");
   const [serverUrl, setServerUrl] = useState(i.server_url || "");
   const [sms, setSms] = useState(!!i.sms_enabled);
@@ -85,7 +88,7 @@ export default function PhoneNumberForm(props: {
     api("/agents")
       .then((r) => {
         setAgents(r.data.agents);
-        if (!agentId && r.data.agents[0]) setAgentId(r.data.agents[0].agent_id);
+        if (!i.agent_id && r.data.agents.length === 1) setAgentId(r.data.agents[0].agent_id);
       })
       .catch((e) => setErr(e.message));
     api("/meta").then((r) => setVoiceHook(r.data.twilio_voice_webhook)).catch(() => {});
@@ -181,6 +184,9 @@ export default function PhoneNumberForm(props: {
       setBusy(false);
     }
   }
+
+  // Agent routing with no agent picked yet: nothing to submit.
+  const agentUnpicked = (routing === "agent" || routing === "agent_call_init") && !agentId;
 
   if (postSubmit) {
     return (
@@ -365,6 +371,7 @@ export default function PhoneNumberForm(props: {
             </p>
           ) : (
             <select id="pn-agent" className="input" value={agentId} onChange={(e) => setAgentId(e.target.value)}>
+              {!agentId && <option value="" disabled>Choose an agent…</option>}
               {agents.map((a) => <option key={a.agent_id} value={a.agent_id}>{a.name}</option>)}
             </select>
           )}
@@ -412,7 +419,11 @@ export default function PhoneNumberForm(props: {
         <div style={{ height: 8 }} />
       )}
 
-      <button className="btn btn-primary" onClick={submit} disabled={busy}>
+      {agentUnpicked && agents.length > 0 && (
+        <p id="pn-agent-hint" className="hint" style={{ margin: "0 0 8px" }}>Choose an agent to bind the number to.</p>
+      )}
+      <button className="btn btn-primary" onClick={submit} disabled={busy || agentUnpicked}
+        aria-describedby={agentUnpicked && agents.length > 0 ? "pn-agent-hint" : undefined}>
         {props.pendingBind && routing !== "none"
           ? busy ? "Trying…" : "Try binding now"
           : busy ? "Saving…" : props.submitLabel}

@@ -3,7 +3,9 @@
 // Binding a bought Telnyx number whose order hadn't finished (#104, option 1).
 // Nothing can ask Telnyx about the order, so a bind is the check: the Edit page
 // says the submit is an attempt, a refusal keeps the form for a one-click
-// retry, and a bind that succeeds drops the pending mark.
+// retry, and a bind that succeeds drops the pending mark. Like any unassigned
+// number, it opens on Unassigned unless the URL has ?bind, and a bind form
+// makes the admin pick the agent (#106).
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -66,30 +68,91 @@ function show(path = "/phone-numbers/n1/edit") {
 
 // The Agent picker (the Agent routing radio has the same label).
 const agent = () => screen.getByLabelText("Agent", { selector: "select" }) as HTMLSelectElement;
+const tryBind = () => screen.getByRole("button", { name: "Try binding now" }) as HTMLButtonElement;
+const BIND = "/phone-numbers/n1/edit?bind";
+
+// Opened to bind: wait for the agents, then pick one.
+async function pick(agentId = "a1") {
+  await waitFor(() => expect(agent().options.length).toBeGreaterThan(1));
+  fireEvent.change(agent(), { target: { value: agentId } });
+}
 
 const refuse = () => {
   throw new Error(REFUSAL);
 };
 
 it("explains that a bind is the check, and labels the submit as an attempt", async () => {
-  show();
+  show(BIND);
   const callout = await screen.findByRole("status");
   expect(callout.textContent).toContain("Ordered, waiting on Telnyx");
   expect(callout.textContent).toContain("ord-1");
   expect(callout.textContent).toMatch(/trying a bind is the check/);
   expect(callout.textContent).toMatch(/within minutes, unless the order is waiting on regulatory documents/);
   expect(callout.textContent).toMatch(/can take days/);
-  // Opened to bind: Agent routing, even without ?bind.
+  // Opened to bind: Agent routing, and no "Bind it" link, since it's already here.
   await waitFor(() => expect(agent()).toBeDefined());
-  expect(screen.getByRole("button", { name: "Try binding now" })).toBeDefined();
+  expect(tryBind()).toBeDefined();
+  expect(screen.queryByRole("link", { name: "Bind it" })).toBeNull();
+});
+
+it("without ?bind, opens on Unassigned with Save, and links to the bind form", async () => {
+  show();
+  const callout = await screen.findByRole("status");
+  expect((screen.getByLabelText("Unassigned") as HTMLInputElement).checked).toBe(true);
+  expect(screen.getByRole("button", { name: "Save" })).toBeDefined();
+  expect(screen.queryByRole("button", { name: "Try binding now" })).toBeNull();
+  expect(screen.queryByLabelText("Agent", { selector: "select" })).toBeNull();
+
+  const link = screen.getByRole("link", { name: "Bind it" });
+  expect(callout.contains(link)).toBe(true);
+  expect(link.getAttribute("href")).toBe(BIND);
+  fireEvent.click(link);
+  // The same page, now a bind form: Agent routing, with the agent still to pick.
+  await waitFor(() => expect(agent().value).toBe(""));
+  expect((screen.getByLabelText("Agent", { selector: "input" }) as HTMLInputElement).checked).toBe(true);
+  expect(tryBind().disabled).toBe(true);
+  expect(screen.queryByRole("link", { name: "Bind it" })).toBeNull();
+});
+
+it("without ?bind, saves a label edit without binding", async () => {
+  answers = [() => ({ data: { ...pendingRow, label: "Front line" } })];
+  show();
+  fireEvent.change(await screen.findByLabelText("Label"), { target: { value: "Front line" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(puts).toHaveLength(1));
+  expect(puts[0]).toMatchObject({ routing_type: "none", label: "Front line" });
+  expect(puts[0]).not.toHaveProperty("agent_id");
+});
+
+it("with ?bind, starts on a placeholder and won't submit until an agent is picked", async () => {
+  show(BIND);
+  await waitFor(() => expect(agent().options.length).toBe(3));
+  expect(agent().value).toBe("");
+  expect(agent().selectedOptions[0].textContent).toBe("Choose an agent…");
+  expect(tryBind().disabled).toBe(true);
+  expect(screen.getByText("Choose an agent to bind the number to.")).toBeDefined();
+  fireEvent.click(tryBind());
+  expect(puts).toHaveLength(0);
+
+  fireEvent.change(agent(), { target: { value: "a2" } });
+  expect(tryBind().disabled).toBe(false);
+  expect(screen.queryByText("Choose an agent to bind the number to.")).toBeNull();
+  expect(Array.from(agent().options).map((o) => o.value)).toEqual(["a1", "a2"]);
+});
+
+it("without ?bind, choosing Agent routing still asks for the agent", async () => {
+  show();
+  fireEvent.click(await screen.findByLabelText("Agent", { selector: "input" }));
+  await waitFor(() => expect(agent().options.length).toBe(3));
+  expect(agent().value).toBe("");
+  expect(tryBind().disabled).toBe(true);
 });
 
 it("keeps every value after a refusal and shows the sentence by the button, so a retry is one click", async () => {
   answers = [refuse, refuse];
-  show();
-  await waitFor(() => expect(agent()).toBeDefined());
+  show(BIND);
+  await pick("a2");
   fireEvent.change(screen.getByLabelText("Label"), { target: { value: "Front line" } });
-  fireEvent.change(agent(), { target: { value: "a2" } });
   fireEvent.click(screen.getByLabelText("Agent + caller info"));
 
   fireEvent.click(screen.getByRole("button", { name: "Try binding now" }));
@@ -110,8 +173,8 @@ it("keeps every value after a refusal and shows the sentence by the button, so a
 it("drops the pending mark once a bind succeeds", async () => {
   // Telnyx's webhook warning keeps the page up, so the bound state shows here.
   answers = [refuse, () => ({ data: { ...pendingRow, id: "tc-1", routing_type: "agent", agent_id: "a1", purchase_status: null, telnyx_order_id: null, webhooks_configured: false } })];
-  show();
-  await waitFor(() => expect(agent()).toBeDefined());
+  show(BIND);
+  await pick();
   fireEvent.click(screen.getByRole("button", { name: "Try binding now" }));
   await screen.findByRole("alert");
   fireEvent.click(screen.getByRole("button", { name: "Try binding now" }));
@@ -122,14 +185,14 @@ it("drops the pending mark once a bind succeeds", async () => {
 
 it("goes to the list after a bind that succeeds cleanly", async () => {
   answers = [() => ({ data: { ...pendingRow, id: "tc-1", routing_type: "agent", agent_id: "a1", purchase_status: null, telnyx_order_id: null } })];
-  show();
-  await waitFor(() => expect(agent()).toBeDefined());
+  show(BIND);
+  await pick();
   fireEvent.click(screen.getByRole("button", { name: "Try binding now" }));
   expect(await screen.findByText("Phone numbers list")).toBeDefined();
 });
 
 it("calls an unassigned edit of a pending number a save", async () => {
-  show();
+  show(BIND);
   await waitFor(() => expect(agent()).toBeDefined());
   fireEvent.click(screen.getByLabelText("Unassigned"));
   expect(screen.getByRole("button", { name: "Save" })).toBeDefined();
@@ -147,4 +210,16 @@ it("leaves a number that isn't pending as it was", async () => {
   show("/phone-numbers/n1/edit?bind");
   await waitFor(() => expect(screen.getByRole("button", { name: "Bind number" })).toBeDefined());
   expect(screen.queryByRole("button", { name: "Try binding now" })).toBeNull();
+});
+
+it("keeps a bound number's agent, with and without ?bind", async () => {
+  row = { ...pendingRow, purchase_status: null, telnyx_order_id: null, routing_type: "agent", agent_id: "a2" };
+  for (const path of ["/phone-numbers/n1/edit", BIND]) {
+    show(path);
+    await waitFor(() => expect(agent().options.length).toBe(2));
+    expect(agent().value).toBe("a2");
+    expect(screen.queryByText("Choose an agent…")).toBeNull();
+    expect((screen.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(false);
+    cleanup();
+  }
 });

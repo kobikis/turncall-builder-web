@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import PhoneNumberForm, { PhoneInitial } from "./PhoneNumberForm";
 import type { PendingPurchase } from "../types";
@@ -8,7 +8,8 @@ export default function EditPhoneNumber() {
   const { id } = useParams();
   // ?bind: opened to bind an unassigned number (Buy's pending screen links here),
   // so it starts on Agent routing. Without it, an unassigned number keeps
-  // Unassigned selected and can be edited without binding it.
+  // Unassigned selected and can be edited without binding it. A pending number
+  // follows the same rule (#106).
   const [params] = useSearchParams();
   const bind = params.has("bind");
   const [initial, setInitial] = useState<(PhoneInitial & PendingPurchase & { telnyx_order_id?: string | null }) | null>(null);
@@ -46,13 +47,19 @@ export default function EditPhoneNumber() {
             it finishes, a bind is refused and the number stays as it is. Telnyx usually finishes within
             minutes, unless the order is waiting on regulatory documents, in which case it can take days.
           </p>
+          {!bind && (
+            <p>
+              <Link to={`/phone-numbers/${id}/edit?bind`}>Bind it</Link>
+            </p>
+          )}
         </div>
       )}
       <PhoneNumberForm
+        // "Bind it" adds ?bind on this same route: start the form over in bind mode.
+        key={bind ? "bind" : "edit"}
         initial={initial}
         lockNumber
-        // A pending number is here to be bound, so it starts on Agent routing.
-        bind={bind || pending}
+        bind={bind}
         pendingBind={pending}
         submitLabel={bind && !pending && initial.routing_type === "none" ? "Bind number" : "Save"}
         onSubmit={async (body) => {
