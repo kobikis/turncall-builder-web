@@ -1,8 +1,30 @@
+// `reason` and `numbers` are a refusal's machine-readable parts, when the body
+// has them (e.g. 409 `numbers_not_on_account`, builder-api#114); `message` is
+// still the sentence every other caller shows.
 export class ApiError extends Error {
-  constructor(message: string, public status: number) {
+  reason?: string;
+  numbers?: string[];
+  constructor(
+    message: string,
+    public status: number,
+    extra?: { reason?: string; numbers?: string[] },
+  ) {
     super(message);
+    this.reason = extra?.reason;
+    this.numbers = extra?.numbers;
   }
 }
+
+const refusalParts = (body: unknown): { reason?: string; numbers?: string[] } => {
+  const b = (body ?? {}) as { reason?: unknown; numbers?: unknown };
+  return {
+    reason: typeof b.reason === "string" ? b.reason : undefined,
+    numbers:
+      Array.isArray(b.numbers) && b.numbers.every((n) => typeof n === "string")
+        ? (b.numbers as string[])
+        : undefined,
+  };
+};
 
 // The active Workspace, sent as X-Workspace-Id on every builder call so the
 // backend scopes the request (RBAC gate, builder-api #31). AuthProvider owns
@@ -41,7 +63,11 @@ export const api = async <T = any>(path: string, init?: RequestInit): Promise<T>
   }
   const body = await r.json().catch(() => null);
   if (!r.ok)
-    throw new ApiError((body as { detail?: string })?.detail || `Request failed (${r.status})`, r.status);
+    throw new ApiError(
+      (body as { detail?: string })?.detail || `Request failed (${r.status})`,
+      r.status,
+      refusalParts(body),
+    );
   return body as T;
 };
 

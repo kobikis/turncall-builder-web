@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api } from "../../api";
+import { api, ApiError } from "../../api";
 import { TwilioCard } from "./TwilioAccount";
 import { tint } from "../../apps";
 
@@ -154,6 +154,20 @@ const DISPLAY_NAMES: Record<string, string> = {
 export const displayName = (provider: string) =>
   DISPLAY_NAMES[provider] ?? provider.charAt(0).toUpperCase() + provider.slice(1);
 
+// A request the server may refuse until bound numbers are acknowledged
+// (builder-api#114); `acknowledge` is set only on the resend.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Send = (acknowledge?: string[]) => Promise<any>;
+
+/** The refusal to connect a Telnyx account that doesn't hold this workspace's
+ * bound numbers: they'd stop answering calls (builder-api#114). */
+const strandedNumbers = (e: unknown): string[] | null =>
+  e instanceof ApiError && e.reason === "numbers_not_on_account" && e.numbers?.length ? e.numbers : null;
+
+/** The same body, carrying the acknowledgement only on a resend. */
+const withAck = (body: Record<string, unknown>, acknowledge?: string[]) =>
+  acknowledge ? { ...body, acknowledge_numbers: acknowledge } : body;
+
 const primaryRole = (card: ProviderCard): Role =>
   GROUP_ORDER.find((r) => card.serves[r]?.length) ?? "llm";
 
@@ -172,22 +186,44 @@ function Card({
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
+  // Numbers the server says this account would strand, and how to resend the
+  // refused request with them acknowledged.
+  const [stranded, setStranded] = useState<{ numbers: string[]; resend: () => void } | null>(null);
+  const [understood, setUnderstood] = useState(false);
+  const discardStranded = () => {
+    setStranded(null);
+    setUnderstood(false);
+  };
   const close = () => {
     setOpen(false);
     setConfirming(false);
     setValues({});
     setError("");
+    discardStranded();
   };
 
-  const run = async (fn: () => Promise<unknown>) => {
+  const run = async (
+    send: Send,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    done: (r: any) => void = () => onData(null), // reload
+    fallback = "Something went wrong.",
+    acknowledge?: string[],
+  ) => {
     setBusy(true);
     setError("");
     try {
-      await fn();
+      const r = await send(acknowledge);
       close();
-      onData(null); // reload
+      done(r);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      const numbers = strandedNumbers(e);
+      setUnderstood(false);
+      if (numbers) {
+        setStranded({ numbers, resend: () => void run(send, done, fallback, numbers) });
+      } else {
+        setStranded(null);
+        setError(e instanceof Error ? e.message : fallback);
+      }
     } finally {
       setBusy(false);
     }
@@ -205,29 +241,31 @@ function Card({
         : Boolean(values.api_key?.trim());
 
   const save = () =>
-    run(() =>
-      api(`/integrations/providers/${card.provider}`, { method: "PUT", body: JSON.stringify(body) }),
+    run((ack) =>
+      api(`/integrations/providers/${card.provider}`, {
+        method: "PUT",
+        body: JSON.stringify(withAck(body, ack)),
+      }),
     );
   const disconnect = () =>
     run(() => api(`/integrations/providers/${card.provider}`, { method: "DELETE" }));
   const retry = () =>
-    run(() => api(`/integrations/providers/${card.provider}/apply`, { method: "POST" }));
-  const adopt = async (agentId: string) => {
-    setBusy(true);
-    setError("");
-    try {
-      const r = await api(`/integrations/providers/${card.provider}/adopt`, {
+    run((ack) =>
+      api(`/integrations/providers/${card.provider}/apply`, {
         method: "POST",
-        body: JSON.stringify({ agent_id: agentId }),
-      });
-      close();
-      onData(r.data.providers);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not adopt the key.");
-    } finally {
-      setBusy(false);
-    }
-  };
+        ...(ack ? { body: JSON.stringify(withAck({}, ack)) } : {}),
+      }),
+    );
+  const adopt = (agentId: string) =>
+    run(
+      (ack) =>
+        api(`/integrations/providers/${card.provider}/adopt`, {
+          method: "POST",
+          body: JSON.stringify(withAck({ agent_id: agentId }, ack)),
+        }),
+      (r) => onData(r.data.providers),
+      "Could not adopt the key.",
+    );
 
   const failed = card.agents.filter((a) => a.state === "failed" || a.state === "remove_failed");
   const pinned = card.pinned_agents.length;
@@ -235,6 +273,47 @@ function Card({
   const checked = validationText(card.validation);
 
   const name = displayName(card.provider);
+  const one = stranded?.numbers.length === 1;
+  const strandedPanel = stranded && (
+    <div className="callout warn" role="alertdialog" aria-label={`Numbers not on this ${name} account`}>
+      <strong>{one ? `This number isn't` : `These numbers aren't`} on this {name} account:</strong>
+      <ul>
+        {stranded.numbers.map((n) => (
+          <li key={n}>{n}</li>
+        ))}
+      </ul>
+      <p>
+        {one ? "It's" : "They're"} bound in this workspace but on another {name} account, likely
+        TurnCall's platform account. Once this account is connected, {one ? "it" : "they"} will stop
+        answering calls.
+      </p>
+      <label
+        htmlFor={`${card.provider}-ack-numbers`}
+        style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 400, marginTop: 8 }}
+      >
+        <input
+          id={`${card.provider}-ack-numbers`}
+          type="checkbox"
+          checked={understood}
+          onChange={(e) => setUnderstood(e.target.checked)}
+        />
+        I understand these numbers will stop answering calls
+      </label>
+      <div className="modal-actions">
+        <button type="button" className="btn" onClick={discardStranded}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="btn btn-danger"
+          disabled={busy || !understood}
+          onClick={stranded.resend}
+        >
+          Connect anyway
+        </button>
+      </div>
+    </div>
+  );
   const status = card.disconnecting
     ? { cls: "warn", text: "Disconnecting" }
     : card.connected
@@ -274,6 +353,7 @@ function Card({
         ) : (
           <p className="desc meta">{webhookNumbersText(card)}</p>
         ))}
+      {!open && strandedPanel}
       {pinned > 0 && (
         <p className="desc meta">
           {pinned === 1 ? "1 agent uses its own key" : `${pinned} agents use their own key`} for
@@ -415,13 +495,14 @@ function Card({
                     <button type="button" className="btn" onClick={close}>
                       Cancel
                     </button>
-                    <button type="submit" className="btn btn-primary" disabled={busy || !canSave}>
+                    <button type="submit" className="btn btn-primary" disabled={busy || !canSave || !!stranded}>
                       {busy ? "Checking…" : card.connected ? "Replace key" : "Save key"}
                     </button>
                   </div>
                 )}
               </form>
             )}
+            {strandedPanel}
             {error && (
               <div className="callout error" role="alert">
                 {error}
