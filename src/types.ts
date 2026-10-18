@@ -148,3 +148,13 @@ export type PhoneNumber = {
   server_url: string | null;
   sms_enabled: boolean;
 };
+
+// ---- Releasing a number (#101) ----------------------------------------------
+// POST /phone-numbers/{id}/release {confirm: <the exact E.164>} (builder-api #108).
+// Admin-only, unassigned numbers only. The registry row is deleted; refetch the list.
+export type PhoneNumberRelease = {
+  released: string; // the E.164 given back
+  carrier: "twilio" | "telnyx";
+  external_number_sid: string;
+};
+// ---- end releasing a number -------------------------------------------------
