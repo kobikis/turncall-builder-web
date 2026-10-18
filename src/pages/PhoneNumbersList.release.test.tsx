@@ -15,19 +15,24 @@ const row = (over: Partial<PhoneNumber>): PhoneNumber => ({
   agent_id: null,
   server_url: null,
   sms_enabled: false,
+  sid: "PN1",
+  twilio_credentials: "workspace",
+  purchase_status: null,
   ...over,
 });
 const seed = (): PhoneNumber[] => [
   row({}),
-  row({ id: "n-telnyx", e164: "+13125550101", carrier: "telnyx" }),
+  row({ id: "n-telnyx", e164: "+13125550101", carrier: "telnyx", twilio_credentials: "platform" }),
   row({ id: "n-routed", e164: "+13125550102", routing_type: "agent", agent_id: "a1" }),
-  row({ id: "n-pbx", e164: "+13125550103", carrier: "asterisk" }),
+  row({ id: "n-pbx", e164: "+13125550103", carrier: "asterisk", sid: "", twilio_credentials: "platform" }),
 ];
 
 const calls: { path: string; method?: string; body?: unknown }[] = [];
 let numbers = seed();
 let refuse = "";
 let role: Role = "admin";
+// When set, a release waits on it, so a test can act while it runs.
+let hold: Promise<void> | null = null;
 
 vi.mock("../api", () => ({
   ApiError: class ApiError extends Error {},
@@ -37,6 +42,7 @@ vi.mock("../api", () => ({
     if (path === "/phone-numbers") return { data: { phone_numbers: numbers } };
     const m = path.match(/^\/phone-numbers\/([^/]+)\/release$/);
     if (m && init?.method === "POST") {
+      if (hold) await hold;
       if (refuse) throw new Error(refuse);
       const gone = numbers.find((n) => n.id === m[1])!;
       numbers = numbers.filter((n) => n.id !== m[1]);
@@ -59,6 +65,7 @@ afterEach(() => {
   numbers = seed();
   refuse = "";
   role = "admin";
+  hold = null;
   confirmSpy.mockClear();
   cleanup();
 });
@@ -152,4 +159,68 @@ it.each([
   const dialog = screen.getByRole("alertdialog", { name: "Release +13125550100" });
   expect((await within(dialog).findByRole("alert")).textContent).toBe(sentence);
   expect(screen.getByText("+13125550100")).toBeTruthy();
+});
+
+it("offers no release on a Twilio number on TurnCall's platform account, and says only the operator can release it", async () => {
+  numbers = [
+    row({}),
+    row({ id: "n-platform", e164: "+13125550104", twilio_credentials: "platform" }),
+  ];
+  await renderList();
+  expect(within(rowOf("+13125550104")).queryByRole("button", { name: "Release" })).toBeNull();
+  fireEvent.click(within(rowOf("+13125550104")).getByRole("button", { name: "Remove from list" }));
+  const dialog = screen.getByRole("alertdialog", { name: "Remove +13125550104 from the list" });
+  expect(dialog.textContent).toMatch(/stays on TurnCall's platform Twilio account, not this workspace's/);
+  expect(dialog.textContent).toMatch(/only the TurnCall operator can release it/);
+  expect(dialog.textContent).not.toMatch(/your Twilio account/);
+  expect(dialog.textContent).not.toMatch(/use Release instead/);
+});
+
+it("a Telnyx number is still released, though its row reads twilio_credentials platform", async () => {
+  await renderList();
+  expect(within(rowOf("+13125550101")).getByRole("button", { name: "Release" })).toBeTruthy();
+});
+
+it("offers no release on a pending Telnyx order and says when it can be released", async () => {
+  numbers = [row({}), row({ id: "n-ordered", e164: "+13125550105", carrier: "telnyx", sid: "", twilio_credentials: "platform", purchase_status: "pending" })];
+  await renderList();
+  const r = rowOf("+13125550105");
+  expect(within(r).queryByRole("button", { name: "Release" })).toBeNull();
+  expect(r.textContent).toContain("Can be released once Telnyx finishes the order.");
+  expect(rowOf("+13125550100").textContent).not.toContain("once Telnyx finishes");
+});
+
+async function startHeldRelease(e164: string) {
+  let finish!: () => void;
+  hold = new Promise((r) => (finish = r));
+  openRelease(e164);
+  fireEvent.change(screen.getByLabelText(`Type ${e164} to confirm`), { target: { value: e164 } });
+  fireEvent.click(screen.getByRole("button", { name: "Release number permanently" }));
+  await waitFor(() => expect(calls.some((c) => c.path.endsWith("/release"))).toBe(true));
+  return finish;
+}
+
+it("can't cancel a release while it runs", async () => {
+  await renderList();
+  const finish = await startHeldRelease("+13125550100");
+  expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(true);
+  finish();
+  await waitFor(() => expect(screen.queryByText("+13125550100")).toBeNull());
+});
+
+it.each([
+  ["succeeds", ""],
+  ["is refused", "TurnCall refused to release +13125550100: Twilio returned an error"],
+])("a release that %s after another row's confirmation opened leaves that confirmation alone", async (_, sentence) => {
+  refuse = sentence;
+  await renderList();
+  const finish = await startHeldRelease("+13125550100");
+  openRelease("+13125550101");
+  const other = screen.getByRole("alertdialog", { name: "Release +13125550101" });
+  expect((within(other).getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(false);
+  finish();
+  await waitFor(() => expect(calls.filter((c) => c.path === "/phone-numbers").length).toBeGreaterThan(sentence ? 0 : 1));
+  await new Promise((r) => setTimeout(r, 0));
+  expect(screen.getByRole("alertdialog", { name: "Release +13125550101" })).toBeTruthy();
+  expect(within(screen.getByRole("alertdialog")).queryByRole("alert")).toBeNull();
 });

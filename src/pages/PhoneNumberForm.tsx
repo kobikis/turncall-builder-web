@@ -41,6 +41,9 @@ function crossesProjects(before: PhoneInitial, after: { routing: Routing; agentI
 export default function PhoneNumberForm(props: {
   initial?: PhoneInitial;
   lockNumber?: boolean;
+  // Opened to bind the number (a bought one, or Edit's ?bind): an unassigned
+  // number then starts on Agent routing instead of Unassigned.
+  bind?: boolean;
   submitLabel: string;
   onSubmit: (body: any) => Promise<any>;
 }) {
@@ -52,7 +55,9 @@ export default function PhoneNumberForm(props: {
   const isTwilio = carrier === "twilio";
   const [sid, setSid] = useState(i.sid || "");
   const [e164, setE164] = useState(i.e164 || "");
-  const [routing, setRouting] = useState<Routing>(i.routing_type || "agent");
+  const [routing, setRouting] = useState<Routing>(
+    !i.routing_type || (props.bind && i.routing_type === "none") ? "agent" : i.routing_type,
+  );
   const [agentId, setAgentId] = useState(i.agent_id || "");
   const [serverUrl, setServerUrl] = useState(i.server_url || "");
   const [sms, setSms] = useState(!!i.sms_enabled);

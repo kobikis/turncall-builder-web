@@ -22,17 +22,27 @@ const telnyxNum = {
   capabilities: { voice: true, sms: false, mms: false },
   upfront_cost: "1.00", monthly_cost: "1.50", currency: "USD",
 };
+// A registry row, as GET /phone-numbers and /phone-numbers/{id} return it:
+// `purchase_status` is "pending" while a bought Telnyx order is unfinished.
 const row = (over: Record<string, unknown> = {}) => ({
   id: "local-1", e164: "+13125550100", sid: "PN123", routing_type: "none", agent_id: null,
   project_id: null, server_url: null, server_url_secret: null, sms_enabled: false, label: null,
   carrier: "twilio", workspace_id: "w1", twilio_account_sid: AC, twilio_credentials: "workspace",
-  status: "active", telnyx_order_id: null, ...over,
+  purchase_status: null, ...over,
 });
+// POST /phone-numbers/purchase: the new registry row plus `status` and
+// `telnyx_order_id`, which only this response carries.
+const bought = (over: Record<string, unknown> = {}) => {
+  const pending = over.status === "pending";
+  return row({ status: "active", telnyx_order_id: null, purchase_status: pending ? "pending" : null, ...over });
+};
 
 const calls: { path: string; method?: string; body?: unknown }[] = [];
 let role: Role = "admin";
 let carriers = ["twilio", "telnyx"];
-let purchased: ReturnType<typeof row> = row();
+let purchased: Record<string, unknown> = bought();
+// When set, searches wait on it, so a test can change the carrier mid-search.
+let holdSearch: Promise<void> | null = null;
 let refusePurchase = "";
 let listed: unknown[] = [];
 
@@ -49,6 +59,7 @@ vi.mock("../api", () => ({
     if (path.startsWith("/phone-numbers/available")) {
       const q = new URLSearchParams(path.split("?")[1] || "");
       const c = q.get("carrier");
+      if (c && holdSearch) await holdSearch;
       return { data: { carriers, numbers: c === "twilio" ? [twilioNum] : c === "telnyx" ? [telnyxNum] : [] } };
     }
     if (path === "/phone-numbers/purchase") {
@@ -72,7 +83,8 @@ afterEach(() => {
   calls.length = 0;
   role = "admin";
   carriers = ["twilio", "telnyx"];
-  purchased = row();
+  purchased = bought();
+  holdSearch = null;
   refusePurchase = "";
   listed = [];
   cleanup();
@@ -162,7 +174,7 @@ it("searches, buys and binds a Twilio number in one flow", async () => {
 });
 
 it("shows Telnyx's price and binds a Telnyx number once bought", async () => {
-  purchased = row({ e164: "+13125550199", sid: "tel-1", carrier: "telnyx", twilio_account_sid: null, twilio_credentials: "platform" });
+  purchased = bought({ e164: "+13125550199", sid: "tel-1", carrier: "telnyx", twilio_account_sid: null, twilio_credentials: "platform" });
   const picker = await openBuy();
   fireEvent.change(picker, { target: { value: "telnyx" } });
   fireEvent.click(screen.getByRole("button", { name: "Search numbers" }));
@@ -182,8 +194,8 @@ it("shows Telnyx's price and binds a Telnyx number once bought", async () => {
   expect(calls.find((c) => c.method === "PUT")?.body).toMatchObject({ carrier: "telnyx", sid: "", routing_type: "agent" });
 });
 
-it("explains a pending Telnyx order and does not offer to bind it", async () => {
-  purchased = row({
+it("says a pending Telnyx order can be bound once Telnyx finishes, and links to its Edit page", async () => {
+  purchased = bought({
     e164: "+13125550199", sid: "", carrier: "telnyx", twilio_account_sid: null,
     twilio_credentials: "platform", status: "pending", telnyx_order_id: "ord-1",
   });
@@ -195,8 +207,12 @@ it("explains a pending Telnyx order and does not offer to bind it", async () => 
 
   const status = await screen.findByRole("status");
   expect(status.textContent).toContain("+13125550199 is ordered from Telnyx");
-  expect(status.textContent).toContain("once Telnyx finishes the order");
+  // The same rule as the Edit page: bindable once the order lands, refused before.
+  expect(status.textContent).toContain("can be bound once Telnyx finishes it; until then a bind is refused");
   expect(screen.queryByRole("button", { name: "Bind number" })).toBeNull();
+  expect(screen.getByRole("link", { name: "Bind it on its Edit page" }).getAttribute("href")).toBe(
+    "/phone-numbers/local-1/edit?bind",
+  );
   expect(screen.getByRole("link", { name: "Go to Phone Numbers" }).getAttribute("href")).toBe("/phone-numbers");
 });
 
@@ -251,4 +267,81 @@ it("the edit page says a pending Telnyx order can be bound once it lands", async
   expect((await screen.findByRole("status")).textContent).toContain("Ordered, waiting on Telnyx");
   // Binding stays offered: the pending mark clears with the first bind that succeeds.
   expect(screen.getByRole("button", { name: "Save" })).toBeDefined();
+});
+
+it("drops a search that comes back after the carrier changed, and the confirmation names the number's carrier", async () => {
+  let finish!: () => void;
+  holdSearch = new Promise((r) => (finish = r));
+  const picker = await openBuy();
+  fireEvent.click(screen.getByRole("button", { name: "Search numbers" })); // a Twilio search, still running
+  fireEvent.change(picker, { target: { value: "telnyx" } });
+  finish();
+  await waitFor(() => expect(calls.filter((c) => c.path.includes("carrier=")).length).toBe(1));
+  await new Promise((r) => setTimeout(r, 0));
+  // The Twilio results don't land under Telnyx.
+  expect(screen.queryByRole("button", { name: "Choose +13125550100" })).toBeNull();
+
+  holdSearch = null;
+  fireEvent.click(screen.getByRole("button", { name: "Search numbers" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Choose +13125550199" }));
+  expect(screen.getByRole("group", { name: "Buy +13125550199" }).textContent).toContain("Buy +13125550199 on Telnyx?");
+  fireEvent.click(screen.getByRole("button", { name: "Buy +13125550199" }));
+  await waitFor(() =>
+    expect(calls.find((c) => c.path === "/phone-numbers/purchase")?.body).toEqual({ carrier: "telnyx", e164: "+13125550199" }),
+  );
+});
+
+it("locks the Bind/Buy switch while buying and hides it once a number is bought", async () => {
+  let finish!: () => void;
+  const held = new Promise<void>((r) => (finish = r));
+  const { api } = await import("../api");
+  const real = vi.mocked(api).getMockImplementation()!;
+  vi.mocked(api).mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === "/phone-numbers/purchase") await held;
+    return real(path, init);
+  });
+  try {
+    await openBuy();
+    fireEvent.click(screen.getByRole("button", { name: "Search numbers" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Choose +13125550100" }));
+    fireEvent.click(screen.getByRole("button", { name: "Buy +13125550100" }));
+    const toBind = screen.getByRole("button", { name: "Bind a number you have" }) as HTMLButtonElement;
+    await waitFor(() => expect(toBind.disabled).toBe(true));
+    finish();
+    expect(await screen.findByText(/Bought \+13125550100 on Twilio/)).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Bind a number you have" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Buy a number" })).toBeNull();
+  } finally {
+    vi.mocked(api).mockImplementation(real);
+  }
+});
+
+const renderEdit = (url: string) =>
+  render(
+    <MemoryRouter initialEntries={[url]}>
+      <Routes>
+        <Route path="/phone-numbers/:id/edit" element={<EditPhoneNumber />} />
+        <Route path="/phone-numbers" element={<p>list</p>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+const routingChoice = (name: string) =>
+  screen.getByRole("radio", { name }) as HTMLInputElement;
+
+it("the edit page opened to bind an unassigned number starts on Agent routing", async () => {
+  listed = [row()];
+  renderEdit("/phone-numbers/local-1/edit?bind");
+  fireEvent.click(await screen.findByRole("button", { name: "Bind number" }));
+  await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
+  expect(calls.find((c) => c.method === "PUT")?.body).toMatchObject({ routing_type: "agent", agent_id: "a1" });
+});
+
+it("editing an unassigned number without ?bind keeps it unassigned", async () => {
+  listed = [row()];
+  renderEdit("/phone-numbers/local-1/edit");
+  const save = await screen.findByRole("button", { name: "Save" });
+  expect(routingChoice("Unassigned").checked).toBe(true);
+  fireEvent.click(save);
+  await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
+  expect(calls.find((c) => c.method === "PUT")?.body).toMatchObject({ routing_type: "none" });
 });

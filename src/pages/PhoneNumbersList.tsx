@@ -1,13 +1,14 @@
 import { Fragment, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
+import { errMsg } from "../errors";
 import { useAuth } from "../auth";
 import { canEdit, isAdmin } from "../roles";
 import Uid from "../components/Uid";
 import { CARRIER_LABELS, type Carrier } from "./PhoneNumberForm";
-import { Agent, ApiResponse, PendingPurchase, PhoneNumber, PhoneNumberRelease } from "../types";
+import { Agent, ApiResponse, PhoneNumber, PhoneNumberRelease } from "../types";
 
-type Num = PhoneNumber & PendingPurchase;
+type Num = PhoneNumber;
 
 // What an open in-page confirmation is for. A routed row is unbound, an unassigned
 // one is removed from the list (#103); neither gives the number back to the carrier.
@@ -15,15 +16,33 @@ type Num = PhoneNumber & PendingPurchase;
 type Pending = { id: string; kind: "unbind" | "remove" | "release" };
 
 const carrierOf = (n: Num) => (n.carrier || "twilio") as Carrier;
-// Only Twilio and Telnyx numbers are bought and released; an Asterisk number
-// belongs to the PBX's dialplan.
-const releasable = (n: Num) => n.routing_type === "none" && carrierOf(n) !== "asterisk";
 const carrierName = (n: Num) => CARRIER_LABELS[carrierOf(n)] ?? n.carrier;
+// A Twilio number on TurnCall's own Twilio account, not the workspace's. Every
+// row without a Twilio token reads "platform", so it counts on Twilio rows only
+// (builder-web #105).
+const onPlatformTwilio = (n: Num) => carrierOf(n) === "twilio" && n.twilio_credentials === "platform";
+// Bought on Telnyx, but the order hasn't finished: builder-api refuses to release it yet.
+const ordering = (n: Num) => n.purchase_status === "pending";
+// Only Twilio and Telnyx numbers on the workspace's own account are released;
+// an Asterisk number belongs to the PBX's dialplan.
+const releasable = (n: Num) =>
+  n.routing_type === "none" && carrierOf(n) !== "asterisk" && !onPlatformTwilio(n) && !ordering(n);
 // Where the number lives once TurnCall lets go of it: unbinding or removing keeps paying.
 const staysText = (n: Num) =>
   carrierOf(n) === "asterisk"
     ? "The number stays in your PBX's dialplan."
-    : `The number stays on your ${carrierName(n)} account and is still billed.`;
+    : onPlatformTwilio(n)
+      ? "The number stays on TurnCall's platform Twilio account, not this workspace's."
+      : `The number stays on your ${carrierName(n)} account and is still billed.`;
+// How the number stops being paid for, said in the Remove confirmation.
+const stopPayingText = (n: Num, admin: boolean) =>
+  onPlatformTwilio(n)
+    ? "Removing it doesn't release it; only the TurnCall operator can release it."
+    : ordering(n)
+      ? `To stop paying for it, ${admin ? "release it" : "a workspace admin can release it"} once Telnyx finishes the order.`
+      : admin
+        ? "To stop paying for it, use Release instead."
+        : "To stop paying for it, a workspace admin can release it.";
 
 export const ROUTING_LABELS: Record<string, string> = {
   agent: "agent",
@@ -43,8 +62,10 @@ export default function PhoneNumbersList() {
   const [sortDesc, setSortDesc] = useState(false); // by number, ascending default
   const [pending, setPending] = useState<Pending | null>(null); // the one open confirmation
   const [typed, setTyped] = useState(""); // release: the E.164 typed to confirm
-  const [busy, setBusy] = useState(false);
-  const [actionError, setActionError] = useState(""); // shown inside the open confirmation
+  // Rows with a request running. A request finishing only touches its own row:
+  // the confirmation may have moved to another row meanwhile.
+  const [running, setRunning] = useState<Record<string, true>>({});
+  const [actionError, setActionError] = useState<{ id: string; text: string } | null>(null);
   const [notice, setNotice] = useState("");
 
   const load = () =>
@@ -75,53 +96,61 @@ export default function PhoneNumbersList() {
   function ask(id: string, kind: Pending["kind"]) {
     setPending({ id, kind });
     setTyped("");
-    setActionError("");
+    setActionError(null);
     setNotice("");
   }
   const dismiss = () => {
     setPending(null);
-    setActionError("");
+    setActionError(null);
   };
 
-  // Unbind (routed) or remove from the list (unassigned): the same DELETE.
-  async function unbind(n: Num) {
-    setBusy(true);
-    setActionError("");
+  // Runs one row's request: closes that row's confirmation on success, shows the
+  // refusal in it on failure, and leaves any other row's confirmation alone.
+  async function act(n: Num, send: () => Promise<string>, fallback: string) {
+    setRunning((r) => ({ ...r, [n.id]: true }));
+    setError("");
+    setActionError((a) => (a?.id === n.id ? null : a));
     try {
-      await api(`/phone-numbers/${n.id}`, { method: "DELETE" });
-      setPending(null);
-      setNotice(
-        n.routing_type === "none"
-          ? `Removed ${n.e164} from the list. ${staysText(n)}`
-          : `Unbound ${n.e164}. ${staysText(n)}`,
-      );
+      const done = await send();
+      setPending((p) => (p?.id === n.id ? null : p));
+      setNotice(done);
       load();
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Couldn't do that; try again.");
+      setActionError({ id: n.id, text: errMsg(e, fallback) });
     } finally {
-      setBusy(false);
+      setRunning(({ [n.id]: _, ...rest }) => rest);
     }
   }
 
-  async function release(n: Num) {
-    setBusy(true);
-    setActionError("");
-    try {
-      const r = await api<ApiResponse<PhoneNumberRelease>>(`/phone-numbers/${n.id}/release`, {
-        method: "POST",
-        body: JSON.stringify({ confirm: typed.trim() }),
-      });
-      setPending(null);
-      setNotice(`Released ${r.data?.released ?? n.e164} back to ${carrierName(n)}.`);
-      load();
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Release failed.");
-    } finally {
-      setBusy(false);
-    }
-  }
+  // Unbind (routed) or remove from the list (unassigned): the same DELETE.
+  const unbind = (n: Num) =>
+    act(
+      n,
+      async () => {
+        await api(`/phone-numbers/${n.id}`, { method: "DELETE" });
+        return n.routing_type === "none"
+          ? `Removed ${n.e164} from the list. ${staysText(n)}`
+          : `Unbound ${n.e164}. ${staysText(n)}`;
+      },
+      "Couldn't do that; try again.",
+    );
+
+  const release = (n: Num, confirm: string) =>
+    act(
+      n,
+      async () => {
+        const r = await api<ApiResponse<PhoneNumberRelease>>(`/phone-numbers/${n.id}/release`, {
+          method: "POST",
+          body: JSON.stringify({ confirm }),
+        });
+        return `Released ${r.data?.released ?? n.e164} back to ${carrierName(n)}.`;
+      },
+      "Release failed.",
+    );
 
   function confirmation(n: Num, kind: Pending["kind"]) {
+    const busy = !!running[n.id];
+    const failed = actionError?.id === n.id ? actionError.text : "";
     if (kind === "release") {
       const matches = typed.trim() === n.e164;
       return (
@@ -143,14 +172,14 @@ export default function PhoneNumbersList() {
             onChange={(e) => setTyped(e.target.value)}
             placeholder={n.e164}
           />
-          {actionError && <p role="alert" className="error-text">{actionError}</p>}
+          {failed && <p role="alert" className="error-text">{failed}</p>}
           <div className="modal-actions">
-            <button type="button" className="btn" onClick={dismiss}>Cancel</button>
+            <button type="button" className="btn" onClick={dismiss} disabled={busy}>Cancel</button>
             <button
               type="button"
               className="btn btn-danger"
               disabled={busy || !matches}
-              onClick={() => void release(n)}
+              onClick={() => void release(n, typed.trim())}
             >
               {busy ? "Releasing…" : "Release number permanently"}
             </button>
@@ -172,16 +201,10 @@ export default function PhoneNumbersList() {
             : "TurnCall forgets this number and it leaves this list. "}
           {staysText(n)} You can add it again later.
         </p>
-        {!routed && carrierOf(n) !== "asterisk" && (
-          <p>
-            {admin
-              ? "To stop paying for it, use Release instead."
-              : "To stop paying for it, a workspace admin can release it."}
-          </p>
-        )}
-        {actionError && <p role="alert" className="error-text">{actionError}</p>}
+        {!routed && carrierOf(n) !== "asterisk" && <p>{stopPayingText(n, admin)}</p>}
+        {failed && <p role="alert" className="error-text">{failed}</p>}
         <div className="modal-actions">
-          <button type="button" className="btn" onClick={dismiss}>Cancel</button>
+          <button type="button" className="btn" onClick={dismiss} disabled={busy}>Cancel</button>
           <button type="button" className="btn btn-danger" disabled={busy} onClick={() => void unbind(n)}>
             {busy ? "Working…" : routed ? "Unbind number" : "Remove from list"}
           </button>
@@ -233,12 +256,12 @@ export default function PhoneNumbersList() {
                 <td className="num" style={{ fontWeight: 500 }}>
                   {editable ? <Link to={`/phone-numbers/${n.id}/edit`}>{n.e164}</Link> : n.e164}
                   {n.label && <div className="hint" style={{ fontWeight: 400 }}>{n.label}</div>}
-                  {n.purchase_status === "pending" && (
+                  {ordering(n) && (
                     <div className="hint" style={{ fontWeight: 400 }}>ordered, waiting on Telnyx</div>
                   )}
                 </td>
                 <td><Uid id={n.id} label="phone_number_id" /></td>
-                <td>{CARRIER_LABELS[(n.carrier || "twilio") as Carrier] ?? n.carrier}</td>
+                <td>{carrierName(n)}</td>
                 <td>{ROUTING_LABELS[n.routing_type] || n.routing_type}</td>
                 <td className="hint">
                   {n.agent_id ? (
@@ -258,6 +281,7 @@ export default function PhoneNumbersList() {
                       type="button"
                       className="btn btn-danger-ghost"
                       style={{ padding: "3px 10px" }}
+                      disabled={!!running[n.id]}
                       onClick={() => ask(n.id, n.routing_type === "none" ? "remove" : "unbind")}
                     >
                       {n.routing_type === "none" ? "Remove from list" : "Unbind"}
@@ -268,10 +292,16 @@ export default function PhoneNumbersList() {
                       type="button"
                       className="btn btn-danger"
                       style={{ padding: "3px 10px", marginLeft: 6 }}
+                      disabled={!!running[n.id]}
                       onClick={() => ask(n.id, "release")}
                     >
                       Release
                     </button>
+                  )}
+                  {admin && n.routing_type === "none" && ordering(n) && (
+                    <div className="hint" style={{ marginTop: 4, whiteSpace: "normal" }}>
+                      Can be released once Telnyx finishes the order.
+                    </div>
                   )}
                 </td>
               </tr>

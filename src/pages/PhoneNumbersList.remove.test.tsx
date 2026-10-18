@@ -16,11 +16,14 @@ const row = (over: Partial<PhoneNumber>): PhoneNumber => ({
   agent_id: null,
   server_url: null,
   sms_enabled: false,
+  sid: "PN1",
+  twilio_credentials: "workspace",
+  purchase_status: null,
   ...over,
 });
 const seed = (): PhoneNumber[] => [
   row({}),
-  row({ id: "n-routed", e164: "+13125550102", carrier: "telnyx", routing_type: "agent", agent_id: "a1" }),
+  row({ id: "n-routed", e164: "+13125550102", carrier: "telnyx", twilio_credentials: "platform", routing_type: "agent", agent_id: "a1" }),
 ];
 
 const calls: { path: string; method?: string }[] = [];

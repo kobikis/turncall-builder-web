@@ -2,7 +2,7 @@ import { useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { isAdmin } from "../roles";
-import BuyPhoneNumber from "./BuyPhoneNumber";
+import BuyPhoneNumber, { type BuyStage } from "./BuyPhoneNumber";
 import PhoneNumberForm from "./PhoneNumberForm";
 
 export default function AddPhoneNumber() {
@@ -12,6 +12,10 @@ export default function AddPhoneNumber() {
   const admin = isAdmin(activeWorkspace?.role);
   const [mode, setMode] = useState<"bind" | "buy">("bind");
   const buying = admin && mode === "buy";
+  // Switching to Bind unmounts the buy flow, so the switch is locked while a
+  // purchase is in flight and gone once a number is bought.
+  const [stage, setStage] = useState<BuyStage>("choosing");
+  const buyStage = buying ? stage : "choosing";
 
   return (
     <div>
@@ -25,18 +29,20 @@ export default function AddPhoneNumber() {
           </p>
         </div>
       </div>
-      {admin && (
+      {admin && buyStage !== "bought" && (
         <div role="group" aria-label="Add number" className="seg" style={{ marginBottom: 16 }}>
-          <button type="button" aria-pressed={mode === "bind"} onClick={() => setMode("bind")}>
+          <button type="button" aria-pressed={mode === "bind"} disabled={buyStage === "buying"}
+            onClick={() => setMode("bind")}>
             Bind a number you have
           </button>
-          <button type="button" aria-pressed={mode === "buy"} onClick={() => setMode("buy")}>
+          <button type="button" aria-pressed={mode === "buy"} disabled={buyStage === "buying"}
+            onClick={() => setMode("buy")}>
             Buy a number
           </button>
         </div>
       )}
       {buying ? (
-        <BuyPhoneNumber />
+        <BuyPhoneNumber onStage={setStage} />
       ) : (
         <PhoneNumberForm
           submitLabel="Bind number"

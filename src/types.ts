@@ -147,7 +147,12 @@ export type PhoneNumber = {
   agent_id: string | null;
   server_url: string | null;
   sms_enabled: boolean;
-};
+  // "" for a pending Telnyx order (builder-api #108); never null.
+  sid?: string;
+  // "platform" on every row with no Twilio token of its own, so it means the
+  // platform's Twilio account only on a Twilio row (builder-web #105).
+  twilio_credentials?: "workspace" | "number" | "platform";
+} & PendingPurchase;
 
 // ---- Releasing a number (#101) ----------------------------------------------
 // POST /phone-numbers/{id}/release {confirm: <the exact E.164>} (builder-api #108).
@@ -203,7 +208,7 @@ export type PurchasedNumber = {
   twilio_credentials: "workspace" | "number" | "platform";
   status: "active" | "pending";
   telnyx_order_id: string | null;
-} & PendingPurchase;
+};
 
 // A bought Telnyx number whose order hasn't landed yet, as kept on the
 // registry row (GET /phone-numbers and /phone-numbers/{id}). Cleared by the

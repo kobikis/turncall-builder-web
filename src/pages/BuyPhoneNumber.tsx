@@ -1,14 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
+import { errMsg } from "../errors";
 import { ApiResponse, AvailableNumber, AvailableNumbers, BuyCarrier, PurchasedNumber } from "../types";
 import PhoneNumberForm, { CARRIER_LABELS } from "./PhoneNumberForm";
 
 // Buy a number on one of the workspace's own carrier accounts, then bind it
 // (builder-web #100). Admin-only: the page shows it only to admins and
 // builder-api refuses everyone else.
-
-const errText = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
 
 // What the carrier charges, when it says (Telnyx does; Twilio doesn't).
 export function costText(n: AvailableNumber): string | null {
@@ -28,7 +27,11 @@ const abilities = (n: AvailableNumber) => {
   return [c.voice && "voice", c.sms && "SMS", c.mms && "MMS"].filter(Boolean).join(", ") || "—";
 };
 
-export default function BuyPhoneNumber() {
+// Where the flow is, so Add Number can keep its Bind/Buy switch from throwing
+// away a purchase in flight or a number already bought.
+export type BuyStage = "choosing" | "buying" | "bought";
+
+export default function BuyPhoneNumber({ onStage }: { onStage?: (stage: BuyStage) => void }) {
   const [carriers, setCarriers] = useState<BuyCarrier[] | null>(null); // null = loading
   const [carrier, setCarrier] = useState<BuyCarrier>("twilio");
   const [country, setCountry] = useState("US");
@@ -40,6 +43,13 @@ export default function BuyPhoneNumber() {
   const [buying, setBuying] = useState(false);
   const [bought, setBought] = useState<PurchasedNumber | null>(null);
   const [err, setErr] = useState("");
+  // Bumped by every search and every carrier change: a response that comes
+  // back for an older one is dropped, so results never land under the wrong carrier.
+  const searchSeq = useRef(0);
+
+  useEffect(() => {
+    onStage?.(bought ? "bought" : buying ? "buying" : "choosing");
+  }, [bought, buying, onStage]);
 
   // Which carriers this workspace can buy on: asked without a carrier, so
   // nothing is searched and the server's own rule decides.
@@ -52,7 +62,7 @@ export default function BuyPhoneNumber() {
       })
       .catch((e) => {
         setCarriers([]);
-        setErr(errText(e, "Could not tell which carriers this workspace can buy on."));
+        setErr(errMsg(e, "Could not tell which carriers this workspace can buy on."));
       });
   }, []);
 
@@ -64,16 +74,27 @@ export default function BuyPhoneNumber() {
     if (country.trim()) q.set("country", country.trim().toUpperCase());
     if (areaCode.trim()) q.set("area_code", areaCode.trim());
     if (contains.trim()) q.set("contains", contains.trim());
+    const seq = ++searchSeq.current;
     setSearching(true);
     try {
       const r = await api<ApiResponse<AvailableNumbers>>(`/phone-numbers/available?${q}`);
-      setResults(r.data.numbers || []);
+      if (seq === searchSeq.current) setResults(r.data.numbers || []);
     } catch (e) {
+      if (seq !== searchSeq.current) return;
       setResults(null);
-      setErr(errText(e, "The search failed."));
+      setErr(errMsg(e, "The search failed."));
     } finally {
-      setSearching(false);
+      if (seq === searchSeq.current) setSearching(false);
     }
+  }
+
+  function changeCarrier(c: BuyCarrier) {
+    searchSeq.current++; // a search still running was for the old carrier
+    setCarrier(c);
+    setResults(null);
+    setPicked(null);
+    setSearching(false);
+    setErr("");
   }
 
   async function buy() {
@@ -83,14 +104,14 @@ export default function BuyPhoneNumber() {
     try {
       const r = await api<ApiResponse<PurchasedNumber>>("/phone-numbers/purchase", {
         method: "POST",
-        body: JSON.stringify({ carrier: picked.carrier || carrier, e164: picked.e164_number }),
+        body: JSON.stringify({ carrier: picked.carrier, e164: picked.e164_number }),
       });
       setBought(r.data);
     } catch (e) {
       // Drop the pick: a "may have been bought" refusal must not be one click
       // away from buying the same number again.
       setPicked(null);
-      setErr(errText(e, "The purchase failed."));
+      setErr(errMsg(e, "The purchase failed."));
     } finally {
       setBuying(false);
     }
@@ -98,17 +119,22 @@ export default function BuyPhoneNumber() {
 
   if (bought) {
     const label = CARRIER_LABELS[bought.carrier];
-    if (bought.status === "pending" || bought.purchase_status === "pending") {
+    if (bought.status === "pending") {
+      // Same rule as the Edit page (a fuller fix is #104): the number can be
+      // bound once Telnyx finishes the order, and a bind before then is refused.
       return (
         <div style={{ maxWidth: 460 }}>
           <div className="callout info" role="status">
             <strong>{bought.e164} is ordered from {label}</strong>
             <p>
-              {label} is still completing the order, so the number can't be bound yet. It's listed
-              on Phone Numbers as unassigned; bind it from there once {label} finishes the order.
+              {label} is still completing the order. The number can be bound once {label} finishes
+              it; until then a bind is refused. It's listed on Phone Numbers as unassigned.
             </p>
           </div>
-          <Link to="/phone-numbers" className="btn btn-primary" style={{ marginTop: 12 }}>Go to Phone Numbers</Link>
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <Link to={`/phone-numbers/${bought.id}/edit?bind`} className="btn btn-primary">Bind it on its Edit page</Link>
+            <Link to="/phone-numbers" className="btn">Go to Phone Numbers</Link>
+          </div>
         </div>
       );
     }
@@ -123,10 +149,9 @@ export default function BuyPhoneNumber() {
         </div>
         <PhoneNumberForm
           key={bought.id}
-          // routing_type left out: the form then defaults to Agent, and does not
-          // read the bind as an edit that moves the number between projects.
-          initial={{ ...bought, routing_type: undefined }}
+          initial={bought}
           lockNumber
+          bind
           submitLabel="Bind number"
           onSubmit={(body) => api(`/phone-numbers/${bought.id}`, { method: "PUT", body: JSON.stringify(body) })}
         />
@@ -160,11 +185,7 @@ export default function BuyPhoneNumber() {
         <div className="field">
           <label htmlFor="buy-carrier">Carrier</label>
           <select id="buy-carrier" className="input" value={carrier}
-            onChange={(e) => {
-              setCarrier(e.target.value as BuyCarrier);
-              setResults(null);
-              setPicked(null);
-            }}>
+            onChange={(e) => changeCarrier(e.target.value as BuyCarrier)}>
             {carriers.map((c) => <option key={c} value={c}>{CARRIER_LABELS[c]}</option>)}
           </select>
           <p className="hint" style={{ margin: "4px 0 0" }}>
@@ -239,10 +260,10 @@ export default function BuyPhoneNumber() {
 
       {picked && (
         <div className="callout warn" role="group" aria-label={`Buy ${picked.e164_number}`} style={{ maxWidth: 460 }}>
-          <strong>Buy {picked.e164_number} on {CARRIER_LABELS[carrier]}?</strong>
+          <strong>Buy {picked.e164_number} on {CARRIER_LABELS[picked.carrier]}?</strong>
           <p>
             {pickedCost ? `It costs ${pickedCost}, billed` : "It's billed"} to the workspace's{" "}
-            {CARRIER_LABELS[carrier]} account until the number is released.
+            {CARRIER_LABELS[picked.carrier]} account until the number is released.
           </p>
           <div className="modal-actions">
             <button className="btn" onClick={() => setPicked(null)} disabled={buying}>Cancel</button>
