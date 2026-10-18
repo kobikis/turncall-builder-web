@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
+import { errMsg } from "../errors";
 import { AgentRef as Agent } from "../types";
 
 type Routing = "agent" | "agent_call_init" | "webhook" | "none";
@@ -22,6 +23,7 @@ export type PhoneInitial = {
   twilio_credentials?: "workspace" | "number" | "platform";
 };
 
+const AGENT_GONE = "This number's agent no longer exists. Choose an agent to route it to.";
 const E164_RE = /^\+[1-9]\d{1,14}$/;
 const SID_RE = /^PN[a-zA-Z0-9]{8,}$/;
 const ACCOUNT_RE = /^AC[0-9a-fA-F]{32}$/;
@@ -37,22 +39,44 @@ function crossesProjects(before: PhoneInitial, after: { routing: Routing; agentI
   return before.routing_type !== after.routing;
 }
 
-// Shared Add/Edit form. onSubmit returns the api() data payload.
-export default function PhoneNumberForm(props: {
+// What a page can do to the form from outside it.
+export type PhoneNumberFormHandle = {
+  // Switch to Agent routing in place, the same as picking Agent, keeping every
+  // other value typed so far (#108): the pending callout's "Bind it".
+  bind: () => void;
+};
+
+type PhoneNumberFormProps = {
   initial?: PhoneInitial;
   lockNumber?: boolean;
+  // Opened to bind the number (a bought one, or Edit's ?bind): an unassigned
+  // number then starts on Agent routing instead of Unassigned.
+  bind?: boolean;
+  // A bought Telnyx number whose order hasn't finished (#104). Nothing can ask
+  // Telnyx whether it has, so a bind is the check: the submit says it's an
+  // attempt while a routing is chosen, and a refusal leaves every value as it was.
+  pendingBind?: boolean;
   submitLabel: string;
   onSubmit: (body: any) => Promise<any>;
-}) {
+};
+
+// Shared Add/Edit form. onSubmit returns the api() data payload.
+export default forwardRef<PhoneNumberFormHandle, PhoneNumberFormProps>(function PhoneNumberForm(props, ref) {
   const nav = useNavigate();
   const i = props.initial || {};
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [agentsLoaded, setAgentsLoaded] = useState(false);
   const [carrier, setCarrier] = useState<Carrier>(i.carrier || "twilio");
   // Twilio's own features — its account, number SID, SMS — apply to Twilio only.
   const isTwilio = carrier === "twilio";
   const [sid, setSid] = useState(i.sid || "");
   const [e164, setE164] = useState(i.e164 || "");
-  const [routing, setRouting] = useState<Routing>(i.routing_type || "agent");
+  const [routing, setRouting] = useState<Routing>(
+    !i.routing_type || (props.bind && i.routing_type === "none") ? "agent" : i.routing_type,
+  );
+  // No agent is preselected: the user picks one, so a submit can't route the
+  // number to an agent nobody chose (#106, #107). A bound number keeps its
+  // agent, and a workspace with exactly one agent gets it, as there's no choice.
   const [agentId, setAgentId] = useState(i.agent_id || "");
   const [serverUrl, setServerUrl] = useState(i.server_url || "");
   const [sms, setSms] = useState(!!i.sms_enabled);
@@ -71,14 +95,37 @@ export default function PhoneNumberForm(props: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [postSubmit, setPostSubmit] = useState<{ secret?: string; twilioWarn?: boolean; telnyxWarn?: boolean } | null>(null);
+  const agentRadio = useRef<HTMLInputElement>(null);
+  const agentPicker = useRef<HTMLSelectElement>(null);
+  // Bumped by each switch to binding, so focus moves to the choice still to
+  // make once the Agent picker has rendered.
+  const [bindRequests, setBindRequests] = useState(0);
+  useEffect(() => {
+    if (bindRequests) (agentPicker.current ?? agentRadio.current)?.focus();
+  }, [bindRequests]);
+  // Switch to Agent routing in place, keeping every other value typed so far.
+  const bindInPlace = () => {
+    setRouting("agent");
+    setBindRequests((n) => n + 1);
+  };
+  useImperativeHandle(ref, () => ({ bind: bindInPlace }), []);
+  // `bind` turning on while mounted (the same Edit page, now with ?bind) does
+  // what it does on mount for an unassigned number, the same way as "Bind it".
+  const wasBind = useRef(props.bind);
+  useEffect(() => {
+    const turnedOn = props.bind && !wasBind.current;
+    wasBind.current = props.bind;
+    if (turnedOn && (!i.routing_type || i.routing_type === "none")) bindInPlace();
+  }, [props.bind]);
 
   useEffect(() => {
     api("/agents")
       .then((r) => {
         setAgents(r.data.agents);
-        if (!agentId && r.data.agents[0]) setAgentId(r.data.agents[0].agent_id);
+        setAgentsLoaded(true);
+        if (!i.agent_id && r.data.agents.length === 1) setAgentId(r.data.agents[0].agent_id);
       })
-      .catch((e) => setErr(e.message));
+      .catch((e) => setErr(errMsg(e, "Could not load the agents.")));
     api("/meta").then((r) => setVoiceHook(r.data.twilio_voice_webhook)).catch(() => {});
     api("/integrations/twilio")
       .then((r) => {
@@ -95,7 +142,7 @@ export default function PhoneNumberForm(props: {
     if (!useWorkspace || !workspaceTwilio || props.lockNumber) return;
     api("/integrations/twilio/numbers")
       .then((r) => setAccountNumbers(Array.isArray(r.data) ? r.data : []))
-      .catch((e) => setErr(e instanceof Error ? e.message : "Could not list the account's numbers."));
+      .catch((e) => setErr(errMsg(e, "Could not list the account's numbers.")));
   }, [useWorkspace, workspaceTwilio, props.lockNumber]);
 
   function validate(): string {
@@ -116,6 +163,7 @@ export default function PhoneNumberForm(props: {
   }
 
   function routingError(): string {
+    if ((routing === "agent" || routing === "agent_call_init") && agentGone) return AGENT_GONE;
     if ((routing === "agent" || routing === "agent_call_init") && !agentId)
       return "Pick an agent (or create one first).";
     if (routing === "webhook" && !/^https?:\/\//.test(serverUrl))
@@ -167,11 +215,17 @@ export default function PhoneNumberForm(props: {
         nav("/phone-numbers");
       }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Failed.");
+      setErr(errMsg(e, "Failed."));
     } finally {
       setBusy(false);
     }
   }
+
+  // The number's agent isn't among the workspace's agents any more (deleted):
+  // the picker asks for one rather than showing whichever agent comes first.
+  const agentGone = agentsLoaded && !!agentId && !agents.some((a) => a.agent_id === agentId);
+  // Agent routing with no agent picked yet: nothing to submit.
+  const agentUnpicked = (routing === "agent" || routing === "agent_call_init") && (!agentId || agentGone);
 
   if (postSubmit) {
     return (
@@ -333,7 +387,7 @@ export default function PhoneNumberForm(props: {
         <legend style={{ padding: 0, fontWeight: 500, fontSize: 13 }}>Routing</legend>
         <div className="radio-row">
           <label>
-            <input type="radio" name="routing" checked={routing === "agent"} onChange={() => setRouting("agent")} /> Agent
+            <input ref={agentRadio} type="radio" name="routing" checked={routing === "agent"} onChange={() => setRouting("agent")} /> Agent
           </label>
           <label>
             <input type="radio" name="routing" checked={routing === "agent_call_init"} onChange={() => setRouting("agent_call_init")} /> Agent + caller info
@@ -355,7 +409,9 @@ export default function PhoneNumberForm(props: {
               No agents yet — <Link to="/agents/new">create one</Link> first.
             </p>
           ) : (
-            <select id="pn-agent" className="input" value={agentId} onChange={(e) => setAgentId(e.target.value)}>
+            <select ref={agentPicker} id="pn-agent" className="input" value={agentGone ? "" : agentId}
+              onChange={(e) => setAgentId(e.target.value)}>
+              {(!agentId || agentGone) && <option value="" disabled>Choose an agent…</option>}
               {agents.map((a) => <option key={a.agent_id} value={a.agent_id}>{a.name}</option>)}
             </select>
           )}
@@ -403,8 +459,16 @@ export default function PhoneNumberForm(props: {
         <div style={{ height: 8 }} />
       )}
 
-      <button className="btn btn-primary" onClick={submit} disabled={busy}>
-        {busy ? "Saving…" : props.submitLabel}
+      {agentUnpicked && agents.length > 0 && (
+        <p id="pn-agent-hint" className="hint" style={{ margin: "0 0 8px" }}>
+          {agentGone ? AGENT_GONE : "Choose an agent to bind the number to."}
+        </p>
+      )}
+      <button className="btn btn-primary" onClick={submit} disabled={busy || agentUnpicked}
+        aria-describedby={agentUnpicked && agents.length > 0 ? "pn-agent-hint" : undefined}>
+        {props.pendingBind && routing !== "none"
+          ? busy ? "Trying…" : "Try binding now"
+          : busy ? "Saving…" : props.submitLabel}
       </button>
       {err && <p role="alert" className="error-text">{err}</p>}
 
@@ -420,4 +484,4 @@ export default function PhoneNumberForm(props: {
       )}
     </div>
   );
-}
+});

@@ -57,6 +57,24 @@ describe("api()", () => {
     await expect(api("/agents")).rejects.toBeInstanceOf(ApiError);
   });
 
+  it("carries a refusal's reason and numbers beside the sentence", async () => {
+    stubFetch({
+      ok: false,
+      status: 409,
+      body: {
+        detail: "+15550001111 is on another Telnyx account.",
+        reason: "numbers_not_on_account",
+        numbers: ["+15550001111"],
+      },
+    });
+    await expect(api("/integrations/providers/telnyx")).rejects.toMatchObject({
+      status: 409,
+      message: "+15550001111 is on another Telnyx account.",
+      reason: "numbers_not_on_account",
+      numbers: ["+15550001111"],
+    });
+  });
+
   it("turns a network failure into ApiError status 0", async () => {
     vi.stubGlobal(
       "fetch",
