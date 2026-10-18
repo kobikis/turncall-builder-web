@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../../api";
 import { TwilioCard } from "./TwilioAccount";
 import { tint } from "../../apps";
@@ -168,6 +168,11 @@ const strandedNumbers = (e: unknown): string[] | null =>
 const withAck = (body: Record<string, unknown>, acknowledge?: string[]) =>
   acknowledge ? { ...body, acknowledge_numbers: acknowledge } : body;
 
+// A Telnyx connect first checks every bound number against the account, which
+// can take up to its deadline (builder-api#114, #118). Say so once it's been
+// running a moment, so a fast check doesn't flash the line.
+const CHECKING_DELAY_MS = 1000;
+
 const primaryRole = (card: ProviderCard): Role =>
   GROUP_ORDER.find((r) => card.serves[r]?.length) ?? "llm";
 
@@ -190,6 +195,10 @@ function Card({
   // refused request with them acknowledged.
   const [stranded, setStranded] = useState<{ numbers: string[]; resend: () => void } | null>(null);
   const [understood, setUnderstood] = useState(false);
+  // Whether a slow Telnyx number check is in flight (#110).
+  const [checking, setChecking] = useState(false);
+  const checkingTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(checkingTimer.current), []);
   const discardStranded = () => {
     setStranded(null);
     setUnderstood(false);
@@ -204,13 +213,22 @@ function Card({
 
   const run = async (
     send: Send,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    done: (r: any) => void = () => onData(null), // reload
-    fallback = "Something went wrong.",
+    {
+      done = () => onData(null), // reload
+      fallback = "Something went wrong.",
+      checksNumbers = false,
+    }: {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      done?: (r: any) => void;
+      fallback?: string;
+      // The server checks bound Telnyx numbers against the account first.
+      checksNumbers?: boolean;
+    } = {},
     acknowledge?: string[],
   ) => {
     setBusy(true);
     setError("");
+    if (checksNumbers) checkingTimer.current = setTimeout(() => setChecking(true), CHECKING_DELAY_MS);
     try {
       const r = await send(acknowledge);
       close();
@@ -219,15 +237,18 @@ function Card({
       const numbers = strandedNumbers(e);
       setUnderstood(false);
       if (numbers) {
-        setStranded({ numbers, resend: () => void run(send, done, fallback, numbers) });
+        setStranded({ numbers, resend: () => void run(send, { done, fallback, checksNumbers }, numbers) });
       } else {
         setStranded(null);
         setError(e instanceof Error ? e.message : fallback);
       }
     } finally {
+      clearTimeout(checkingTimer.current);
+      setChecking(false);
       setBusy(false);
     }
   };
+  const checksNumbers = card.provider === "telnyx";
 
   const body = fields
     ? Object.fromEntries(Object.entries(values).filter(([, v]) => v.trim()))
@@ -241,20 +262,24 @@ function Card({
         : Boolean(values.api_key?.trim());
 
   const save = () =>
-    run((ack) =>
-      api(`/integrations/providers/${card.provider}`, {
-        method: "PUT",
-        body: JSON.stringify(withAck(body, ack)),
-      }),
+    run(
+      (ack) =>
+        api(`/integrations/providers/${card.provider}`, {
+          method: "PUT",
+          body: JSON.stringify(withAck(body, ack)),
+        }),
+      { checksNumbers },
     );
   const disconnect = () =>
     run(() => api(`/integrations/providers/${card.provider}`, { method: "DELETE" }));
   const retry = () =>
-    run((ack) =>
-      api(`/integrations/providers/${card.provider}/apply`, {
-        method: "POST",
-        ...(ack ? { body: JSON.stringify(withAck({}, ack)) } : {}),
-      }),
+    run(
+      (ack) =>
+        api(`/integrations/providers/${card.provider}/apply`, {
+          method: "POST",
+          ...(ack ? { body: JSON.stringify(withAck({}, ack)) } : {}),
+        }),
+      { checksNumbers },
     );
   const adopt = (agentId: string) =>
     run(
@@ -263,8 +288,7 @@ function Card({
           method: "POST",
           body: JSON.stringify(withAck({ agent_id: agentId }, ack)),
         }),
-      (r) => onData(r.data.providers),
-      "Could not adopt the key.",
+      { done: (r) => onData(r.data.providers), fallback: "Could not adopt the key.", checksNumbers },
     );
 
   const failed = card.agents.filter((a) => a.state === "failed" || a.state === "remove_failed");
@@ -314,6 +338,11 @@ function Card({
       </div>
     </div>
   );
+  const checkingLine = checking && (
+    <p className="hint" role="status">
+      Checking your bound Telnyx numbers against this account…
+    </p>
+  );
   const status = card.disconnecting
     ? { cls: "warn", text: "Disconnecting" }
     : card.connected
@@ -353,6 +382,7 @@ function Card({
         ) : (
           <p className="desc meta">{webhookNumbersText(card)}</p>
         ))}
+      {!open && checkingLine}
       {!open && strandedPanel}
       {pinned > 0 && (
         <p className="desc meta">
@@ -502,6 +532,7 @@ function Card({
                 )}
               </form>
             )}
+            {checkingLine}
             {strandedPanel}
             {error && (
               <div className="callout error" role="alert">
