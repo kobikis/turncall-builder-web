@@ -272,7 +272,7 @@ it("a pending Telnyx order is listed as ordered, waiting on Telnyx", async () =>
   expect(active.textContent).not.toContain("ordered");
 });
 
-it("the edit page says a pending Telnyx order can be bound once it lands, and links to the bind form", async () => {
+it("the edit page says a pending Telnyx order can be bound once it lands, and binds in place", async () => {
   listed = [row({ e164: "+13125550199", sid: "", carrier: "telnyx", twilio_credentials: "platform", purchase_status: "pending" })];
   render(
     <MemoryRouter initialEntries={["/phone-numbers/local-1/edit"]}>
@@ -283,10 +283,12 @@ it("the edit page says a pending Telnyx order can be bound once it lands, and li
   );
   expect((await screen.findByRole("status")).textContent).toContain("Ordered, waiting on Telnyx");
   // Like any unassigned number, it opens on Unassigned without ?bind (#106);
-  // binding is a link away, as an attempt: the pending mark clears with the
-  // first bind that succeeds (#104; EditPhoneNumber.pending.test.tsx has the rest).
+  // binding is a click away, in place (#108), as an attempt: the pending mark
+  // clears with the first bind that succeeds (#104; EditPhoneNumber.pending.test.tsx
+  // has the rest).
   expect(screen.getByRole("button", { name: "Save" })).toBeDefined();
-  expect(screen.getByRole("link", { name: "Bind it" }).getAttribute("href")).toBe("/phone-numbers/local-1/edit?bind");
+  fireEvent.click(screen.getByRole("button", { name: "Bind it" }));
+  expect(screen.getByRole("button", { name: "Try binding now" })).toBeDefined();
 });
 
 it("drops a search that comes back after the carrier changed, and the confirmation names the number's carrier", async () => {

@@ -5,9 +5,10 @@
 // says the submit is an attempt, a refusal keeps the form for a one-click
 // retry, and a bind that succeeds drops the pending mark. Like any unassigned
 // number, it opens on Unassigned unless the URL has ?bind, and a bind form
-// makes the admin pick the agent (#106).
+// makes the admin pick the agent (#106). The callout's "Bind it" switches the
+// form to Agent routing in place, keeping what's typed (#108).
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 const REFUSAL =
@@ -89,13 +90,13 @@ it("explains that a bind is the check, and labels the submit as an attempt", asy
   expect(callout.textContent).toMatch(/trying a bind is the check/);
   expect(callout.textContent).toMatch(/within minutes, unless the order is waiting on regulatory documents/);
   expect(callout.textContent).toMatch(/can take days/);
-  // Opened to bind: Agent routing, and no "Bind it" link, since it's already here.
+  // Opened to bind: Agent routing, and no "Bind it", since it's already here.
   await waitFor(() => expect(agent()).toBeDefined());
   expect(tryBind()).toBeDefined();
-  expect(screen.queryByRole("link", { name: "Bind it" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Bind it" })).toBeNull();
 });
 
-it("without ?bind, opens on Unassigned with Save, and links to the bind form", async () => {
+it("without ?bind, opens on Unassigned with Save, and offers Bind it in place", async () => {
   show();
   const callout = await screen.findByRole("status");
   expect((screen.getByLabelText("Unassigned") as HTMLInputElement).checked).toBe(true);
@@ -103,15 +104,58 @@ it("without ?bind, opens on Unassigned with Save, and links to the bind form", a
   expect(screen.queryByRole("button", { name: "Try binding now" })).toBeNull();
   expect(screen.queryByLabelText("Agent", { selector: "select" })).toBeNull();
 
-  const link = screen.getByRole("link", { name: "Bind it" });
-  expect(callout.contains(link)).toBe(true);
-  expect(link.getAttribute("href")).toBe(BIND);
-  fireEvent.click(link);
-  // The same page, now a bind form: Agent routing, with the agent still to pick.
-  await waitFor(() => expect(agent().value).toBe(""));
+  const bindIt = screen.getByRole("button", { name: "Bind it" });
+  expect(callout.contains(bindIt)).toBe(true);
+  expect(screen.queryByRole("link", { name: "Bind it" })).toBeNull();
+  // Let the agents load, so the picker is there to take focus.
+  await act(() => new Promise((r) => setTimeout(r, 0)));
+  fireEvent.click(bindIt);
+  // The same form, now a bind form: Agent routing, with the agent still to pick.
+  await waitFor(() => expect(agent().options.length).toBe(3));
+  expect(agent().value).toBe("");
+  expect(agent().selectedOptions[0].textContent).toBe("Choose an agent…");
+  expect(document.activeElement).toBe(agent());
   expect((screen.getByLabelText("Agent", { selector: "input" }) as HTMLInputElement).checked).toBe(true);
   expect(tryBind().disabled).toBe(true);
-  expect(screen.queryByRole("link", { name: "Bind it" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Bind it" })).toBeNull();
+});
+
+it("Bind it keeps what's already typed", async () => {
+  answers = [refuse];
+  show();
+  const label = (await screen.findByLabelText("Label")) as HTMLInputElement;
+  fireEvent.change(label, { target: { value: "Front line" } });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Bind it" })).toBeDefined());
+
+  fireEvent.click(screen.getByRole("button", { name: "Bind it" }));
+  // Not remounted: the same input, still holding the edit.
+  expect(screen.getByLabelText("Label")).toBe(label);
+  expect(label.value).toBe("Front line");
+  expect((screen.getByLabelText("Agent", { selector: "input" }) as HTMLInputElement).checked).toBe(true);
+  await waitFor(() => expect(agent().options.length).toBe(3));
+  expect(agent().value).toBe("");
+  expect(tryBind().disabled).toBe(true);
+
+  await pick("a2");
+  fireEvent.click(tryBind());
+  await waitFor(() => expect(puts).toHaveLength(1));
+  expect(puts[0]).toMatchObject({ routing_type: "agent", agent_id: "a2", label: "Front line" });
+});
+
+it("Bind it gives a workspace's only agent, like picking Agent does", async () => {
+  const { api } = await import("../api");
+  const real = vi.mocked(api).getMockImplementation()!;
+  vi.mocked(api).mockImplementation(async (path: string, init?: RequestInit) =>
+    path === "/agents" ? { data: { agents: [{ agent_id: "a1", name: "Front desk" }] } } : real(path, init),
+  );
+  try {
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Bind it" }));
+    await waitFor(() => expect(agent().value).toBe("a1"));
+    expect(tryBind().disabled).toBe(false);
+  } finally {
+    vi.mocked(api).mockImplementation(real);
+  }
 });
 
 it("without ?bind, saves a label edit without binding", async () => {

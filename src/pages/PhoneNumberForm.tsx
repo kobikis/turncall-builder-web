@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { AgentRef as Agent } from "../types";
@@ -37,8 +38,14 @@ function crossesProjects(before: PhoneInitial, after: { routing: Routing; agentI
   return before.routing_type !== after.routing;
 }
 
-// Shared Add/Edit form. onSubmit returns the api() data payload.
-export default function PhoneNumberForm(props: {
+// What a page can do to the form from outside it.
+export type PhoneNumberFormHandle = {
+  // Switch to Agent routing in place, the same as picking Agent, keeping every
+  // other value typed so far (#108): the pending callout's "Bind it".
+  bind: () => void;
+};
+
+type PhoneNumberFormProps = {
   initial?: PhoneInitial;
   lockNumber?: boolean;
   // Opened to bind the number (a bought one, or Edit's ?bind): an unassigned
@@ -50,7 +57,10 @@ export default function PhoneNumberForm(props: {
   pendingBind?: boolean;
   submitLabel: string;
   onSubmit: (body: any) => Promise<any>;
-}) {
+};
+
+// Shared Add/Edit form. onSubmit returns the api() data payload.
+export default forwardRef<PhoneNumberFormHandle, PhoneNumberFormProps>(function PhoneNumberForm(props, ref) {
   const nav = useNavigate();
   const i = props.initial || {};
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -83,6 +93,16 @@ export default function PhoneNumberForm(props: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [postSubmit, setPostSubmit] = useState<{ secret?: string; twilioWarn?: boolean; telnyxWarn?: boolean } | null>(null);
+  const agentRadio = useRef<HTMLInputElement>(null);
+  const agentPicker = useRef<HTMLSelectElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    bind() {
+      // Render the Agent picker now, so focus can move to the choice still to make.
+      flushSync(() => setRouting("agent"));
+      (agentPicker.current ?? agentRadio.current)?.focus();
+    },
+  }), []);
 
   useEffect(() => {
     api("/agents")
@@ -348,7 +368,7 @@ export default function PhoneNumberForm(props: {
         <legend style={{ padding: 0, fontWeight: 500, fontSize: 13 }}>Routing</legend>
         <div className="radio-row">
           <label>
-            <input type="radio" name="routing" checked={routing === "agent"} onChange={() => setRouting("agent")} /> Agent
+            <input ref={agentRadio} type="radio" name="routing" checked={routing === "agent"} onChange={() => setRouting("agent")} /> Agent
           </label>
           <label>
             <input type="radio" name="routing" checked={routing === "agent_call_init"} onChange={() => setRouting("agent_call_init")} /> Agent + caller info
@@ -370,7 +390,7 @@ export default function PhoneNumberForm(props: {
               No agents yet — <Link to="/agents/new">create one</Link> first.
             </p>
           ) : (
-            <select id="pn-agent" className="input" value={agentId} onChange={(e) => setAgentId(e.target.value)}>
+            <select ref={agentPicker} id="pn-agent" className="input" value={agentId} onChange={(e) => setAgentId(e.target.value)}>
               {!agentId && <option value="" disabled>Choose an agent…</option>}
               {agents.map((a) => <option key={a.agent_id} value={a.agent_id}>{a.name}</option>)}
             </select>
@@ -442,4 +462,4 @@ export default function PhoneNumberForm(props: {
       )}
     </div>
   );
-}
+});

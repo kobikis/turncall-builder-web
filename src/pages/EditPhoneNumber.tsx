@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
-import PhoneNumberForm, { PhoneInitial } from "./PhoneNumberForm";
+import PhoneNumberForm, { PhoneInitial, PhoneNumberFormHandle } from "./PhoneNumberForm";
 import type { PendingPurchase } from "../types";
 
 export default function EditPhoneNumber() {
@@ -12,6 +12,10 @@ export default function EditPhoneNumber() {
   // follows the same rule (#106).
   const [params] = useSearchParams();
   const bind = params.has("bind");
+  // "Bind it" switches the form to Agent routing in place, so nothing typed is
+  // lost (#108); after that, the form is a bind form like ?bind's.
+  const form = useRef<PhoneNumberFormHandle>(null);
+  const [bindChosen, setBindChosen] = useState(false);
   const [initial, setInitial] = useState<(PhoneInitial & PendingPurchase & { telnyx_order_id?: string | null }) | null>(null);
   // Bought, but Telnyx hadn't finished the order (#100). builder-api clears it
   // on the first bind that succeeds, so it follows the save's answer too.
@@ -47,16 +51,24 @@ export default function EditPhoneNumber() {
             it finishes, a bind is refused and the number stays as it is. Telnyx usually finishes within
             minutes, unless the order is waiting on regulatory documents, in which case it can take days.
           </p>
-          {!bind && (
+          {!bind && !bindChosen && (
             <p>
-              <Link to={`/phone-numbers/${id}/edit?bind`}>Bind it</Link>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  form.current?.bind();
+                  setBindChosen(true);
+                }}
+              >
+                Bind it
+              </button>
             </p>
           )}
         </div>
       )}
       <PhoneNumberForm
-        // "Bind it" adds ?bind on this same route: start the form over in bind mode.
-        key={bind ? "bind" : "edit"}
+        ref={form}
         initial={initial}
         lockNumber
         bind={bind}
