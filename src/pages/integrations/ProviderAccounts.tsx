@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../../api";
+import { errMsg } from "../../errors";
 import { TwilioCard } from "./TwilioAccount";
 import { tint } from "../../apps";
 
@@ -168,8 +169,9 @@ const strandedNumbers = (e: unknown): string[] | null =>
 const withAck = (body: Record<string, unknown>, acknowledge?: string[]) =>
   acknowledge ? { ...body, acknowledge_numbers: acknowledge } : body;
 
-// A Telnyx connect first checks every bound number against the account, which
-// can take up to its deadline (builder-api#114, #118). Say so once it's been
+// A Telnyx connect, re-save or apply first checks every bound number against the
+// account, which can take up to its deadline (builder-api#114, #118); adopt never
+// does, as it never projects a Telnyx key. Say so once it's been
 // running a moment, so a fast check doesn't flash the line.
 const CHECKING_DELAY_MS = 1000;
 
@@ -221,7 +223,8 @@ function Card({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       done?: (r: any) => void;
       fallback?: string;
-      // The server checks bound Telnyx numbers against the account first.
+      // The server checks bound Telnyx numbers against the account first, and
+      // may refuse until they're acknowledged.
       checksNumbers?: boolean;
     } = {},
     acknowledge?: string[],
@@ -234,13 +237,13 @@ function Card({
       close();
       done(r);
     } catch (e) {
-      const numbers = strandedNumbers(e);
+      const numbers = checksNumbers ? strandedNumbers(e) : null;
       setUnderstood(false);
       if (numbers) {
         setStranded({ numbers, resend: () => void run(send, { done, fallback, checksNumbers }, numbers) });
       } else {
         setStranded(null);
-        setError(e instanceof Error ? e.message : fallback);
+        setError(errMsg(e, fallback));
       }
     } finally {
       clearTimeout(checkingTimer.current);
@@ -249,6 +252,10 @@ function Card({
     }
   };
   const checksNumbers = card.provider === "telnyx";
+  // The key can't change under a request in flight or a numbers warning, so
+  // "Connect anyway" resends exactly the key on screen. Cancelling the warning
+  // unlocks it, and a changed key is checked (and acknowledged) afresh.
+  const locked = busy || !!stranded;
 
   const body = fields
     ? Object.fromEntries(Object.entries(values).filter(([, v]) => v.trim()))
@@ -281,14 +288,15 @@ function Card({
         }),
       { checksNumbers },
     );
+  // No numbers check: an agent's own key is its LLM's, never a Telnyx one.
   const adopt = (agentId: string) =>
     run(
-      (ack) =>
+      () =>
         api(`/integrations/providers/${card.provider}/adopt`, {
           method: "POST",
-          body: JSON.stringify(withAck({ agent_id: agentId }, ack)),
+          body: JSON.stringify({ agent_id: agentId }),
         }),
-      { done: (r) => onData(r.data.providers), fallback: "Could not adopt the key.", checksNumbers },
+      { done: (r) => onData(r.data.providers), fallback: "Could not adopt the key." },
     );
 
   const failed = card.agents.filter((a) => a.state === "failed" || a.state === "remove_failed");
@@ -474,6 +482,7 @@ function Card({
                         type={f.secret ? "password" : "text"}
                         autoComplete="off"
                         aria-label={`${card.provider} ${f.label}`}
+                        disabled={locked}
                         value={values[f.name] || ""}
                         onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
                       />
@@ -488,6 +497,7 @@ function Card({
                       type="password"
                       autoComplete="off"
                       aria-label={`${card.provider} API key`}
+                      disabled={locked}
                       placeholder={card.connected ? `····${card.last4 ?? ""} — paste a new key to replace it` : "Paste an API key"}
                       value={values.api_key || ""}
                       onChange={(e) => setValues({ api_key: e.target.value })}

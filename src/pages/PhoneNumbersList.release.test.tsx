@@ -321,3 +321,21 @@ it.each([
   expect(screen.getByRole("alertdialog", { name: "Release +13125550101" })).toBeTruthy();
   expect(within(screen.getByRole("alertdialog")).queryByRole("alert")).toBeNull();
 });
+
+it("a release refused after another row's confirmation opened shows the refusal on its own row", async () => {
+  refuse = "TurnCall refused to release +13125550100: Twilio returned an error";
+  await renderList();
+  const finish = await startHeldRelease("+13125550100");
+  await openRelease("+13125550101");
+  finish();
+  const shown = await screen.findByText(refuse);
+  expect(shown.getAttribute("role")).toBe("alert");
+  expect(screen.getByRole("alertdialog", { name: "Release +13125550101" }).contains(shown)).toBe(false);
+  // Right under its own row, and the number is still listed.
+  expect(rowOf("+13125550100").nextElementSibling?.contains(shown)).toBe(true);
+
+  // Acting on that row again clears it.
+  clickRelease("+13125550100");
+  await screen.findByRole("alertdialog", { name: "Release +13125550100" });
+  expect(screen.queryByText(refuse)).toBeNull();
+});

@@ -67,7 +67,8 @@ export default function BuyPhoneNumber({ onStage }: { onStage?: (stage: BuyStage
   }, []);
 
   async function search() {
-    if (searching) return;
+    // While buying, the panel must keep naming the number being bought.
+    if (searching || buying) return;
     setErr("");
     setPicked(null);
     const q = new URLSearchParams({ carrier });
@@ -119,6 +120,10 @@ export default function BuyPhoneNumber({ onStage }: { onStage?: (stage: BuyStage
 
   if (bought) {
     const label = CARRIER_LABELS[bought.carrier];
+    // Bought all the same, but TurnCall couldn't record it in its own log.
+    const warning = bought.warning && (
+      <div className="callout warn" style={{ maxWidth: 460, marginBottom: 16 }}>{bought.warning}</div>
+    );
     if (bought.status === "pending") {
       // Same rule as the Edit page (a fuller fix is #104): the number can be
       // bound once Telnyx finishes the order, and a bind before then is refused.
@@ -131,6 +136,7 @@ export default function BuyPhoneNumber({ onStage }: { onStage?: (stage: BuyStage
               it; until then a bind is refused. It's listed on Phone Numbers as unassigned.
             </p>
           </div>
+          {warning}
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
             <Link to={`/phone-numbers/${bought.id}/edit?bind`} className="btn btn-primary">Bind it on its Edit page</Link>
             <Link to="/phone-numbers" className="btn">Go to Phone Numbers</Link>
@@ -147,6 +153,7 @@ export default function BuyPhoneNumber({ onStage }: { onStage?: (stage: BuyStage
             Phone Numbers</Link>, where it's listed as unassigned.
           </p>
         </div>
+        {warning}
         <PhoneNumberForm
           key={bought.id}
           initial={bought}
@@ -184,7 +191,7 @@ export default function BuyPhoneNumber({ onStage }: { onStage?: (stage: BuyStage
       <div style={{ maxWidth: 460 }}>
         <div className="field">
           <label htmlFor="buy-carrier">Carrier</label>
-          <select id="buy-carrier" className="input" value={carrier}
+          <select id="buy-carrier" className="input" value={carrier} disabled={buying}
             onChange={(e) => changeCarrier(e.target.value as BuyCarrier)}>
             {carriers.map((c) => <option key={c} value={c}>{CARRIER_LABELS[c]}</option>)}
           </select>
@@ -208,7 +215,7 @@ export default function BuyPhoneNumber({ onStage }: { onStage?: (stage: BuyStage
           <input id="buy-contains" className="input" value={contains} inputMode="numeric" autoComplete="off"
             onChange={(e) => setContains(e.target.value)} placeholder="e.g. 5555 (optional)" />
         </div>
-        <button className="btn btn-primary" onClick={search} disabled={searching}>
+        <button className="btn btn-primary" onClick={search} disabled={searching || buying}>
           {searching ? "Searching…" : "Search numbers"}
         </button>
       </div>
@@ -247,6 +254,7 @@ export default function BuyPhoneNumber({ onStage }: { onStage?: (stage: BuyStage
                     <button className="btn" style={{ padding: "3px 10px" }}
                       aria-label={`Choose ${n.e164_number}`}
                       aria-pressed={picked?.e164_number === n.e164_number}
+                      disabled={buying}
                       onClick={() => { setErr(""); setPicked(n); }}>
                       Choose
                     </button>

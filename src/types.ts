@@ -218,6 +218,9 @@ export type PurchasedNumber = {
   twilio_credentials: "workspace" | "number" | "platform";
   status: "active" | "pending";
   telnyx_order_id: string | null;
+  // Null, or a sentence when the carrier sold the number but TurnCall couldn't
+  // record the purchase in its own log. Bought and listed all the same.
+  warning?: string | null;
 };
 
 // A bought Telnyx number whose order hasn't landed yet, as kept on the

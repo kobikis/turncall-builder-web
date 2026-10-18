@@ -9,7 +9,7 @@
 // form to Agent routing in place, keeping what's typed (#108).
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
 
 const REFUSAL =
   "Telnyx hasn't finished the order for +13125550100 (order ord-1) yet, so it can't be bound: try again in a few minutes.";
@@ -266,4 +266,53 @@ it("keeps a bound number's agent, with and without ?bind", async () => {
     expect((screen.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(false);
     cleanup();
   }
+});
+
+it("a number routed to an agent that no longer exists asks for an agent instead of showing another", async () => {
+  row = { ...pendingRow, purchase_status: null, telnyx_order_id: null, routing_type: "agent", agent_id: "gone" };
+  show();
+  await waitFor(() => expect(agent().options.length).toBe(3));
+  expect(agent().value).toBe("");
+  expect(agent().selectedOptions[0].textContent).toBe("Choose an agent…");
+  const save = screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
+  expect(save.disabled).toBe(true);
+  expect(screen.getByText("This number's agent no longer exists. Choose an agent to route it to.")).toBeDefined();
+  fireEvent.click(save);
+  expect(puts).toHaveLength(0);
+
+  fireEvent.change(agent(), { target: { value: "a2" } });
+  expect(save.disabled).toBe(false);
+  expect(screen.queryByText(/no longer exists/)).toBeNull();
+  answers = [() => ({ data: { ...row, agent_id: "a2" } })];
+  // A different agent is a different project: the form's existing move warning.
+  const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+  fireEvent.click(save);
+  await waitFor(() => expect(puts).toHaveLength(1));
+  expect(puts[0]).toMatchObject({ routing_type: "agent", agent_id: "a2" });
+  confirmSpy.mockRestore();
+});
+
+it("following a link to ?bind on the same Edit page switches to Agent routing in place, keeping what's typed", async () => {
+  render(
+    <MemoryRouter initialEntries={["/phone-numbers/n1/edit"]}>
+      <Link to={BIND}>to bind</Link>
+      <Routes>
+        <Route path="/phone-numbers/:id/edit" element={<EditPhoneNumber />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  const label = (await screen.findByLabelText("Label")) as HTMLInputElement;
+  expect((screen.getByLabelText("Unassigned") as HTMLInputElement).checked).toBe(true);
+  fireEvent.change(label, { target: { value: "Front line" } });
+  await act(() => new Promise((r) => setTimeout(r, 0))); // agents loaded
+
+  fireEvent.click(screen.getByRole("link", { name: "to bind" }));
+  // Not remounted: the same input, still holding the edit, now a bind form.
+  expect(screen.getByLabelText("Label")).toBe(label);
+  expect(label.value).toBe("Front line");
+  expect((screen.getByLabelText("Agent", { selector: "input" }) as HTMLInputElement).checked).toBe(true);
+  expect(agent().value).toBe("");
+  expect(document.activeElement).toBe(agent());
+  expect(tryBind().disabled).toBe(true);
+  expect(screen.queryByRole("button", { name: "Bind it" })).toBeNull();
 });

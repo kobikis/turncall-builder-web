@@ -44,6 +44,8 @@ let purchased: Record<string, unknown> = bought();
 // When set, searches wait on it, so a test can change the carrier mid-search.
 let holdSearch: Promise<void> | null = null;
 let refusePurchase = "";
+// When set, a purchase waits on it, so a test can act while it runs.
+let holdPurchase: Promise<void> | null = null;
 let listed: unknown[] = [];
 
 vi.mock("../api", () => ({
@@ -63,6 +65,7 @@ vi.mock("../api", () => ({
       return { data: { carriers, numbers: c === "twilio" ? [twilioNum] : c === "telnyx" ? [telnyxNum] : [] } };
     }
     if (path === "/phone-numbers/purchase") {
+      if (holdPurchase) await holdPurchase;
       if (refusePurchase) throw new Error(refusePurchase);
       return { data: purchased };
     }
@@ -86,6 +89,7 @@ afterEach(() => {
   purchased = bought();
   holdSearch = null;
   refusePurchase = "";
+  holdPurchase = null;
   listed = [];
   cleanup();
 });
@@ -367,4 +371,47 @@ it("editing an unassigned number without ?bind keeps it unassigned", async () =>
   fireEvent.click(save);
   await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
   expect(calls.find((c) => c.method === "PUT")?.body).toMatchObject({ routing_type: "none" });
+});
+
+const WARNING =
+  "Twilio sold +13125550100 to this workspace and it is on Phone Numbers, but TurnCall could not record the purchase in its own log.";
+
+it.each([
+  ["bought", {}],
+  ["ordered", { status: "pending", purchase_status: "pending", carrier: "telnyx", sid: "", twilio_account_sid: null, twilio_credentials: "platform" }],
+])("shows the purchase's warning beside the %s message", async (_, over) => {
+  purchased = bought({ ...over, warning: WARNING });
+  await openBuy();
+  fireEvent.click(screen.getByRole("button", { name: "Search numbers" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Choose +13125550100" }));
+  fireEvent.click(screen.getByRole("button", { name: "Buy +13125550100" }));
+  const warning = await screen.findByText(WARNING);
+  expect(warning.closest(".callout.warn")).not.toBeNull();
+});
+
+it("shows no warning when the purchase has none", async () => {
+  await openBuy();
+  fireEvent.click(screen.getByRole("button", { name: "Search numbers" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Choose +13125550100" }));
+  fireEvent.click(screen.getByRole("button", { name: "Buy +13125550100" }));
+  await screen.findByText(/Bought \+13125550100 on Twilio/);
+  expect(document.querySelector(".callout.warn")).toBeNull();
+});
+
+it("while a purchase runs, the carrier, Search and Choose are disabled, so the panel keeps naming the number being bought", async () => {
+  let finish!: () => void;
+  holdPurchase = new Promise((r) => (finish = r));
+  const picker = await openBuy();
+  fireEvent.click(screen.getByRole("button", { name: "Search numbers" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Choose +13125550100" }));
+  fireEvent.click(screen.getByRole("button", { name: "Buy +13125550100" }));
+  await waitFor(() => expect(calls.some((c) => c.path === "/phone-numbers/purchase")).toBe(true));
+
+  expect(picker.disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "Search numbers" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "Choose +13125550100" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.getByRole("group", { name: "Buy +13125550100" })).toBeDefined();
+
+  finish();
+  expect(await screen.findByText(/Bought \+13125550100 on Twilio/)).toBeDefined();
 });

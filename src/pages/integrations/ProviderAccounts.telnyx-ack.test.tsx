@@ -156,3 +156,36 @@ it.each([
   expect((await screen.findByRole("alert")).textContent).toBe(err.message);
   expect(screen.queryByRole("alertdialog")).toBeNull();
 });
+
+it("locks the key fields while the warning is up, so Connect anyway sends the key shown", async () => {
+  cards = [telnyx()];
+  refuse = stranding;
+  await connect();
+  await screen.findByRole("alertdialog");
+
+  const key = screen.getByLabelText("telnyx API key") as HTMLInputElement;
+  const pub = screen.getByLabelText("telnyx Public key") as HTMLInputElement;
+  expect(key.disabled).toBe(true);
+  expect(pub.disabled).toBe(true);
+  expect(key.value).toBe("KEY123");
+
+  // Cancel the warning to change the key: the fields open again.
+  fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Cancel" }));
+  expect(key.disabled).toBe(false);
+  fireEvent.change(key, { target: { value: "KEY456" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save key" }));
+  await waitFor(() => expect(calls).toHaveLength(2));
+  expect(calls[1].body).toEqual({ api_key: "KEY456", public_key: "cHVi" }); // asked again, unacknowledged
+});
+
+it("adopting an agent's key never asks about numbers: builder-api's adopt projects no Telnyx key", async () => {
+  cards = [telnyx({ pinned_agents: [{ agent_id: "a1", name: "Front desk" }] })];
+  refuse = stranding;
+  render(<ProviderAccounts isAdmin />);
+  fireEvent.click(within(await screen.findByTestId("provider-telnyx")).getByText("Connect"));
+  fireEvent.click(screen.getByRole("button", { name: "Adopt into workspace" }));
+
+  expect((await screen.findByRole("alert")).textContent).toBe("+15550001111 and +15550002222 are on another Telnyx account.");
+  expect(screen.queryByRole("alertdialog")).toBeNull();
+  expect(calls).toEqual([{ path: "/integrations/providers/telnyx/adopt", method: "POST", body: { agent_id: "a1" } }]);
+});

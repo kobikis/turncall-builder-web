@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// While a Telnyx save, replace, retry or adopt runs, the server checks every
+// While a Telnyx save, replace or retry runs, the server checks every
 // bound number against the account (builder-api#114), which can take a while.
 // After about a second the card says so, until the request ends (#110).
 import { afterEach, expect, it, vi } from "vitest";
@@ -172,7 +172,7 @@ it("shows the line on the card for a Retry outside the dialog", async () => {
   expect(status()).toBeNull();
 });
 
-it("shows the line in the dialog while adopting an agent's key", async () => {
+it("never shows the line while adopting an agent's key, which checks no numbers", async () => {
   cards = [telnyx({ pinned_agents: [{ agent_id: "a1", name: "Front desk" }] })];
   render(<ProviderAccounts isAdmin />);
   fireEvent.click(within(await screen.findByTestId("provider-telnyx")).getByText("Connect"));
@@ -181,8 +181,8 @@ it("shows the line in the dialog while adopting an agent's key", async () => {
   fireEvent.click(adopt);
   expect(pending[0].call.path).toBe("/integrations/providers/telnyx/adopt");
   expect(adopt.disabled).toBe(true);
-  advance(1000);
-  expect(within(screen.getByRole("dialog")).getByRole("status").textContent).toBe(CHECKING);
+  advance(5000);
+  expect(screen.queryByText(CHECKING)).toBeNull();
 
   await settle((p) => p.resolve({ data: { providers: [telnyx({ connected: true, runs_on: "workspace" })] } }));
   expect(status()).toBeNull();

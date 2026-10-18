@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
+import { errMsg } from "../errors";
 import PhoneNumberForm, { PhoneInitial, PhoneNumberFormHandle } from "./PhoneNumberForm";
 import type { PendingPurchase } from "../types";
 
@@ -17,19 +18,21 @@ export default function EditPhoneNumber() {
   const form = useRef<PhoneNumberFormHandle>(null);
   const [bindChosen, setBindChosen] = useState(false);
   const [initial, setInitial] = useState<(PhoneInitial & PendingPurchase & { telnyx_order_id?: string | null }) | null>(null);
-  // Bought, but Telnyx hadn't finished the order (#100). builder-api clears it
-  // on the first bind that succeeds, so it follows the save's answer too.
-  const [pending, setPending] = useState(false);
+  // The save's answer, once there is one. It matters when a bind succeeds but
+  // the form stays up (a webhook warning or a new secret): builder-api clears
+  // the pending mark on the first bind that succeeds, so the callout goes.
+  const [saved, setSaved] = useState<PendingPurchase | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    setSaved(null);
     api(`/phone-numbers/${id}`)
-      .then((r) => {
-        setInitial(r.data);
-        setPending(r.data?.purchase_status === "pending");
-      })
-      .catch((e) => setError(e.message));
+      .then((r) => setInitial(r.data))
+      .catch((e) => setError(errMsg(e, "Could not load this number.")));
   }, [id]);
+
+  // Bought, but Telnyx hadn't finished the order (#100).
+  const pending = (saved ?? initial)?.purchase_status === "pending";
 
   if (error) return <p role="alert" className="error-text">{error}</p>;
   if (!initial) return <p className="muted">Loading…</p>;
@@ -76,7 +79,7 @@ export default function EditPhoneNumber() {
         submitLabel={bind && !pending && initial.routing_type === "none" ? "Bind number" : "Save"}
         onSubmit={async (body) => {
           const r = await api(`/phone-numbers/${id}`, { method: "PUT", body: JSON.stringify(body) });
-          setPending(r?.data?.purchase_status === "pending");
+          setSaved(r?.data ?? {});
           return r;
         }}
       />

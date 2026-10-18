@@ -51,7 +51,9 @@ const stopPayingText = (n: Num, admin: boolean, routed: boolean) =>
           ? " Release checks which Twilio account it's on."
           : " A workspace admin can use Release, which checks which Twilio account it's on.")
     : ordering(n)
-      ? `To stop paying for it, ${admin ? "release it" : "a workspace admin can release it"} once Telnyx finishes the order.`
+      ? // Release appears once the order lands, on this row: removing the row loses it.
+        "Removing it doesn't release it. To stop paying for it, keep it here until Telnyx finishes the order, " +
+        `then ${admin ? "release it" : "a workspace admin can release it"}: once removed, it has to be added again before it can be released.`
       : admin
         ? "To stop paying for it, use Release instead."
         : "To stop paying for it, a workspace admin can release it.";
@@ -78,7 +80,11 @@ export default function PhoneNumbersList() {
   // the confirmation may have moved to another row meanwhile.
   // "check" is a release check (#111), "act" any other request.
   const [running, setRunning] = useState<Record<string, "check" | "act">>({});
-  const [actionError, setActionError] = useState<{ id: string; text: string } | null>(null);
+  // A row's refused request, by row id. Shown in its confirmation while that's
+  // open, else as a line under the row: the confirmation may have moved on.
+  const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
+  const clearActionError = (id: string) =>
+    setActionErrors(({ [id]: _, ...rest }) => rest);
   const [notice, setNotice] = useState("");
 
   const load = () =>
@@ -109,12 +115,12 @@ export default function PhoneNumbersList() {
   function ask(id: string, kind: Exclude<Pending["kind"], "blocked">) {
     setPending({ id, kind });
     setTyped("");
-    setActionError(null);
+    clearActionError(id);
     setNotice("");
   }
   const dismiss = () => {
+    if (pending) clearActionError(pending.id);
     setPending(null);
-    setActionError(null);
   };
 
   // Runs one row's request: closes that row's confirmation on success, shows the
@@ -122,14 +128,14 @@ export default function PhoneNumbersList() {
   async function act(n: Num, send: () => Promise<string>, fallback: string) {
     setRunning((r) => ({ ...r, [n.id]: "act" }));
     setError("");
-    setActionError((a) => (a?.id === n.id ? null : a));
+    clearActionError(n.id);
     try {
       const done = await send();
       setPending((p) => (p?.id === n.id ? null : p));
       setNotice(done);
       load();
     } catch (e) {
-      setActionError({ id: n.id, text: errMsg(e, fallback) });
+      setActionErrors((a) => ({ ...a, [n.id]: errMsg(e, fallback) }));
     } finally {
       setRunning(({ [n.id]: _, ...rest }) => rest);
     }
@@ -196,7 +202,7 @@ export default function PhoneNumbersList() {
 
   function confirmation(n: Num, p: Pending) {
     const busy = !!running[n.id];
-    const failed = actionError?.id === n.id ? actionError.text : "";
+    const failed = actionErrors[n.id] ?? "";
     if (p.kind === "blocked") {
       // Not releasable, or the check failed: the reason, and no confirmation.
       return (
@@ -366,10 +372,18 @@ export default function PhoneNumbersList() {
                   )}
                 </td>
               </tr>
-              {pending?.id === n.id && pending.kind !== "checking" && (
+              {pending?.id === n.id && pending.kind !== "checking" ? (
                 <tr>
                   <td colSpan={7}>{confirmation(n, pending)}</td>
                 </tr>
+              ) : (
+                actionErrors[n.id] && (
+                  <tr>
+                    <td colSpan={7}>
+                      <p role="alert" className="error-text" style={{ margin: 0 }}>{actionErrors[n.id]}</p>
+                    </td>
+                  </tr>
+                )
               )}
             </Fragment>
           ))}

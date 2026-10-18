@@ -188,3 +188,20 @@ it("unbinding a Twilio number with no stored account says no account is stored a
     "Unbound +13125550104. No Twilio account is stored with this number yet.",
   );
 });
+
+// A pending Telnyx order has no Release yet, and removing the row takes away the
+// only place Release would appear (builder-web#102 review).
+const ordered = row({ id: "n-ordered", e164: "+13125550105", carrier: "telnyx", sid: "", twilio_credentials: "platform", purchase_status: "pending" });
+
+it.each<[Role, RegExp]>([
+  ["admin", /Removing it doesn't release it\. To stop paying for it, keep it here until Telnyx finishes the order, then release it: once removed, it has to be added again before it can be released\./],
+  ["editor", /Removing it doesn't release it\. To stop paying for it, keep it here until Telnyx finishes the order, then a workspace admin can release it: once removed, it has to be added again before it can be released\./],
+])("removing a pending Telnyx order (%s) says it must be added again before it can be released", async (r, copy) => {
+  role = r;
+  numbers = [row({}), ordered];
+  await renderList();
+  fireEvent.click(within(rowOf("+13125550105")).getByRole("button", { name: "Remove from list" }));
+  const dialog = screen.getByRole("alertdialog", { name: "Remove +13125550105 from the list" });
+  expect(dialog.textContent).toMatch(copy);
+  expect(dialog.textContent).not.toMatch(/release it once Telnyx finishes/);
+});
