@@ -11,12 +11,18 @@ export default function EditPhoneNumber() {
   // Unassigned selected and can be edited without binding it.
   const [params] = useSearchParams();
   const bind = params.has("bind");
-  const [initial, setInitial] = useState<(PhoneInitial & PendingPurchase) | null>(null);
+  const [initial, setInitial] = useState<(PhoneInitial & PendingPurchase & { telnyx_order_id?: string | null }) | null>(null);
+  // Bought, but Telnyx hadn't finished the order (#100). builder-api clears it
+  // on the first bind that succeeds, so it follows the save's answer too.
+  const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     api(`/phone-numbers/${id}`)
-      .then((r) => setInitial(r.data))
+      .then((r) => {
+        setInitial(r.data);
+        setPending(r.data?.purchase_status === "pending");
+      })
       .catch((e) => setError(e.message));
   }, [id]);
 
@@ -30,23 +36,30 @@ export default function EditPhoneNumber() {
           <p>Same-project edits keep the phone id and signing secret stable.</p>
         </div>
       </div>
-      {initial.purchase_status === "pending" && (
-        // Bought, but Telnyx hasn't finished the order (builder-web #100).
-        // The bind form stays: it works as soon as the order lands (#104).
+      {pending && (
         <div className="callout info" role="status" style={{ maxWidth: 460, marginBottom: 16 }}>
           <strong>Ordered, waiting on Telnyx</strong>
           <p>
-            Telnyx is still completing the order for this number. It can be bound once the
-            order finishes; until then a bind is refused.
+            Telnyx is still completing the order for this number
+            {initial.telnyx_order_id ? <> (order <code>{initial.telnyx_order_id}</code>)</> : null}. The
+            builder can't ask Telnyx whether the order is done, so trying a bind is the check: until
+            it finishes, a bind is refused and the number stays as it is. Telnyx usually finishes within
+            minutes, unless the order is waiting on regulatory documents, in which case it can take days.
           </p>
         </div>
       )}
       <PhoneNumberForm
         initial={initial}
         lockNumber
-        bind={bind}
-        submitLabel={bind && initial.routing_type === "none" ? "Bind number" : "Save"}
-        onSubmit={(body) => api(`/phone-numbers/${id}`, { method: "PUT", body: JSON.stringify(body) })}
+        // A pending number is here to be bound, so it starts on Agent routing.
+        bind={bind || pending}
+        pendingBind={pending}
+        submitLabel={bind && !pending && initial.routing_type === "none" ? "Bind number" : "Save"}
+        onSubmit={async (body) => {
+          const r = await api(`/phone-numbers/${id}`, { method: "PUT", body: JSON.stringify(body) });
+          setPending(r?.data?.purchase_status === "pending");
+          return r;
+        }}
       />
     </div>
   );

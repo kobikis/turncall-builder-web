@@ -44,6 +44,10 @@ export default function PhoneNumberForm(props: {
   // Opened to bind the number (a bought one, or Edit's ?bind): an unassigned
   // number then starts on Agent routing instead of Unassigned.
   bind?: boolean;
+  // A bought Telnyx number whose order hasn't finished (#104). Nothing can ask
+  // Telnyx whether it has, so a bind is the check: the submit says it's an
+  // attempt while a routing is chosen, and a refusal leaves every value as it was.
+  pendingBind?: boolean;
   submitLabel: string;
   onSubmit: (body: any) => Promise<any>;
 }) {
@@ -409,7 +413,9 @@ export default function PhoneNumberForm(props: {
       )}
 
       <button className="btn btn-primary" onClick={submit} disabled={busy}>
-        {busy ? "Saving…" : props.submitLabel}
+        {props.pendingBind && routing !== "none"
+          ? busy ? "Trying…" : "Try binding now"
+          : busy ? "Saving…" : props.submitLabel}
       </button>
       {err && <p role="alert" className="error-text">{err}</p>}
 
