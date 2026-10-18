@@ -148,3 +148,54 @@ export type PhoneNumber = {
   server_url: string | null;
   sms_enabled: boolean;
 };
+
+// ---- Buying a number (builder-web #100, builder-api #108) ----
+
+// The carriers numbers can be bought on, and only when the workspace has
+// connected that account (Integrations).
+export type BuyCarrier = "twilio" | "telnyx";
+
+// One number for sale, as TurnCall returns it. Twilio gives no prices; Telnyx
+// gives prices but no friendly_name or postal_code.
+export type AvailableNumber = {
+  carrier: BuyCarrier;
+  e164_number: string;
+  friendly_name?: string | null;
+  country?: string | null;
+  region?: string | null;
+  locality?: string | null;
+  postal_code?: string | null;
+  number_type?: string | null;
+  capabilities?: { voice?: boolean; sms?: boolean; mms?: boolean } | null;
+  upfront_cost?: number | string | null;
+  monthly_cost?: number | string | null;
+  currency?: string | null;
+};
+
+// GET /phone-numbers/available. Without `carrier` nothing is searched and
+// `numbers` is empty: `carriers` alone fills the picker.
+export type AvailableNumbers = { carriers: BuyCarrier[]; numbers: AvailableNumber[] };
+
+// POST /phone-numbers/purchase: the new, unassigned registry row. `pending`
+// is a Telnyx order still in progress — not bindable until Telnyx finishes it.
+export type PurchasedNumber = {
+  id: string;
+  e164: string;
+  sid: string;
+  carrier: BuyCarrier;
+  routing_type: "none";
+  agent_id: null;
+  server_url: string | null;
+  server_url_secret?: string | null;
+  sms_enabled: boolean;
+  label: string | null;
+  twilio_account_sid: string | null;
+  twilio_credentials: "workspace" | "number" | "platform";
+  status: "active" | "pending";
+  telnyx_order_id: string | null;
+} & PendingPurchase;
+
+// A bought Telnyx number whose order hasn't landed yet, as kept on the
+// registry row (GET /phone-numbers and /phone-numbers/{id}). Cleared by the
+// first successful bind.
+export type PendingPurchase = { purchase_status?: "pending" | null };
