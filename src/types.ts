@@ -157,10 +157,20 @@ export type PhoneNumber = {
 // ---- Releasing a number (#101) ----------------------------------------------
 // POST /phone-numbers/{id}/release {confirm: <the exact E.164>} (builder-api #108).
 // Admin-only, unassigned numbers only. The registry row is deleted; refetch the list.
+// Runs the release check first: a number that isn't releasable is a 409 with its `detail`.
 export type PhoneNumberRelease = {
   released: string; // the E.164 given back
   carrier: "twilio" | "telnyx";
   external_number_sid: string;
+};
+// GET /phone-numbers/{id}/release-check (builder-api #111), admin-only, asked
+// before the confirmation opens. A Twilio number with no stored pair is looked up
+// on the workspace's Twilio account, and its row corrected when it's found there.
+// When `releasable` is false, `detail` says why. A failed lookup is a 502.
+export type ReleaseCheck = {
+  releasable: boolean;
+  detail: string | null;
+  twilio_credentials: "workspace" | "number" | "platform";
 };
 // ---- end releasing a number -------------------------------------------------
 

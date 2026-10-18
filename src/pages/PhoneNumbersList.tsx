@@ -6,38 +6,50 @@ import { useAuth } from "../auth";
 import { canEdit, isAdmin } from "../roles";
 import Uid from "../components/Uid";
 import { CARRIER_LABELS, type Carrier } from "./PhoneNumberForm";
-import { Agent, ApiResponse, PhoneNumber, PhoneNumberRelease } from "../types";
+import { Agent, ApiResponse, PhoneNumber, PhoneNumberRelease, ReleaseCheck } from "../types";
 
 type Num = PhoneNumber;
 
 // What an open in-page confirmation is for. A routed row is unbound, an unassigned
 // one is removed from the list (#103); neither gives the number back to the carrier.
-// Release does, and can't be undone (#101).
-type Pending = { id: string; kind: "unbind" | "remove" | "release" };
+// Release does, and can't be undone (#101). Before it opens, builder-api checks the
+// number can be released (#111): "checking" while it asks, "blocked" when it can't
+// be, with the reason (`failed` when the check itself failed).
+type Pending =
+  | { id: string; kind: "unbind" | "remove" | "release" | "checking" }
+  | { id: string; kind: "blocked"; text: string; failed: boolean };
 
 const carrierOf = (n: Num) => (n.carrier || "twilio") as Carrier;
 const carrierName = (n: Num) => CARRIER_LABELS[carrierOf(n)] ?? n.carrier;
-// A Twilio number on TurnCall's own Twilio account, not the workspace's. Every
-// row without a Twilio token reads "platform", so it counts on Twilio rows only
-// (builder-web #105).
-const onPlatformTwilio = (n: Num) => carrierOf(n) === "twilio" && n.twilio_credentials === "platform";
+// A Twilio number with no Twilio account stored with it. Every row without a
+// Twilio token reads "platform", so it counts on Twilio rows only (builder-web
+// #105). It may be on the workspace's account or TurnCall's platform account:
+// only the release check finds out (#111).
+const noStoredTwilio = (n: Num) => carrierOf(n) === "twilio" && n.twilio_credentials === "platform";
 // Bought on Telnyx, but the order hasn't finished: builder-api refuses to release it yet.
 const ordering = (n: Num) => n.purchase_status === "pending";
-// Only Twilio and Telnyx numbers on the workspace's own account are released;
-// an Asterisk number belongs to the PBX's dialplan.
-const releasable = (n: Num) =>
-  n.routing_type === "none" && carrierOf(n) !== "asterisk" && !onPlatformTwilio(n) && !ordering(n);
+// Release is offered on unassigned Twilio and Telnyx numbers, once any order has
+// finished; an Asterisk number belongs to the PBX's dialplan. Whether this one can
+// be released is builder-api's release check, asked when Release is clicked (#111).
+const offersRelease = (n: Num) =>
+  n.routing_type === "none" && (carrierOf(n) === "twilio" || carrierOf(n) === "telnyx") && !ordering(n);
 // Where the number lives once TurnCall lets go of it: unbinding or removing keeps paying.
 const staysText = (n: Num) =>
   carrierOf(n) === "asterisk"
     ? "The number stays in your PBX's dialplan."
-    : onPlatformTwilio(n)
-      ? "The number stays on TurnCall's platform Twilio account, not this workspace's."
+    : noStoredTwilio(n)
+      ? "No Twilio account is stored with this number yet."
       : `The number stays on your ${carrierName(n)} account and is still billed.`;
-// How the number stops being paid for, said in the Remove confirmation.
-const stopPayingText = (n: Num, admin: boolean) =>
-  onPlatformTwilio(n)
-    ? "Removing it doesn't release it; only the TurnCall operator can release it."
+// Said in the confirmation of a Remove, or of an Unbind of a number with no stored
+// Twilio account: what letting go of it doesn't do, and how it stops being paid for.
+const stopPayingText = (n: Num, admin: boolean, routed: boolean) =>
+  noStoredTwilio(n)
+    ? `${routed ? "Unbinding" : "Removing"} it doesn't release it.` +
+      (routed
+        ? ""
+        : admin
+          ? " Release checks which Twilio account it's on."
+          : " A workspace admin can use Release, which checks which Twilio account it's on.")
     : ordering(n)
       ? `To stop paying for it, ${admin ? "release it" : "a workspace admin can release it"} once Telnyx finishes the order.`
       : admin
@@ -64,7 +76,8 @@ export default function PhoneNumbersList() {
   const [typed, setTyped] = useState(""); // release: the E.164 typed to confirm
   // Rows with a request running. A request finishing only touches its own row:
   // the confirmation may have moved to another row meanwhile.
-  const [running, setRunning] = useState<Record<string, true>>({});
+  // "check" is a release check (#111), "act" any other request.
+  const [running, setRunning] = useState<Record<string, "check" | "act">>({});
   const [actionError, setActionError] = useState<{ id: string; text: string } | null>(null);
   const [notice, setNotice] = useState("");
 
@@ -93,7 +106,7 @@ export default function PhoneNumbersList() {
     })
     .sort((a, b) => (sortDesc ? -1 : 1) * a.e164.localeCompare(b.e164));
 
-  function ask(id: string, kind: Pending["kind"]) {
+  function ask(id: string, kind: Exclude<Pending["kind"], "blocked">) {
     setPending({ id, kind });
     setTyped("");
     setActionError(null);
@@ -107,7 +120,7 @@ export default function PhoneNumbersList() {
   // Runs one row's request: closes that row's confirmation on success, shows the
   // refusal in it on failure, and leaves any other row's confirmation alone.
   async function act(n: Num, send: () => Promise<string>, fallback: string) {
-    setRunning((r) => ({ ...r, [n.id]: true }));
+    setRunning((r) => ({ ...r, [n.id]: "act" }));
     setError("");
     setActionError((a) => (a?.id === n.id ? null : a));
     try {
@@ -135,6 +148,39 @@ export default function PhoneNumbersList() {
       "Couldn't do that; try again.",
     );
 
+  // Release asks builder-api first whether the number can be released (#111),
+  // with the row busy meanwhile. Only a yes opens the typed confirmation. The
+  // answer lands only if this row's check is still what's open.
+  async function checkRelease(n: Num) {
+    ask(n.id, "checking");
+    setRunning((r) => ({ ...r, [n.id]: "check" }));
+    setError("");
+    let next: Pending;
+    try {
+      const r = await api<ApiResponse<ReleaseCheck>>(`/phone-numbers/${n.id}/release-check`);
+      next = r.data.releasable
+        ? { id: n.id, kind: "release" }
+        : {
+            id: n.id,
+            kind: "blocked",
+            text: r.data.detail || `${n.e164} can't be released.`,
+            failed: false,
+          };
+      // The check corrects a Twilio row it found on the workspace's account.
+      if (r.data.twilio_credentials !== n.twilio_credentials) load();
+    } catch (e) {
+      next = {
+        id: n.id,
+        kind: "blocked",
+        text: errMsg(e, "Couldn't check whether this number can be released; try again."),
+        failed: true,
+      };
+    } finally {
+      setRunning(({ [n.id]: _, ...rest }) => rest);
+    }
+    setPending((p) => (p?.id === n.id && p.kind === "checking" ? next : p));
+  }
+
   const release = (n: Num, confirm: string) =>
     act(
       n,
@@ -148,10 +194,25 @@ export default function PhoneNumbersList() {
       "Release failed.",
     );
 
-  function confirmation(n: Num, kind: Pending["kind"]) {
+  function confirmation(n: Num, p: Pending) {
     const busy = !!running[n.id];
     const failed = actionError?.id === n.id ? actionError.text : "";
-    if (kind === "release") {
+    if (p.kind === "blocked") {
+      // Not releasable, or the check failed: the reason, and no confirmation.
+      return (
+        <div className={`callout ${p.failed ? "error" : "warn"}`} role="group" aria-label={`Release ${n.e164}`}>
+          {p.failed ? (
+            <p role="alert" className="error-text" style={{ marginTop: 0 }}>{p.text}</p>
+          ) : (
+            <p role="status" style={{ marginTop: 0 }}>{p.text}</p>
+          )}
+          <div className="modal-actions">
+            <button type="button" className="btn" onClick={dismiss}>Close</button>
+          </div>
+        </div>
+      );
+    }
+    if (p.kind === "release") {
       const matches = typed.trim() === n.e164;
       return (
         <div className="callout error" role="alertdialog" aria-label={`Release ${n.e164}`}>
@@ -187,7 +248,7 @@ export default function PhoneNumbersList() {
         </div>
       );
     }
-    const routed = kind === "unbind";
+    const routed = p.kind === "unbind";
     return (
       <div
         className="callout warn"
@@ -201,7 +262,7 @@ export default function PhoneNumbersList() {
             : "TurnCall forgets this number and it leaves this list. "}
           {staysText(n)} You can add it again later.
         </p>
-        {!routed && carrierOf(n) !== "asterisk" && <p>{stopPayingText(n, admin)}</p>}
+        {carrierOf(n) !== "asterisk" && (!routed || noStoredTwilio(n)) && <p>{stopPayingText(n, admin, routed)}</p>}
         {failed && <p role="alert" className="error-text">{failed}</p>}
         <div className="modal-actions">
           <button type="button" className="btn" onClick={dismiss} disabled={busy}>Cancel</button>
@@ -287,15 +348,15 @@ export default function PhoneNumbersList() {
                       {n.routing_type === "none" ? "Remove from list" : "Unbind"}
                     </button>
                   )}
-                  {admin && releasable(n) && (
+                  {admin && offersRelease(n) && (
                     <button
                       type="button"
                       className="btn btn-danger"
                       style={{ padding: "3px 10px", marginLeft: 6 }}
                       disabled={!!running[n.id]}
-                      onClick={() => ask(n.id, "release")}
+                      onClick={() => void checkRelease(n)}
                     >
-                      Release
+                      {running[n.id] === "check" ? "Checking…" : "Release"}
                     </button>
                   )}
                   {admin && n.routing_type === "none" && ordering(n) && (
@@ -305,9 +366,9 @@ export default function PhoneNumbersList() {
                   )}
                 </td>
               </tr>
-              {pending?.id === n.id && (
+              {pending?.id === n.id && pending.kind !== "checking" && (
                 <tr>
-                  <td colSpan={7}>{confirmation(n, pending.kind)}</td>
+                  <td colSpan={7}>{confirmation(n, pending)}</td>
                 </tr>
               )}
             </Fragment>

@@ -37,6 +37,9 @@ vi.mock("../api", () => ({
     calls.push({ path, method: init?.method });
     if (path === "/agents") return { data: { agents: [{ agent_id: "a1", name: "Front desk" }] } };
     if (path === "/phone-numbers") return { data: { phone_numbers: numbers } };
+    if (/^\/phone-numbers\/[^/]+\/release-check$/.test(path)) {
+      return { data: { releasable: true, detail: null, twilio_credentials: "workspace" } };
+    }
     const m = path.match(/^\/phone-numbers\/([^/]+)$/);
     if (m && init?.method === "DELETE") {
       if (refuse) throw new Error(refuse);
@@ -129,7 +132,7 @@ it("for an admin, remove and release on the same row read as different actions",
 
   fireEvent.click(within(r).getByRole("button", { name: "Release" }));
   expect(screen.queryByRole("alertdialog", { name: /Remove/ })).toBeNull(); // one confirmation at a time
-  const release = screen.getByRole("alertdialog", { name: "Release +13125550100" });
+  const release = await screen.findByRole("alertdialog", { name: "Release +13125550100" });
   expect(release.textContent).toMatch(/can't be undone/);
   expect(release.textContent).toMatch(/billing for it stops/);
   expect(release.textContent).not.toMatch(/still billed/);
@@ -152,4 +155,36 @@ it("shows a refusal inside the confirmation and keeps the number", async () => {
   const dialog = screen.getByRole("alertdialog", { name: "Unbind +13125550102" });
   expect((await within(dialog).findByRole("alert")).textContent).toBe(refuse);
   expect(screen.getByText("+13125550102")).toBeTruthy();
+});
+
+// A Twilio number with no Twilio account stored with it may be on the workspace's
+// account or TurnCall's platform account (builder-api #111): the copy doesn't say which.
+const noPair = (over: Partial<PhoneNumber>) =>
+  row({ id: "n-nopair", e164: "+13125550104", twilio_credentials: "platform", ...over });
+
+it("removing a Twilio number with no stored account points an editor to an admin's Release, which checks where it is", async () => {
+  numbers = [row({}), noPair({})];
+  await renderList();
+  fireEvent.click(within(rowOf("+13125550104")).getByRole("button", { name: "Remove from list" }));
+  const dialog = screen.getByRole("alertdialog", { name: "Remove +13125550104 from the list" });
+  expect(dialog.textContent).toMatch(/No Twilio account is stored with this number yet\./);
+  expect(dialog.textContent).toMatch(
+    /Removing it doesn't release it\. A workspace admin can use Release, which checks which Twilio account it's on\./,
+  );
+  expect(dialog.textContent).not.toMatch(/platform|still billed/);
+});
+
+it("unbinding a Twilio number with no stored account says no account is stored and unbinding doesn't release it", async () => {
+  numbers = [row({}), noPair({ routing_type: "agent", agent_id: "a1" })];
+  await renderList();
+  fireEvent.click(within(rowOf("+13125550104")).getByRole("button", { name: "Unbind" }));
+  const dialog = screen.getByRole("alertdialog", { name: "Unbind +13125550104" });
+  expect(dialog.textContent).toMatch(/No Twilio account is stored with this number yet\./);
+  expect(dialog.textContent).toMatch(/Unbinding it doesn't release it\./);
+  expect(dialog.textContent).not.toMatch(/platform|still billed|Release checks/);
+  fireEvent.click(within(dialog).getByRole("button", { name: "Unbind number" }));
+  await waitFor(() => expect(screen.queryByText("+13125550104")).toBeNull());
+  expect(screen.getByRole("status").textContent).toBe(
+    "Unbound +13125550104. No Twilio account is stored with this number yet.",
+  );
 });
