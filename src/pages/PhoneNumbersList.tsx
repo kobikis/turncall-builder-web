@@ -5,9 +5,9 @@ import { useAuth } from "../auth";
 import { canEdit, isAdmin } from "../roles";
 import Uid from "../components/Uid";
 import { CARRIER_LABELS, type Carrier } from "./PhoneNumberForm";
-import { Agent, ApiResponse, PhoneNumber, PhoneNumberRelease } from "../types";
+import { Agent, ApiResponse, PendingPurchase, PhoneNumber, PhoneNumberRelease } from "../types";
 
-type Num = PhoneNumber;
+type Num = PhoneNumber & PendingPurchase;
 
 // What an open in-page confirmation is for. A routed row is unbound, an unassigned
 // one is removed from the list (#103); neither gives the number back to the carrier.
@@ -233,6 +233,9 @@ export default function PhoneNumbersList() {
                 <td className="num" style={{ fontWeight: 500 }}>
                   {editable ? <Link to={`/phone-numbers/${n.id}/edit`}>{n.e164}</Link> : n.e164}
                   {n.label && <div className="hint" style={{ fontWeight: 400 }}>{n.label}</div>}
+                  {n.purchase_status === "pending" && (
+                    <div className="hint" style={{ fontWeight: 400 }}>ordered, waiting on Telnyx</div>
+                  )}
                 </td>
                 <td><Uid id={n.id} label="phone_number_id" /></td>
                 <td>{CARRIER_LABELS[(n.carrier || "twilio") as Carrier] ?? n.carrier}</td>
