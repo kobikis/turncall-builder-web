@@ -30,7 +30,7 @@ const FALLBACK_PROVIDERS: Providers = {
   stt: ["deepgram", "openai", "elevenlabs", "cartesia", "assemblyai"],
   llm: ["openai", "anthropic", "google", "openrouter", "ollama", "custom_openai", "bedrock"],
   tts: ["deepgram", "openai", "elevenlabs", "cartesia"],
-  s2s: ["openai", "openai_live", "google", "aws"],
+  s2s: ["openai", "openai_live", "google", "aws", "xai"],
 };
 
 // A raw provider id is only self-explanatory when it names a vendor. Several
@@ -54,6 +54,7 @@ const PROVIDER_LABELS: Record<keyof Providers, Record<string, string>> = {
     openai_live: "openai_live — GPT-Live-1, full duplex (handles interruptions)",
     google: "google — Gemini Live",
     aws: "aws — Amazon Nova Sonic",
+    xai: "xai — Grok Voice",
   },
 };
 
@@ -69,6 +70,11 @@ const STATUS_HINTS: Record<string, string> = {
   failed: "the backend container failed to start — press Save to retry generation (root cause is in the builder API logs: make docker-logs)",
   stopped: "the backend container is not running — calls to this agent's tools and events will fail until it's started",
 };
+
+// A model its vendor has deprecated still runs, so it stays pickable — named as
+// such, from the catalog's own `deprecated` list (builder-api#121).
+export const s2sModelOptions = (models: string[], deprecated: string[]): Opt[] =>
+  models.map((m) => (deprecated.includes(m) ? { value: m, label: `${m} (deprecated)` } : m));
 
 const BUILTIN_TOOLS = ["end_call", "transfer_call", "send_dtmf", "do_not_call"];
 
@@ -116,7 +122,7 @@ export default function ConfigTab({ section }: { section: SectionId }) {
   const [models, setModels] = useState<string[]>([]); // live, for the selected LLM provider
   const [voices, setVoices] = useState<Opt[]>([]); // live, for the selected TTS provider
   const [ttsModels, setTtsModels] = useState<string[]>([]); // for the selected TTS provider
-  const [s2sModels, setS2sModels] = useState<string[]>([]); // live, for the selected S2S provider
+  const [s2sModels, setS2sModels] = useState<Opt[]>([]); // live, for the selected S2S provider
   const [s2sVoices, setS2sVoices] = useState<Opt[]>([]);
   const [catalog, setCatalog] = useState<CatalogApp[]>([]);
   const [connected, setConnected] = useState<ConnectedAccount[]>([]);
@@ -163,12 +169,14 @@ export default function ConfigTab({ section }: { section: SectionId }) {
 
   const isS2S = (cfg.pipeline_mode || "cascade") === "s2s";
   // Placeholder hints per S2S provider — OpenAI's would be actively misleading
-  // next to a Nova Sonic or Gemini dropdown.
+  // next to a Nova Sonic, Gemini or Grok dropdown.
   const S2S_HINTS: Record<string, { model: string; voice: string }> = {
     openai: { model: "gpt-realtime-2.1", voice: "alloy" },
     openai_live: { model: "gpt-live-1", voice: "alloy" },
     google: { model: "models/gemini-3.1-flash-live-preview", voice: "Charon" },
     aws: { model: "amazon.nova-2-sonic-v1:0", voice: "matthew" },
+    // Pinned, as TurnCall runs it, never xAI's moving `grok-voice-latest`.
+    xai: { model: "grok-voice-3.0", voice: "eve" },
   };
 
   // Fetch S2S model + voice lists whenever the S2S provider changes.
@@ -176,7 +184,7 @@ export default function ConfigTab({ section }: { section: SectionId }) {
   useEffect(() => {
     let ok = true;
     api(`/providers/s2s/${s2sProvider}/models`)
-      .then((r) => ok && setS2sModels(r.data.models || []))
+      .then((r) => ok && setS2sModels(s2sModelOptions(r.data.models || [], r.data.deprecated || [])))
       .catch(() => ok && setS2sModels([]));
     api(`/providers/s2s/${s2sProvider}/voices`)
       .then((r) => ok && setS2sVoices(r.data.voices || []))
