@@ -131,7 +131,7 @@ export function disconnectText(card: ProviderCard): string {
 
 function validationText(v: ProviderCard["validation"]): string | null {
   if (!v?.status) return null;
-  if (v.status === "valid") return `Accepted by ${v.checked} — checked against a list endpoint, not a live call.`;
+  if (v.status === "valid") return `Accepted by ${v.checked} — checked against the provider's API, not a live call.`;
   if (v.status === "unchecked") return "Not checked: this provider has no list endpoint to ask.";
   return `Could not be checked (${v.detail}). Saved anyway.`;
 }
@@ -151,6 +151,7 @@ const DISPLAY_NAMES: Record<string, string> = {
   heygen: "HeyGen",
   tavus: "Tavus",
   typesafe: "TypeSafe (Jev)",
+  xai: "xAI (Grok)",
 };
 export const displayName = (provider: string) =>
   DISPLAY_NAMES[provider] ?? provider.charAt(0).toUpperCase() + provider.slice(1);

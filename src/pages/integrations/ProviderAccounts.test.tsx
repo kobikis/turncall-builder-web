@@ -180,3 +180,41 @@ it("says when custom call-init numbers are not on the workspace key (builder-api
   // Nothing to say about a key the workspace has not connected.
   expect(webhookNumbersText(card({ connected: false, webhook_numbers: w({ on_platform_keys: 2 }) }))).toBeNull();
 });
+
+it("shows the xai account as xAI (Grok), serving speech-to-speech (#113)", async () => {
+  cards = [
+    card({
+      provider: "xai",
+      serves: { s2s: ["xai"] },
+      connected: true,
+      last4: "9f3a",
+      runs_on: "workspace",
+      validation: { status: "valid", checked: "GET https://api.x.ai/v1/api-key" },
+    }),
+  ];
+  show();
+  const el = await screen.findByTestId("provider-xai");
+  expect(within(el).getByText("xAI (Grok)")).toBeDefined();
+  expect(within(el).getByText("Speech-to-speech")).toBeDefined();
+  expect(within(el).getByText("Calls use this workspace's key ····9f3a.")).toBeDefined();
+
+  // The check result is in the key dialog. xAI's is a key endpoint, not a
+  // list, so the wording no longer says "list endpoint".
+  fireEvent.click(within(el).getByText("Manage"));
+  expect(
+    screen.getByText(
+      "Accepted by GET https://api.x.ai/v1/api-key — checked against the provider's API, not a live call.",
+    ),
+  ).toBeDefined();
+  fireEvent.change(screen.getByLabelText("xai API key"), { target: { value: "xai-new" } });
+  fireEvent.click(screen.getByText("Replace key"));
+  await waitFor(() => expect(calls.find((c) => c.method === "PUT")?.path).toBe("/integrations/providers/xai"));
+});
+
+it("says an xai account with no key anywhere leaves its calls without one", async () => {
+  cards = [card({ provider: "xai", serves: { s2s: ["xai"] }, platform_key: false, runs_on: "none" })];
+  show();
+  const el = await screen.findByTestId("provider-xai");
+  expect(within(el).getByText("xAI (Grok)")).toBeDefined();
+  expect(within(el).getByText(/neither this workspace nor the platform/)).toBeDefined();
+});
