@@ -6,7 +6,7 @@ import { PickControl, type Opt } from "./PickControl";
 import { LlmTuning } from "./LlmTuning";
 import { Limits } from "./Limits";
 import { Pronunciations } from "./Pronunciations";
-import { withField } from "./SettingFields";
+import { NumberField, withField } from "./SettingFields";
 import { TurnTaking } from "./TurnTaking";
 import { Delegation } from "./Delegation";
 import { McpServers } from "./McpServers";
@@ -27,9 +27,9 @@ import type { SectionId } from "./sections";
 
 type Providers = { stt: string[]; llm: string[]; tts: string[]; s2s: string[] };
 const FALLBACK_PROVIDERS: Providers = {
-  stt: ["deepgram", "openai", "elevenlabs", "cartesia", "assemblyai"],
-  llm: ["openai", "anthropic", "google", "openrouter", "ollama", "custom_openai", "bedrock"],
-  tts: ["deepgram", "openai", "elevenlabs", "cartesia"],
+  stt: ["deepgram", "openai", "elevenlabs", "cartesia", "assemblyai", "xai"],
+  llm: ["openai", "anthropic", "google", "openrouter", "ollama", "custom_openai", "bedrock", "xai"],
+  tts: ["deepgram", "openai", "elevenlabs", "cartesia", "xai"],
   s2s: ["openai", "openai_live", "google", "aws", "xai"],
 };
 
@@ -40,10 +40,11 @@ const FALLBACK_PROVIDERS: Providers = {
 // leave the plain vendor names alone. Keyed by role because `openai` means
 // something different under stt than under s2s.
 const PROVIDER_LABELS: Record<keyof Providers, Record<string, string>> = {
-  stt: {},
-  tts: {},
+  stt: { xai: "xai — speech-to-text" },
+  tts: { xai: "xai — voices" },
   llm: {
     google: "google — Gemini",
+    xai: "xai — Grok",
     openrouter: "openrouter — multi-model routing with fallback",
     ollama: "ollama — local models",
     custom_openai: "custom_openai — any OpenAI-compatible endpoint",
@@ -75,6 +76,40 @@ const STATUS_HINTS: Record<string, string> = {
 // such, from the catalog's own `deprecated` list (builder-api#121).
 export const s2sModelOptions = (models: string[], deprecated: string[]): Opt[] =>
   models.map((m) => (deprecated.includes(m) ? { value: m, label: `${m} (deprecated)` } : m));
+
+// Placeholder hints per cascade provider: TurnCall's own default where it has
+// one we pin (a blank field runs it), else the long-standing example.
+const STT_MODEL_HINTS: Record<string, string> = { xai: "grok-voice-transcribe-2.0" };
+const LLM_MODEL_HINTS: Record<string, string> = { xai: "grok-4.20-non-reasoning" };
+const TTS_VOICE_HINTS: Record<string, string> = { xai: "eve" };
+
+// Deepgram's voice is its model, and xAI's TTS has no model at all: a voice only.
+const TTS_VOICE_ONLY = ["deepgram", "xai"];
+
+// The voice speeds each TTS provider takes. TurnCall's own bound is 0.25–4.0;
+// xAI accepts 0.7–1.5 only, and TurnCall refuses anything outside it (422).
+type Range = { min: number; max: number };
+const SPEED_RANGE: Range = { min: 0.25, max: 4 };
+const TTS_SPEED_RANGES: Record<string, Range> = { xai: { min: 0.7, max: 1.5 } };
+const speedRange = (provider: string) => TTS_SPEED_RANGES[provider] ?? SPEED_RANGE;
+
+/** A speed the new provider accepts: one outside its range is brought to the nearest bound. */
+const speedFor = (provider: string, speed: unknown): unknown => {
+  if (typeof speed !== "number") return speed;
+  const { min, max } = speedRange(provider);
+  return Math.min(max, Math.max(min, speed));
+};
+
+// Only xAI's narrower range is worth saying out loud; outside it, say what will happen.
+const speedHint = (provider: string, speed: unknown): string | undefined => {
+  const range = TTS_SPEED_RANGES[provider];
+  if (!range) return undefined;
+  const span = `${range.min}–${range.max}`;
+  const outside = typeof speed === "number" && (speed < range.min || speed > range.max);
+  return outside
+    ? `${speed} is outside the ${span} xAI accepts — TurnCall will refuse to save it.`
+    : `xAI accepts ${span}. Blank is 1.0.`;
+};
 
 const BUILTIN_TOOLS = ["end_call", "transfer_call", "send_dtmf", "do_not_call"];
 
@@ -278,7 +313,7 @@ export default function ConfigTab({ section }: { section: SectionId }) {
           label={asDelegate ? "Delegate model" : "Model"}
           value={cfg.llm?.model || ""}
           options={models}
-          placeholder="gpt-4o-mini"
+          placeholder={LLM_MODEL_HINTS[llmProvider] ?? "gpt-4o-mini"}
           onChange={(v) => patch((c) => (c.llm = { ...c.llm, model: v }))}
         />
       </div>
@@ -419,7 +454,7 @@ export default function ConfigTab({ section }: { section: SectionId }) {
             label="STT model"
             value={cfg.stt?.model || ""}
             options={sttModels}
-            placeholder="nova-2"
+            placeholder={STT_MODEL_HINTS[sttProvider] ?? "nova-2"}
             onChange={(v) => patch((c) => (c.stt = { ...c.stt, model: v }))}
           />
         </div>
@@ -436,14 +471,23 @@ export default function ConfigTab({ section }: { section: SectionId }) {
               id="cfg-tts-p"
               className="input"
               value={cfg.tts?.provider || "deepgram"}
-              onChange={(e) => patch((c) => (c.tts = { ...c.tts, provider: e.target.value, model: "", voice: "" }))}
+              onChange={(e) =>
+                patch((c) => {
+                  const provider = e.target.value;
+                  c.tts = withField(
+                    { ...c.tts, provider, model: "", voice: "" },
+                    "speed",
+                    speedFor(provider, c.tts?.speed),
+                  );
+                })
+              }
             >
               {providerOptions("tts", providers.tts)}
             </select>
             <ProviderKeyNote role="tts" provider={ttsProvider} cards={cards} />
           </div>
-          {/* Deepgram's voice is its model, so it has no model to pick. */}
-          {ttsProvider !== "deepgram" && (
+          {/* Deepgram's voice is its model and xAI has none, so neither has a model to pick. */}
+          {!TTS_VOICE_ONLY.includes(ttsProvider) && (
             <PickField
               id="cfg-tts-m"
               label="TTS model"
@@ -458,8 +502,21 @@ export default function ConfigTab({ section }: { section: SectionId }) {
             label="Voice"
             value={cfg.tts?.voice || ""}
             options={voices}
-            placeholder="aura-2-helena-en"
+            placeholder={TTS_VOICE_HINTS[ttsProvider] ?? "aura-2-helena-en"}
             onChange={(v) => patch((c) => (c.tts = { ...c.tts, voice: v }))}
+          />
+        </div>
+        <div style={{ display: "flex", gap: 12 }}>
+          <NumberField
+            id="cfg-tts-speed"
+            label="Voice speed"
+            step="0.05"
+            min={speedRange(ttsProvider).min}
+            max={speedRange(ttsProvider).max}
+            value={cfg.tts?.speed}
+            placeholder="1.0"
+            hint={speedHint(ttsProvider, cfg.tts?.speed)}
+            onChange={(v) => patch((c) => (c.tts = withField(c.tts, "speed", v)))}
           />
         </div>
         <Backups role="tts" providers={providers.tts} value={cfg.tts?.failover} editable={editable}
