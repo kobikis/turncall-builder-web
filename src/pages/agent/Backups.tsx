@@ -9,12 +9,12 @@ import { PickControl, type Opt } from "./PickControl";
 
 type Entry = Record<string, string>;
 
-// What each row picks beside its provider. Deepgram's TTS voice is its model,
-// so a Deepgram TTS row picks a voice only.
+// What each row picks beside its provider. Deepgram's TTS voice is its model
+// and xAI's TTS has none, so their TTS rows pick a voice only.
 const FIELDS = { llm: ["model"], stt: ["model"], tts: ["model", "voice"] } as const;
 type Role = keyof typeof FIELDS;
 const fieldsFor = (role: Role, provider: string | undefined): readonly string[] =>
-  role === "tts" && provider === "deepgram" ? ["voice"] : FIELDS[role];
+  role === "tts" && (provider === "deepgram" || provider === "xai") ? ["voice"] : FIELDS[role];
 const ROLE_LABEL = { llm: "LLM", stt: "STT", tts: "TTS" } as const;
 
 function useOptions(role: Role, provider: string | undefined, field: string): Opt[] {

@@ -17,13 +17,15 @@ export function withField<T extends Block>(obj: T | undefined, key: string, valu
 /** "" stays "" (cleared); anything else is a number. */
 export const numberOrBlank = (raw: string): number | "" => (raw.trim() === "" ? "" : Number(raw));
 
-export function NumberField({ id, label, value, placeholder, hint, step, disabled, onChange }: {
+export function NumberField({ id, label, value, placeholder, hint, step, min, max, disabled, onChange }: {
   id: string;
   label: string;
   value: unknown;
   placeholder: string;
   hint?: string;
   step?: string;
+  min?: number;
+  max?: number;
   disabled?: boolean;
   onChange: (v: number | "") => void;
 }) {
@@ -35,6 +37,8 @@ export function NumberField({ id, label, value, placeholder, hint, step, disable
         className="input"
         type="number"
         step={step}
+        min={min}
+        max={max}
         value={typeof value === "number" ? value : ""}
         placeholder={placeholder}
         disabled={disabled}
