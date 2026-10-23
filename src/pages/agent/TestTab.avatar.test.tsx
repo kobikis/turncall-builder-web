@@ -266,3 +266,48 @@ it("shows no such line for an Agent without an Avatar, or an Avatar that runs", 
   expect(api).toHaveBeenCalledWith("/agents/a1/calls/c1/events?event_type=avatar.unavailable");
   expect(screen.queryByText(/Avatar/)).toBeNull();
 });
+
+// The agent's voice (#123). The transport reports the audio track again each
+// time it resumes after a stall; a new element per report played the same
+// voice over itself, and nothing stopped any of them when the call ended.
+function countAudio() {
+  const made: HTMLAudioElement[] = [];
+  const Real = window.Audio;
+  vi.stubGlobal(
+    "Audio",
+    function () {
+      const a = new Real();
+      made.push(a);
+      return a;
+    } as unknown as typeof Audio,
+  );
+  return made;
+}
+
+it("plays the agent's voice on one element, however often its track resumes", async () => {
+  const made = countAudio();
+  await startCall();
+  const voice = track("audio");
+  act(() => callbacks.onTrackStarted?.(voice));
+  act(() => callbacks.onTrackStopped?.(voice));
+  act(() => callbacks.onTrackStarted?.(voice));
+
+  expect(made).toHaveLength(1);
+});
+
+it("stops the agent's voice when either side ends the call", async () => {
+  const made = countAudio();
+  await startCall();
+  act(() => callbacks.onTrackStarted?.(track("audio")));
+  act(() => callbacks.onDisconnected?.());
+  expect(pause).toHaveBeenCalled();
+  expect(made[0].srcObject).toBeNull();
+
+  pause.mockClear();
+  fireEvent.click(await screen.findByText("Start a test call"));
+  await act(async () => {});
+  act(() => callbacks.onTrackStarted?.(track("audio")));
+  await act(async () => fireEvent.click(screen.getByText("End call")));
+  expect(pause).toHaveBeenCalled();
+  expect(made[1].srcObject).toBeNull();
+});

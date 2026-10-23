@@ -81,6 +81,10 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const erroredRef = useRef(false);
   const unwatchRef = useRef<(() => void) | null>(null);
   const callIdRef = useRef<string | null>(null);
+  // The agent's voice: one element per call. The transport reports the audio
+  // track again each time it resumes after a stall, and a new element each
+  // time played the same voice over itself (#123).
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const clearTimer = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -95,6 +99,14 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     unwatchRef.current = null;
   };
 
+  const releaseAudio = () => {
+    const audio = audioRef.current;
+    audioRef.current = null;
+    if (!audio) return;
+    audio.pause();
+    audio.srcObject = null;
+  };
+
   const clearAvatarTimer = () => {
     if (avatarTimerRef.current) clearTimeout(avatarTimerRef.current);
     avatarTimerRef.current = null;
@@ -106,6 +118,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
       clearTimer();
       clearAvatarTimer();
       unwatch();
+      releaseAudio();
       void clientRef.current?.disconnect().catch(() => {});
     },
     [],
@@ -117,6 +130,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     setState("error");
     setMsg(message);
     setVideo(null);
+    releaseAudio();
     void clientRef.current?.disconnect().catch(() => {});
     clientRef.current = null;
   }
@@ -181,6 +195,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
             clientRef.current = null;
             clearTimer();
             setVideo(null);
+            releaseAudio();
             if (erroredRef.current) return; // keep the failure reason
             setState("idle");
             setMsg("Call ended.");
@@ -205,7 +220,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
               return;
             }
             if (track.kind !== "audio") return;
-            const audio = new Audio();
+            const audio = (audioRef.current ??= new Audio());
             audio.srcObject = new MediaStream([track]);
             audio.play().catch(() => {});
           },
@@ -284,6 +299,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     setState("idle");
     setMsg("Call ended.");
     setVideo(null);
+    releaseAudio();
   }
 
   return (
