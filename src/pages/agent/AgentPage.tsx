@@ -9,6 +9,7 @@ import { usePoll } from "../../usePoll";
 import { Backend, ToolStatuses } from "../../types";
 import { agentStatus } from "../../agentStatus";
 import { dirtySections, type SectionId } from "./sections";
+import { avatarIdMissing } from "./Avatar";
 
 // Re-export so the tabs keep importing these from AgentPage.
 export type { Backend, ToolStatuses };
@@ -126,6 +127,13 @@ export default function AgentPage() {
     setSaveErr("");
     if (jsonError) {
       setSaveErr(`Config is not valid JSON: ${jsonError}`);
+      return false;
+    }
+    // Read from the draft, not set by the section: leaving the Avatar section
+    // does not give the Avatar an ID.
+    const noAvatarId = avatarIdMissing(draft?.avatar);
+    if (noAvatarId) {
+      setSaveErr(`Avatar: ${noAvatarId}`);
       return false;
     }
     if (dirty.length === 0) return true;
