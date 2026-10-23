@@ -14,6 +14,8 @@ type Ctx = {
   msg: string;
   start: (agentId: string, variables?: Record<string, string>) => Promise<void>;
   stop: () => Promise<void>;
+  // The remote video track — an Avatar's face — while the call carries one.
+  video: MediaStreamTrack | null;
 };
 
 const VoiceCallCtx = createContext<Ctx | null>(null);
@@ -33,6 +35,7 @@ const CONNECT_TIMEOUT_MS = 15000;
 export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<CallState>("idle");
   const [msg, setMsg] = useState("");
+  const [video, setVideo] = useState<MediaStreamTrack | null>(null);
   const clientRef = useRef<{ disconnect: () => Promise<void> } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const erroredRef = useRef(false);
@@ -67,6 +70,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     clearTimer();
     setState("error");
     setMsg(message);
+    setVideo(null);
     void clientRef.current?.disconnect().catch(() => {});
     clientRef.current = null;
   }
@@ -122,6 +126,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
           onDisconnected: () => {
             clientRef.current = null;
             clearTimer();
+            setVideo(null);
             if (erroredRef.current) return; // keep the failure reason
             setState("idle");
             setMsg("Call ended.");
@@ -135,10 +140,24 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
             if (s === "error") fail("Connection error.");
           },
           onTrackStarted: (track: MediaStreamTrack, participant?: { local?: boolean }) => {
-            if (participant?.local || track.kind !== "audio") return;
+            if (participant?.local) return;
+            // An Avatar's face. Kept in state rather than attached here: the
+            // Test panel shows it, and can unmount and remount mid-call.
+            if (track.kind === "video") {
+              setVideo(track);
+              return;
+            }
+            if (track.kind !== "audio") return;
             const audio = new Audio();
             audio.srcObject = new MediaStream([track]);
             audio.play().catch(() => {});
+          },
+          // A muted or ended track (no participant on SmallWebRTC's call): an
+          // Avatar that drops would otherwise leave its last frame frozen. It
+          // comes back through onTrackStarted when the track resumes.
+          onTrackStopped: (track: MediaStreamTrack, participant?: { local?: boolean }) => {
+            if (participant?.local) return;
+            setVideo((held) => (held === track ? null : held));
           },
         },
       });
@@ -189,7 +208,23 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     clientRef.current = null;
     setState("idle");
     setMsg("Call ended.");
+    setVideo(null);
   }
 
-  return <VoiceCallCtx.Provider value={{ state, msg, start, stop }}>{children}</VoiceCallCtx.Provider>;
+  return (
+    <VoiceCallCtx.Provider value={{ state, msg, start, stop, video }}>{children}</VoiceCallCtx.Provider>
+  );
+}
+
+// The call's video, while there is one. Muted because the audio has its own
+// element, which plays whether or not this is mounted. Renders nothing outside
+// a provider, so the Test panel needs no call to render.
+export function CallVideo() {
+  const track = useContext(VoiceCallCtx)?.video ?? null;
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    if (ref.current && track) ref.current.srcObject = new MediaStream([track]);
+  }, [track]);
+  if (!track) return null;
+  return <video ref={ref} className="call-video" autoPlay playsInline muted />;
 }

@@ -6,18 +6,22 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-// Only Deepgram's voices and OpenAI's TTS models are live here; every other list is unavailable, which
-// leaves that field free text.
+// Only Deepgram's voices, OpenAI's TTS models and the HeyGen account's Avatars are live here; every
+// other list is unavailable, which leaves that field free text.
 vi.mock("../../api", () => ({
   api: vi.fn(async (path: string) => {
     if (path === "/providers/tts/deepgram/voices") {
       return { data: { voices: [{ value: "aura-2-thalia-en", label: "Thalia" }] } };
     }
     if (path === "/providers/tts/openai/models") return { data: { models: ["tts-1", "gpt-4o-mini-tts"] } };
+    if (path === "/providers/avatar/heygen/avatars") {
+      return { data: { avatars: [{ value: "av-ann", label: "Ann (office)" }] } };
+    }
     throw new Error("unavailable");
   }),
 }));
 
+import { api } from "../../api";
 import { Avatar } from "./Avatar";
 import { Backups } from "./Backups";
 import { LlmTuning } from "./LlmTuning";
@@ -158,6 +162,7 @@ it("a Deepgram Flux model owns end-of-turn: Smart Turn and the silence window ar
   expect(screen.getByLabelText(/caller can interrupt the agent/i)).toBeTruthy();
 });
 
+// Tavus's list is unavailable here, so its replica ID is typed.
 it("avatar: a Tavus replica, and off removes the block", () => {
   const onChange = vi.fn();
   const { rerender } = render(<Avatar value={undefined} editable onChange={onChange} />);
@@ -169,4 +174,117 @@ it("avatar: a Tavus replica, and off removes the block", () => {
   expect(onChange).toHaveBeenLastCalledWith({ enabled: true, provider: "tavus", replica_id: "r1" });
   fireEvent.change(screen.getByLabelText(/video avatar/i), { target: { value: "" } });
   expect(onChange).toHaveBeenLastCalledWith(undefined);
+});
+
+it("avatar: the HeyGen account's Avatars are offered by name", async () => {
+  const onChange = vi.fn();
+  render(<Avatar value={{ enabled: true, provider: "heygen", is_sandbox: false }} editable onChange={onChange} />);
+  await screen.findByRole("option", { name: "Ann (office)" });
+  type(/avatar id/i, "av-ann");
+  expect(onChange).toHaveBeenLastCalledWith({ enabled: true, provider: "heygen", is_sandbox: false, avatar_id: "av-ann" });
+});
+
+it("avatar: an ID the list does not show can still be typed", async () => {
+  // One page of the account's Avatars is listed; an Avatar past it, or one
+  // the list leaves out, is pasted by ID.
+  const onChange = vi.fn();
+  const { rerender } = render(<Avatar value={{ enabled: true, provider: "heygen", is_sandbox: false }} editable onChange={onChange} />);
+  await screen.findByRole("option", { name: "Ann (office)" });
+  type(/avatar id/i, screen.getByRole("option", { name: /type an avatar id/i }).getAttribute("value")!);
+  expect(onChange).not.toHaveBeenCalled(); // choosing to type is not a choice of Avatar
+
+  const typed = screen.getByRole("textbox", { name: /avatar id/i });
+  fireEvent.change(typed, { target: { value: "av-past-the-page" } });
+  expect(onChange).toHaveBeenLastCalledWith({ enabled: true, provider: "heygen", is_sandbox: false, avatar_id: "av-past-the-page" });
+
+  rerender(<Avatar value={{ enabled: true, provider: "heygen", is_sandbox: false, avatar_id: "av-past-the-page" }} editable onChange={onChange} />);
+  fireEvent.blur(screen.getByRole("textbox", { name: /avatar id/i }));
+  // Back to the list, which keeps the typed ID as the choice.
+  expect((screen.getByLabelText(/avatar id/i) as HTMLSelectElement).value).toBe("av-past-the-page");
+  expect(screen.getByRole("option", { name: "Ann (office)" })).toBeTruthy();
+});
+
+it("avatar: switching provider refetches, and never offers the other account's Avatars", async () => {
+  const { rerender } = render(<Avatar value={{ enabled: true, provider: "heygen", is_sandbox: false }} editable onChange={() => {}} />);
+  await screen.findByRole("option", { name: "Ann (office)" });
+
+  vi.mocked(api).mockClear();
+  rerender(<Avatar value={{ enabled: true, provider: "tavus" }} editable onChange={() => {}} />);
+  expect(screen.queryByRole("option", { name: "Ann (office)" })).toBeNull();
+  expect(api).toHaveBeenCalledWith("/providers/avatar/tavus/avatars");
+});
+
+it("avatar: a viewer sees the chosen Avatar and cannot change it", async () => {
+  render(<Avatar value={{ enabled: true, provider: "heygen", is_sandbox: false, avatar_id: "av-ann" }} editable={false} onChange={() => {}} />);
+  await screen.findByRole("option", { name: "Ann (office)" });
+  const pick = screen.getByLabelText(/avatar id/i) as HTMLSelectElement;
+  expect(pick.value).toBe("av-ann");
+  expect(pick.disabled).toBe(true);
+});
+
+// LiveAvatar's sandbox runs one Avatar only, and refuses a sandbox session with any other.
+const SANDBOX_AVATAR = "dd73ea75-1218-4ef3-92ce-606d5f7fbc0a";
+
+it("avatar: ticking Sandbox sets the sandbox Avatar and locks the ID", async () => {
+  const onChange = vi.fn();
+  const { rerender } = render(
+    <Avatar value={{ enabled: true, provider: "heygen", is_sandbox: false, avatar_id: "av-ann" }} editable onChange={onChange} />
+  );
+  await screen.findByRole("option", { name: "Ann (office)" });
+  fireEvent.click(screen.getByLabelText(/sandbox/i));
+  expect(onChange).toHaveBeenLastCalledWith({ enabled: true, provider: "heygen", is_sandbox: true, avatar_id: SANDBOX_AVATAR });
+
+  rerender(
+    <Avatar value={{ enabled: true, provider: "heygen", is_sandbox: true, avatar_id: SANDBOX_AVATAR }} editable onChange={onChange} />
+  );
+  const id = screen.getByLabelText(/avatar id/i) as HTMLInputElement;
+  expect(id.value).toBe(SANDBOX_AVATAR);
+  expect(id.readOnly).toBe(true);
+  expect(screen.queryByRole("option", { name: "Ann (office)" })).toBeNull();
+});
+
+it("avatar: unticking Sandbox clears the sandbox Avatar and offers the account's again", async () => {
+  const onChange = vi.fn();
+  const { rerender } = render(
+    <Avatar value={{ enabled: true, provider: "heygen", is_sandbox: true, avatar_id: SANDBOX_AVATAR }} editable onChange={onChange} />
+  );
+  fireEvent.click(screen.getByLabelText(/sandbox/i));
+  // The sandbox Avatar is refused outside the sandbox, so it is not carried over.
+  expect(onChange).toHaveBeenLastCalledWith({ enabled: true, provider: "heygen", is_sandbox: false });
+
+  rerender(<Avatar value={{ enabled: true, provider: "heygen", is_sandbox: false }} editable onChange={onChange} />);
+  await screen.findByRole("option", { name: "Ann (office)" });
+  type(/avatar id/i, "av-ann");
+  expect(onChange).toHaveBeenLastCalledWith({ enabled: true, provider: "heygen", is_sandbox: false, avatar_id: "av-ann" });
+});
+
+it("avatar: choosing HeyGen starts in the sandbox, so a key is all the first test call needs", () => {
+  const onChange = vi.fn();
+  render(<Avatar value={undefined} editable onChange={onChange} />);
+  fireEvent.change(screen.getByLabelText(/video avatar/i), { target: { value: "heygen" } });
+  expect(onChange).toHaveBeenLastCalledWith({ enabled: true, provider: "heygen", is_sandbox: true, avatar_id: SANDBOX_AVATAR });
+});
+
+it("avatar: with no ID the section says it cannot be saved, and stops once there is one", () => {
+  const { rerender } = render(<Avatar value={{ enabled: true, provider: "tavus" }} editable onChange={() => {}} />);
+  expect(screen.getByText(/choose a replica id.*cannot be saved without one/i)).toBeTruthy();
+
+  rerender(<Avatar value={{ enabled: true, provider: "tavus", replica_id: "r1" }} editable onChange={() => {}} />);
+  expect(screen.queryByText(/cannot be saved without one/i)).toBeNull();
+
+  rerender(<Avatar value={{ enabled: true, provider: "heygen", is_sandbox: false }} editable onChange={() => {}} />);
+  expect(screen.getByText(/choose an avatar id.*cannot be saved without one/i)).toBeTruthy();
+});
+
+it("avatar: the hint says a sandbox session is short and free, and where an Avatar shows", () => {
+  const { rerender } = render(
+    <Avatar value={{ enabled: true, provider: "heygen", is_sandbox: true, avatar_id: SANDBOX_AVATAR }} editable onChange={() => {}} />
+  );
+  expect(screen.getByText(/sandbox.*about a minute.*free/i)).toBeTruthy();
+  expect(screen.getByText(/only on browser calls/i)).toBeTruthy();
+  expect(screen.getByText(/hearing, thinking and speaking stages.*speech-to-speech/i)).toBeTruthy();
+
+  rerender(<Avatar value={{ enabled: true, provider: "tavus", replica_id: "r1" }} editable onChange={() => {}} />);
+  expect(screen.queryByText(/about a minute/i)).toBeNull();
+  expect(screen.getByText(/only on browser calls/i)).toBeTruthy();
 });
