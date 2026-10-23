@@ -184,6 +184,26 @@ it("avatar: the HeyGen account's Avatars are offered by name", async () => {
   expect(onChange).toHaveBeenLastCalledWith({ enabled: true, provider: "heygen", is_sandbox: false, avatar_id: "av-ann" });
 });
 
+it("avatar: an ID the list does not show can still be typed", async () => {
+  // One page of the account's Avatars is listed; an Avatar past it, or one
+  // the list leaves out, is pasted by ID.
+  const onChange = vi.fn();
+  const { rerender } = render(<Avatar value={{ enabled: true, provider: "heygen", is_sandbox: false }} editable onChange={onChange} />);
+  await screen.findByRole("option", { name: "Ann (office)" });
+  type(/avatar id/i, screen.getByRole("option", { name: /type an avatar id/i }).getAttribute("value")!);
+  expect(onChange).not.toHaveBeenCalled(); // choosing to type is not a choice of Avatar
+
+  const typed = screen.getByRole("textbox", { name: /avatar id/i });
+  fireEvent.change(typed, { target: { value: "av-past-the-page" } });
+  expect(onChange).toHaveBeenLastCalledWith({ enabled: true, provider: "heygen", is_sandbox: false, avatar_id: "av-past-the-page" });
+
+  rerender(<Avatar value={{ enabled: true, provider: "heygen", is_sandbox: false, avatar_id: "av-past-the-page" }} editable onChange={onChange} />);
+  fireEvent.blur(screen.getByRole("textbox", { name: /avatar id/i }));
+  // Back to the list, which keeps the typed ID as the choice.
+  expect((screen.getByLabelText(/avatar id/i) as HTMLSelectElement).value).toBe("av-past-the-page");
+  expect(screen.getByRole("option", { name: "Ann (office)" })).toBeTruthy();
+});
+
 it("avatar: switching provider refetches, and never offers the other account's Avatars", async () => {
   const { rerender } = render(<Avatar value={{ enabled: true, provider: "heygen", is_sandbox: false }} editable onChange={() => {}} />);
   await screen.findByRole("option", { name: "Ann (office)" });

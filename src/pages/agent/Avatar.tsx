@@ -86,6 +86,7 @@ export function Avatar({ value, editable, onChange }: {
             ) : (
               <PickControl id="cfg-avatar-id" value={value?.[idKey] || ""} options={avatars} disabled={!editable}
                 placeholder={provider === "tavus" ? "Paste a replica ID" : "Paste an Avatar ID"}
+                other={provider === "tavus" ? "Type a replica ID…" : "Type an Avatar ID…"}
                 onChange={(v) => set({ [idKey]: v.trim() || undefined })} />
             )}
           </div>
