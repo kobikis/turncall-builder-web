@@ -23,6 +23,10 @@ const PROVIDERS: Record<Provider, { idKey: "avatar_id" | "replica_id"; label: st
   tavus: { idKey: "replica_id", label: "Replica ID", anId: "a replica ID" },
 };
 
+// What a provider calls its Avatar's ID, as the section labels it.
+export const avatarIdLabel = (provider: string): string =>
+  PROVIDERS[provider as Provider]?.label ?? "Avatar ID";
+
 // LiveAvatar's sandbox serves this one Avatar and refuses a sandbox session
 // with any other, so Sandbox fixes the ID rather than leaving it to choose.
 export const SANDBOX_AVATAR_ID = "dd73ea75-1218-4ef3-92ce-606d5f7fbc0a";

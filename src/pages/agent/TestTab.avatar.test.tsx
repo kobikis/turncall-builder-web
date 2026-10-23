@@ -37,7 +37,8 @@ const api = vi.fn(async (path: string) => ({
   data: path.includes("event_type=avatar.unavailable") ? avatarEvents : [],
 }));
 vi.mock("../../api", () => ({ api: (path: string) => api(path), getActiveWorkspaceId: () => "w1" }));
-vi.mock("../../webrtc", () => ({
+vi.mock("../../webrtc", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../webrtc")>()),
   buildConnectRequest: () => ({ url: "/connect" }),
   // TurnCall's answer names the call, which is what its events are read by.
   watchConnect: (_url: string, on: { call: (id: string) => void }) => {

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { api, getActiveWorkspaceId } from "../../api";
-import { agentStopReason, buildConnectRequest, watchConnect } from "../../webrtc";
+import { agentStopReason, avatarUnavailableReason, buildConnectRequest, watchConnect } from "../../webrtc";
 
 // The WebRTC test call lives here (provided at the agent level) rather than in
 // the Voice tab, so switching tabs — or the Chat/Voice toggle — doesn't tear the
@@ -41,32 +41,6 @@ const CONNECT_TIMEOUT_MS = 15000;
 // face has been gone 5 s; the browser may report the track stopping before
 // that, or never. Asked until a reason is found or the call ends.
 const AVATAR_POLL_MS = 8000;
-
-const AVATAR_PROVIDERS: Record<string, string> = { heygen: "HeyGen", tavus: "Tavus" };
-
-// One sentence per `avatar.unavailable` reason (turncall#402). The latest
-// event wins: it is the one that explains what the panel shows now.
-function avatarUnavailableReason(events: { payload?: { provider?: unknown; reason?: unknown } }[]): string | null {
-  const p = events[events.length - 1]?.payload;
-  if (!p) return null;
-  const provider = typeof p.provider === "string" ? p.provider : "";
-  const name = AVATAR_PROVIDERS[provider] ?? "The Avatar provider";
-  const none = "No Avatar on this call";
-  switch (p.reason) {
-    case "transport":
-      return `${none} — an Avatar shows on browser calls only.`;
-    case "missing_id":
-      return `${none} — the Agent has no ${provider === "tavus" ? "replica ID" : "Avatar ID"} set.`;
-    case "session_refused":
-      return `${none} — ${name} refused or couldn't start the session.`;
-    case "session_ended":
-      return provider === "heygen"
-        ? "The Avatar stopped — the HeyGen session ended (a sandbox session lasts about a minute)."
-        : `The Avatar stopped — the ${name} session ended.`;
-    default:
-      return `${none}.`;
-  }
-}
 
 export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<CallState>("idle");
