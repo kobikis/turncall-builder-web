@@ -4,13 +4,23 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api";
 import { PickControl, type Opt } from "./PickControl";
+import { withField } from "./SettingFields";
+
+type Provider = "heygen" | "tavus";
 
 type AvatarValue = {
   enabled: boolean;
-  provider: "heygen" | "tavus";
+  provider: Provider;
   avatar_id?: string;
   is_sandbox?: boolean;
   replica_id?: string;
+};
+
+// Where each provider keeps its Avatar's ID, and what the section calls it:
+// Tavus's ID field keeps its own word, replica.
+const PROVIDERS: Record<Provider, { idKey: "avatar_id" | "replica_id"; label: string; anId: string }> = {
+  heygen: { idKey: "avatar_id", label: "Avatar ID", anId: "an Avatar ID" },
+  tavus: { idKey: "replica_id", label: "Replica ID", anId: "a replica ID" },
 };
 
 // LiveAvatar's sandbox serves this one Avatar and refuses a sandbox session
@@ -31,9 +41,9 @@ export function avatarIdProblem(avatar: AvatarValue | undefined): string {
   if (inSandbox(avatar) && avatar.avatar_id !== SANDBOX_AVATAR_ID) {
     return "The sandbox runs only its own Avatar — use it, or untick Sandbox to choose another.";
   }
-  const tavus = avatar.provider === "tavus";
-  if ((tavus ? avatar.replica_id : avatar.avatar_id)?.trim()) return "";
-  return `Choose ${tavus ? "a replica ID" : "an Avatar ID"} — an Avatar cannot be saved without one.`;
+  const { idKey, anId } = PROVIDERS[avatar.provider];
+  if (avatar[idKey]?.trim()) return "";
+  return `Choose ${anId} — an Avatar cannot be saved without one.`;
 }
 
 // The Avatars the Workspace's account has, by name. Empty with no key or a
@@ -61,13 +71,12 @@ export function Avatar({ value, editable, onChange }: {
   onChange: (next: AvatarValue | undefined) => void;
 }) {
   const provider = value?.enabled ? value.provider : "";
-  const idKey = provider === "tavus" ? "replica_id" : "avatar_id";
   const sandbox = !!inSandbox(value);
   const avatars = useAvatars(provider);
   const missing = avatarIdProblem(value);
-  const useSandboxAvatar = () => set({ is_sandbox: true, avatar_id: SANDBOX_AVATAR_ID });
   const set = (patch: Partial<AvatarValue>) =>
     onChange({ enabled: true, provider: value?.provider || "heygen", ...value, ...patch });
+  const chooseSandboxAvatar = () => set({ is_sandbox: true, avatar_id: SANDBOX_AVATAR_ID });
 
   return (
     <>
@@ -76,11 +85,13 @@ export function Avatar({ value, editable, onChange }: {
           <label htmlFor="cfg-avatar-p">Video avatar</label>
           <select id="cfg-avatar-p" className="input" value={provider} disabled={!editable}
             onChange={(e) => {
-              const p = e.target.value;
+              const p = e.target.value as Provider | "";
               // Absence is "off"; a switched provider starts from a clean block —
               // HeyGen's in the sandbox, which needs nothing but a key.
-              onChange(p === "heygen" ? { enabled: true, provider: "heygen", is_sandbox: true, avatar_id: SANDBOX_AVATAR_ID }
-                : p ? { enabled: true, provider: p as AvatarValue["provider"] } : undefined);
+              if (!p) return onChange(undefined);
+              onChange(p === "heygen"
+                ? { enabled: true, provider: p, is_sandbox: true, avatar_id: SANDBOX_AVATAR_ID }
+                : { enabled: true, provider: p });
             }}>
             <option value="">off</option>
             <option value="heygen">HeyGen (LiveAvatar)</option>
@@ -89,14 +100,14 @@ export function Avatar({ value, editable, onChange }: {
         </div>
         {provider && (
           <div className="field" style={{ flex: 1 }}>
-            <label htmlFor="cfg-avatar-id">{provider === "tavus" ? "Replica ID" : "Avatar ID"}</label>
+            <label htmlFor="cfg-avatar-id">{PROVIDERS[provider].label}</label>
             {sandbox ? (
               <input id="cfg-avatar-id" className="input" value={value?.avatar_id || ""} readOnly />
             ) : (
-              <PickControl id="cfg-avatar-id" value={value?.[idKey] || ""} options={avatars} disabled={!editable}
-                placeholder={provider === "tavus" ? "Paste a replica ID" : "Paste an Avatar ID"}
-                other={provider === "tavus" ? "Type a replica ID…" : "Type an Avatar ID…"}
-                onChange={(v) => set({ [idKey]: v.trim() || undefined })} />
+              <PickControl id="cfg-avatar-id" value={value?.[PROVIDERS[provider].idKey] || ""} options={avatars}
+                disabled={!editable} placeholder={`Paste ${PROVIDERS[provider].anId}`}
+                other={`Type ${PROVIDERS[provider].anId}…`}
+                onChange={(v) => set({ [PROVIDERS[provider].idKey]: v.trim() || undefined })} />
             )}
           </div>
         )}
@@ -105,10 +116,10 @@ export function Avatar({ value, editable, onChange }: {
         <label>
           <input type="checkbox" checked={sandbox} disabled={!editable}
             onChange={(e) => {
-              if (e.target.checked) return useSandboxAvatar();
+              if (e.target.checked) return chooseSandboxAvatar();
               // The sandbox Avatar is refused outside the sandbox, so it goes with it.
-              const { avatar_id, ...rest } = value!;
-              onChange(avatar_id === SANDBOX_AVATAR_ID ? { ...rest, is_sandbox: false } : { ...value!, is_sandbox: false });
+              const kept = value?.avatar_id === SANDBOX_AVATAR_ID ? undefined : value?.avatar_id;
+              onChange(withField<AvatarValue>({ ...value, enabled: true, provider: "heygen", is_sandbox: false }, "avatar_id", kept));
             }} />{" "}
           Sandbox
         </label>
@@ -117,7 +128,7 @@ export function Avatar({ value, editable, onChange }: {
         <p className="error-text" style={{ margin: "4px 0 0" }}>
           {missing}
           {sandbox && editable && (
-            <>{" "}<button type="button" className="btn" onClick={useSandboxAvatar}>Use the sandbox Avatar</button></>
+            <>{" "}<button type="button" className="btn" onClick={chooseSandboxAvatar}>Use the sandbox Avatar</button></>
           )}
         </p>
       )}
