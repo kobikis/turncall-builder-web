@@ -37,7 +37,8 @@ const api = vi.fn(async (path: string) => ({
   data: path.includes("event_type=avatar.unavailable") ? avatarEvents : [],
 }));
 vi.mock("../../api", () => ({ api: (path: string) => api(path), getActiveWorkspaceId: () => "w1" }));
-vi.mock("../../webrtc", () => ({
+vi.mock("../../webrtc", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../webrtc")>()),
   buildConnectRequest: () => ({ url: "/connect" }),
   // TurnCall's answer names the call, which is what its events are read by.
   watchConnect: (_url: string, on: { call: (id: string) => void }) => {
@@ -310,4 +311,62 @@ it("stops the agent's voice when either side ends the call", async () => {
   await act(async () => fireEvent.click(screen.getByText("End call")));
   expect(pause).toHaveBeenCalled();
   expect(made[1].srcObject).toBeNull();
+});
+
+// TurnCall records a session that ended mid-call only after the face has been
+// gone a few seconds, and the browser may report the track stopping before
+// that, or never. So the panel keeps asking while the call is up.
+const avatarReads = () =>
+  api.mock.calls.filter(([path]) => path.includes("event_type=avatar.unavailable")).length;
+
+it("says why the Avatar stopped when TurnCall records it after the face dropped", async () => {
+  await startTimedCall();
+  const face = track("video");
+  act(() => callbacks.onTrackStarted?.(face));
+  await settle();
+
+  act(() => callbacks.onTrackStopped?.(face));
+  await settle(); // the face is gone; TurnCall has not said why yet
+  avatarEvents = unavailable("heygen", "session_ended");
+  await settle();
+
+  expect(screen.getByText(/The Avatar stopped — the HeyGen session ended/)).toBeTruthy();
+  expect(screen.getByText("End call")).toBeTruthy();
+});
+
+it("takes the face down when TurnCall says the Avatar stopped, though its track never did", async () => {
+  await startTimedCall();
+  act(() => callbacks.onTrackStarted?.(track("video")));
+  await settle();
+  expect(video()).not.toBeNull();
+
+  avatarEvents = unavailable("tavus", "session_ended");
+  await settle();
+
+  expect(video()).toBeNull();
+  expect(screen.getByText("The Avatar stopped — the Tavus session ended.")).toBeTruthy();
+});
+
+it("stops asking once it knows why", async () => {
+  avatarEvents = unavailable("heygen", "session_refused");
+  await startTimedCall();
+  await settle();
+  const reads = avatarReads();
+  expect(reads).toBeGreaterThan(0);
+
+  await settle();
+  await settle();
+  expect(avatarReads()).toBe(reads);
+});
+
+it("stops asking when the call ends, after one last read", async () => {
+  await startTimedCall();
+  await settle();
+  await act(async () => fireEvent.click(screen.getByText("End call")));
+  await settle();
+  const reads = avatarReads();
+
+  await settle();
+  await settle();
+  expect(avatarReads()).toBe(reads);
 });

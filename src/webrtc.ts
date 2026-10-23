@@ -1,3 +1,4 @@
+import { avatarIdLabel } from "./pages/agent/Avatar";
 import { displayName } from "./pages/integrations/ProviderAccounts";
 // Build the signaling request for a WebRTC test call (#29). The browser POSTs its
 // SDP offer to builder-api's proxy (#35) — NOT TurnCall directly — so no TurnCall
@@ -122,4 +123,33 @@ export function agentStopReason(events: { payload?: ErrorPayload }[]): string | 
     return `The ${displayName(p.provider)} API key was rejected — check it in Integrations.`;
   }
   return p.error ? `The agent stopped: ${p.error}` : null;
+}
+
+// Why a call's Avatar is not showing: one sentence per `avatar.unavailable`
+// reason (kobikis/turncall#402), or null when none is recorded. The latest
+// event wins: it is the one that explains what the panel shows now.
+type AvatarPayload = { provider?: unknown; reason?: unknown };
+
+export function avatarUnavailableReason(events: { payload?: AvatarPayload }[]): string | null {
+  const p = events[events.length - 1]?.payload;
+  if (!p) return null;
+  const provider = typeof p.provider === "string" ? p.provider : "";
+  const name = provider ? displayName(provider) : "The Avatar provider";
+  const none = "No Avatar on this call";
+  switch (p.reason) {
+    case "transport":
+      return `${none} — an Avatar shows on browser calls only.`;
+    case "missing_id":
+      return `${none} — the Agent has no ${avatarIdLabel(provider)} set.`;
+    case "unknown_provider":
+      return `${none} — TurnCall has no Avatar from ${name}.`;
+    case "session_refused":
+      return `${none} — ${name} refused or couldn't start the session.`;
+    case "session_ended":
+      return provider === "heygen"
+        ? "The Avatar stopped — the HeyGen session ended (a sandbox session lasts about a minute)."
+        : `The Avatar stopped — the ${name} session ended.`;
+    default:
+      return `${none}.`;
+  }
 }
