@@ -1,6 +1,6 @@
-// A lip-synced video avatar (#63) — TurnCall's `avatar` block. It taps the TTS
-// stage, so it exists on cascade agents only, and shows on WebRTC calls (the
-// console's voice test); a phone call has no video and skips it.
+// A lip-synced video avatar (#63) — TurnCall's `avatar` block, on every
+// pipeline (kobikis/turncall#401). It shows on WebRTC calls (the console's
+// voice test); a phone call has no video and skips it.
 import { useEffect, useState } from "react";
 import { api } from "../../api";
 import { PickControl, type Opt } from "./PickControl";
@@ -135,8 +135,7 @@ export function Avatar({ value, editable, onChange }: {
       <p className="hint" style={{ margin: "4px 0 0" }}>
         {sandbox && "A sandbox Avatar runs short, about a minute, on free sessions. "}
         An Avatar shows only on browser calls, such as this Console's voice test; phone calls have no
-        video and skip it. It needs separate hearing, thinking and speaking stages, which a
-        speech-to-speech Agent does not have.
+        video and skip it.
       </p>
     </>
   );

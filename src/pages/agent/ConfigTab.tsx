@@ -703,14 +703,10 @@ export default function ConfigTab({ section }: { section: SectionId }) {
         </div>
       </>)}
 
-      {section === "avatar" && (isS2S ? (
-        <p className="hint">Video avatars need the cascade pipeline (STT → LLM → TTS); this agent is speech-to-speech.</p>
-      ) : (
-        <>
-          <Avatar value={cfg.avatar} editable={editable}
-            onChange={(a) => setCfg((c: any) => withField(c, "avatar", a))} />
-        </>
-      ))}
+      {section === "avatar" && (
+        <Avatar value={cfg.avatar} editable={editable}
+          onChange={(a) => setCfg((c: any) => withField(c, "avatar", a))} />
+      )}
 
       {section === "advanced" && <AdvancedJson />}
     </section>
