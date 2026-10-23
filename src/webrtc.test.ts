@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { agentStopReason, buildConnectRequest, watchConnect } from "./webrtc";
+import { agentStopReason, avatarUnavailableReason, buildConnectRequest, watchConnect } from "./webrtc";
 
 // The security contract of #29: the WebRTC test call is signaled through the
 // builder proxy with the session cookie, scoped by X-Workspace-Id, and NEVER
@@ -144,5 +144,25 @@ describe("agentStopReason", () => {
 
   it("is null for a call nothing went wrong on", () => {
     expect(agentStopReason([])).toBeNull();
+  });
+});
+
+describe("avatarUnavailableReason", () => {
+  const reason = (provider: string, reason: string) =>
+    avatarUnavailableReason([{ payload: { provider, reason } }]);
+
+  it("names the ID the Avatar section asks for", () => {
+    expect(reason("tavus", "missing_id")).toBe("No Avatar on this call — the Agent has no Replica ID set.");
+    expect(reason("heygen", "missing_id")).toBe("No Avatar on this call — the Agent has no Avatar ID set.");
+  });
+
+  // An inline Agent from call-init is not held to the API's provider list
+  // (kobikis/turncall#402 records it as unknown_provider).
+  it("says when TurnCall has no Avatar from the provider named", () => {
+    expect(reason("d-id", "unknown_provider")).toBe("No Avatar on this call — TurnCall has no Avatar from D-id.");
+  });
+
+  it("is null with nothing recorded", () => {
+    expect(avatarUnavailableReason([])).toBeNull();
   });
 });

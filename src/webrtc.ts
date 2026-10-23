@@ -141,6 +141,8 @@ export function avatarUnavailableReason(events: { payload?: AvatarPayload }[]): 
       return `${none} — an Avatar shows on browser calls only.`;
     case "missing_id":
       return `${none} — the Agent has no ${avatarIdLabel(provider)} set.`;
+    case "unknown_provider":
+      return `${none} — TurnCall has no Avatar from ${name}.`;
     case "session_refused":
       return `${none} — ${name} refused or couldn't start the session.`;
     case "session_ended":
