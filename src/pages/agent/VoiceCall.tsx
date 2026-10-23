@@ -152,6 +152,13 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
             audio.srcObject = new MediaStream([track]);
             audio.play().catch(() => {});
           },
+          // A muted or ended track (no participant on SmallWebRTC's call): an
+          // Avatar that drops would otherwise leave its last frame frozen. It
+          // comes back through onTrackStarted when the track resumes.
+          onTrackStopped: (track: MediaStreamTrack, participant?: { local?: boolean }) => {
+            if (participant?.local) return;
+            setVideo((held) => (held === track ? null : held));
+          },
         },
       });
       clientRef.current = client;

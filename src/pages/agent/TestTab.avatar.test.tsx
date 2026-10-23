@@ -92,6 +92,7 @@ async function startCall() {
 }
 
 const video = () => document.querySelector("video");
+const shownTracks = () => ((video()!.srcObject as unknown) as FakeStream).getTracks();
 
 it("shows the agent's video at the top of the Test panel", async () => {
   await startCall();
@@ -100,7 +101,7 @@ it("shows the agent's video at the top of the Test panel", async () => {
 
   const el = video()!;
   expect(el).not.toBeNull();
-  expect(((el.srcObject as unknown) as FakeStream).getTracks()).toEqual([face]);
+  expect(shownTracks()).toEqual([face]);
   expect(el.muted).toBe(true);
   expect(el.autoplay).toBe(true);
   expect(el.hasAttribute("playsinline")).toBe(true);
@@ -145,9 +146,36 @@ it("shows the video again when you come back to the Test panel mid-call", async 
   expect(video()).toBeNull();
   fireEvent.click(screen.getByText("Toggle panel"));
 
-  expect(((video()!.srcObject as unknown) as FakeStream).getTracks()).toEqual([face]);
+  expect(shownTracks()).toEqual([face]);
   // The call — and its voice — carried on while the panel was away.
   expect(disconnect).not.toHaveBeenCalled();
   expect(pause).not.toHaveBeenCalled();
   expect(play).toHaveBeenCalledTimes(1);
+});
+
+// SmallWebRTC reports a remote track muting or ending as onTrackStopped(track)
+// and its return as onTrackStarted(track) — no participant on either — so a
+// dropped Avatar must not leave its last frame frozen on the panel.
+it("removes the video while the agent's video track is stopped, and shows it again when it resumes", async () => {
+  await startCall();
+  const face = track("video");
+  const voice = track("audio");
+  act(() => {
+    callbacks.onTrackStarted?.(voice);
+    callbacks.onTrackStarted?.(face);
+  });
+  expect(shownTracks()).toEqual([face]);
+
+  act(() => callbacks.onTrackStopped?.(voice));
+  expect(shownTracks()).toEqual([face]); // only the video's own stop removes it
+
+  act(() => callbacks.onTrackStopped?.(face));
+  expect(video()).toBeNull();
+  // The call and its voice carry on without the face.
+  expect(screen.getByText("End call")).toBeTruthy();
+  expect(disconnect).not.toHaveBeenCalled();
+  expect(pause).not.toHaveBeenCalled();
+
+  act(() => callbacks.onTrackStarted?.(face));
+  expect(shownTracks()).toEqual([face]);
 });
