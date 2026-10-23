@@ -6,18 +6,22 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-// Only Deepgram's voices and OpenAI's TTS models are live here; every other list is unavailable, which
-// leaves that field free text.
+// Only Deepgram's voices, OpenAI's TTS models and the HeyGen account's Avatars are live here; every
+// other list is unavailable, which leaves that field free text.
 vi.mock("../../api", () => ({
   api: vi.fn(async (path: string) => {
     if (path === "/providers/tts/deepgram/voices") {
       return { data: { voices: [{ value: "aura-2-thalia-en", label: "Thalia" }] } };
     }
     if (path === "/providers/tts/openai/models") return { data: { models: ["tts-1", "gpt-4o-mini-tts"] } };
+    if (path === "/providers/avatar/heygen/avatars") {
+      return { data: { avatars: [{ value: "av-ann", label: "Ann (office)" }] } };
+    }
     throw new Error("unavailable");
   }),
 }));
 
+import { api } from "../../api";
 import { Avatar } from "./Avatar";
 import { Backups } from "./Backups";
 import { LlmTuning } from "./LlmTuning";
@@ -158,6 +162,7 @@ it("a Deepgram Flux model owns end-of-turn: Smart Turn and the silence window ar
   expect(screen.getByLabelText(/caller can interrupt the agent/i)).toBeTruthy();
 });
 
+// Tavus's list is unavailable here, so its replica ID is typed.
 it("avatar: a Tavus replica, and off removes the block", () => {
   const onChange = vi.fn();
   const { rerender } = render(<Avatar value={undefined} editable onChange={onChange} />);
@@ -169,4 +174,30 @@ it("avatar: a Tavus replica, and off removes the block", () => {
   expect(onChange).toHaveBeenLastCalledWith({ enabled: true, provider: "tavus", replica_id: "r1" });
   fireEvent.change(screen.getByLabelText(/video avatar/i), { target: { value: "" } });
   expect(onChange).toHaveBeenLastCalledWith(undefined);
+});
+
+it("avatar: the HeyGen account's Avatars are offered by name", async () => {
+  const onChange = vi.fn();
+  render(<Avatar value={{ enabled: true, provider: "heygen" }} editable onChange={onChange} />);
+  await screen.findByRole("option", { name: "Ann (office)" });
+  type(/avatar id/i, "av-ann");
+  expect(onChange).toHaveBeenLastCalledWith({ enabled: true, provider: "heygen", avatar_id: "av-ann" });
+});
+
+it("avatar: switching provider refetches, and never offers the other account's Avatars", async () => {
+  const { rerender } = render(<Avatar value={{ enabled: true, provider: "heygen" }} editable onChange={() => {}} />);
+  await screen.findByRole("option", { name: "Ann (office)" });
+
+  vi.mocked(api).mockClear();
+  rerender(<Avatar value={{ enabled: true, provider: "tavus" }} editable onChange={() => {}} />);
+  expect(screen.queryByRole("option", { name: "Ann (office)" })).toBeNull();
+  expect(api).toHaveBeenCalledWith("/providers/avatar/tavus/avatars");
+});
+
+it("avatar: a viewer sees the chosen Avatar and cannot change it", async () => {
+  render(<Avatar value={{ enabled: true, provider: "heygen", avatar_id: "av-ann" }} editable={false} onChange={() => {}} />);
+  await screen.findByRole("option", { name: "Ann (office)" });
+  const pick = screen.getByLabelText(/avatar id/i) as HTMLSelectElement;
+  expect(pick.value).toBe("av-ann");
+  expect(pick.disabled).toBe(true);
 });

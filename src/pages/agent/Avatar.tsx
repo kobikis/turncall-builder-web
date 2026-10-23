@@ -1,6 +1,10 @@
 // A lip-synced video avatar (#63) — TurnCall's `avatar` block. It taps the TTS
 // stage, so it exists on cascade agents only, and shows on WebRTC calls (the
 // console's voice test); a phone call has no video and skips it.
+import { useEffect, useState } from "react";
+import { api } from "../../api";
+import { PickControl, type Opt } from "./PickControl";
+
 type AvatarValue = {
   enabled: boolean;
   provider: "heygen" | "tavus";
@@ -9,6 +13,25 @@ type AvatarValue = {
   replica_id?: string;
 };
 
+// The Avatars the Workspace's account has, by name. Empty with no key or a
+// refused one, which leaves the ID free to type. The list is kept with the
+// provider it came from, so a switched provider never offers the other
+// account's Avatars while its own list loads.
+function useAvatars(provider: string): Opt[] {
+  const [list, setList] = useState<{ provider: string; avatars: Opt[] }>({ provider: "", avatars: [] });
+  useEffect(() => {
+    if (!provider) return;
+    let ok = true;
+    api(`/providers/avatar/${provider}/avatars`)
+      .then((r) => ok && setList({ provider, avatars: r.data.avatars || [] }))
+      .catch(() => ok && setList({ provider, avatars: [] }));
+    return () => {
+      ok = false;
+    };
+  }, [provider]);
+  return list.provider === provider ? list.avatars : [];
+}
+
 export function Avatar({ value, editable, onChange }: {
   value: AvatarValue | undefined;
   editable: boolean;
@@ -16,6 +39,7 @@ export function Avatar({ value, editable, onChange }: {
 }) {
   const provider = value?.enabled ? value.provider : "";
   const idKey = provider === "tavus" ? "replica_id" : "avatar_id";
+  const avatars = useAvatars(provider);
   const set = (patch: Partial<AvatarValue>) =>
     onChange({ enabled: true, provider: value?.provider || "heygen", ...value, ...patch });
 
@@ -38,8 +62,9 @@ export function Avatar({ value, editable, onChange }: {
         {provider && (
           <div className="field" style={{ flex: 1 }}>
             <label htmlFor="cfg-avatar-id">{provider === "tavus" ? "Replica ID" : "Avatar ID"}</label>
-            <input id="cfg-avatar-id" className="input" value={value?.[idKey] || ""} disabled={!editable}
-              onChange={(e) => set({ [idKey]: e.target.value.trim() || undefined })} />
+            <PickControl id="cfg-avatar-id" value={value?.[idKey] || ""} options={avatars} disabled={!editable}
+              placeholder={provider === "tavus" ? "Paste a replica ID" : "Paste an Avatar ID"}
+              onChange={(v) => set({ [idKey]: v.trim() || undefined })} />
           </div>
         )}
       </div>
