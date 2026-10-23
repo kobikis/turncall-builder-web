@@ -92,13 +92,41 @@ it("a sandbox Avatar with no ID can be given the sandbox one", async () => {
   expect(puts[0]).toMatchObject({ avatar: { is_sandbox: true, avatar_id: SANDBOX_AVATAR } });
 });
 
-it("a speech-to-speech agent saves whatever Avatar block it carries", async () => {
-  // The Avatar section is not shown there, and TurnCall ignores the block
-  // with a warning, so nothing on the page could fix what Save refused.
+it("a speech-to-speech agent shows the Avatar section and refuses an Avatar with no ID, as cascade does", async () => {
+  // TurnCall runs an Avatar on speech-to-speech Agents too (kobikis/turncall#401).
+  stored = { pipeline_mode: "s2s" };
+  renderPage("avatar");
+  fireEvent.change(await screen.findByLabelText(/video avatar/i, { selector: "select" }), { target: { value: "tavus" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toMatch(/not saved.*choose a replica id/i);
+  expect(puts).toEqual([]);
+
+  fireEvent.change(screen.getByLabelText(/replica id/i), { target: { value: "r1" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(puts).toHaveLength(1));
+  expect(puts[0]).toMatchObject({ pipeline_mode: "s2s", avatar: { enabled: true, provider: "tavus", replica_id: "r1" } });
+});
+
+it("a speech-to-speech agent's HeyGen Avatar starts in the sandbox with the sandbox Avatar locked", async () => {
+  stored = { pipeline_mode: "s2s" };
+  renderPage("avatar");
+  fireEvent.change(await screen.findByLabelText(/video avatar/i, { selector: "select" }), { target: { value: "heygen" } });
+  const id = screen.getByLabelText(/avatar id/i) as HTMLInputElement;
+  expect(id.value).toBe(SANDBOX_AVATAR);
+  expect(id.readOnly).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(puts).toHaveLength(1));
+  expect(puts[0]).toMatchObject({ avatar: { provider: "heygen", is_sandbox: true, avatar_id: SANDBOX_AVATAR } });
+});
+
+it("a speech-to-speech agent with a stored Avatar and no ID is refused even from another section", async () => {
   stored = { pipeline_mode: "s2s", avatar: { enabled: true, provider: "tavus" } };
   renderPage("prompt");
   fireEvent.change(await screen.findByLabelText(/system prompt/i), { target: { value: "Be brief." } });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
-  await waitFor(() => expect(puts).toHaveLength(1));
-  expect(screen.queryByRole("alert")).toBeNull();
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toMatch(/not saved.*choose a replica id/i);
+  expect(puts).toEqual([]);
 });

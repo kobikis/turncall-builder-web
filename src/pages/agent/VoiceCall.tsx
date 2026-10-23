@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { api, getActiveWorkspaceId } from "../../api";
-import { agentStopReason, buildConnectRequest, watchConnect } from "../../webrtc";
+import { agentStopReason, avatarUnavailableReason, buildConnectRequest, watchConnect } from "../../webrtc";
 
 // The WebRTC test call lives here (provided at the agent level) rather than in
 // the Voice tab, so switching tabs — or the Chat/Voice toggle — doesn't tear the
@@ -16,6 +16,9 @@ type Ctx = {
   stop: () => Promise<void>;
   // The remote video track — an Avatar's face — while the call carries one.
   video: MediaStreamTrack | null;
+  // Why an Agent's Avatar is not showing, as TurnCall recorded it; null when
+  // nothing was recorded (no Avatar, or one that runs).
+  avatarNote: string | null;
 };
 
 const VoiceCallCtx = createContext<Ctx | null>(null);
@@ -32,15 +35,32 @@ export function useVoiceCall(): Ctx {
 // timer and mark failures so onDisconnected doesn't overwrite the reason.
 const CONNECT_TIMEOUT_MS = 15000;
 
+// How often to ask, while the call is up, why its Avatar is not showing.
+// TurnCall records a refused session while it starts, which can outlast the
+// pipeline's own start by seconds, and one that ended mid-call only after the
+// face has been gone 5 s; the browser may report the track stopping before
+// that, or never. Asked until a reason is found or the call ends.
+const AVATAR_POLL_MS = 8000;
+
 export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<CallState>("idle");
   const [msg, setMsg] = useState("");
   const [video, setVideo] = useState<MediaStreamTrack | null>(null);
+  const [avatarNote, setAvatarNote] = useState<string | null>(null);
+  const avatarPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // TurnCall gave this call's reason: its Avatar is gone for good.
+  const avatarGoneRef = useRef(false);
+  // Which call a read belongs to, so one that answers late can't label the next.
+  const callSeqRef = useRef(0);
   const clientRef = useRef<{ disconnect: () => Promise<void> } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const erroredRef = useRef(false);
   const unwatchRef = useRef<(() => void) | null>(null);
   const callIdRef = useRef<string | null>(null);
+  // The agent's voice: one element per call. The transport reports the audio
+  // track again each time it resumes after a stall, and a new element each
+  // time played the same voice over itself (#123).
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const clearTimer = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -55,11 +75,26 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     unwatchRef.current = null;
   };
 
+  const releaseAudio = () => {
+    const audio = audioRef.current;
+    audioRef.current = null;
+    if (!audio) return;
+    audio.pause();
+    audio.srcObject = null;
+  };
+
+  const stopAvatarPoll = () => {
+    if (avatarPollRef.current) clearInterval(avatarPollRef.current);
+    avatarPollRef.current = null;
+  };
+
   // Tear down only when the provider unmounts (leaving the agent).
   useEffect(
     () => () => {
       clearTimer();
+      stopAvatarPoll();
       unwatch();
+      releaseAudio();
       void clientRef.current?.disconnect().catch(() => {});
     },
     [],
@@ -68,9 +103,11 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   function fail(message: string) {
     erroredRef.current = true;
     clearTimer();
+    stopAvatarPoll();
     setState("error");
     setMsg(message);
     setVideo(null);
+    releaseAudio();
     void clientRef.current?.disconnect().catch(() => {});
     clientRef.current = null;
   }
@@ -85,6 +122,10 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
       return;
     }
     erroredRef.current = false;
+    callSeqRef.current += 1;
+    stopAvatarPoll();
+    avatarGoneRef.current = false;
+    setAvatarNote(null);
     setState("connecting");
     setMsg("Requesting mic + connecting…");
     // Signaling failures don't reject connect() (the transport retries then
@@ -122,11 +163,18 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
             unwatch();
             setState("connected");
             setMsg("Connected — speak now.");
+            stopAvatarPoll();
+            avatarPollRef.current = setInterval(() => {
+              const callId = callIdRef.current;
+              if (callId) void explainAvatar(agentId, callId);
+            }, AVATAR_POLL_MS);
           },
           onDisconnected: () => {
             clientRef.current = null;
             clearTimer();
+            stopAvatarPoll();
             setVideo(null);
+            releaseAudio();
             if (erroredRef.current) return; // keep the failure reason
             setState("idle");
             setMsg("Call ended.");
@@ -134,7 +182,10 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
             // hangup from here; TurnCall recorded why before the line dropped.
             const callId = callIdRef.current;
             callIdRef.current = null;
-            if (callId) void explainEnd(agentId, callId);
+            if (callId) {
+              void explainEnd(agentId, callId);
+              void explainAvatar(agentId, callId);
+            }
           },
           onTransportStateChanged: (s: string) => {
             if (s === "error") fail("Connection error.");
@@ -142,13 +193,14 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
           onTrackStarted: (track: MediaStreamTrack, participant?: { local?: boolean }) => {
             if (participant?.local) return;
             // An Avatar's face. Kept in state rather than attached here: the
-            // Test panel shows it, and can unmount and remount mid-call.
+            // Test panel shows it, and can unmount and remount mid-call. Not
+            // once TurnCall said the Avatar is gone: nothing switches back.
             if (track.kind === "video") {
-              setVideo(track);
+              if (!avatarGoneRef.current) setVideo(track);
               return;
             }
             if (track.kind !== "audio") return;
-            const audio = new Audio();
+            const audio = (audioRef.current ??= new Audio());
             audio.srcObject = new MediaStream([track]);
             audio.play().catch(() => {});
           },
@@ -196,8 +248,27 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Read every AVATAR_POLL_MS while the call is up, and once when it ends. A
+  // reason found is final: the face goes (its track may never say so), and
+  // the asking stops.
+  async function explainAvatar(agentId: string, callId: string) {
+    const seq = callSeqRef.current;
+    try {
+      const r = await api(`/agents/${agentId}/calls/${callId}/events?event_type=avatar.unavailable`);
+      const note = avatarUnavailableReason(r.data || []);
+      if (!note || seq !== callSeqRef.current) return;
+      stopAvatarPoll();
+      avatarGoneRef.current = true;
+      setVideo(null);
+      setAvatarNote(note);
+    } catch {
+      /* no reason to show; the panel just has no face */
+    }
+  }
+
   async function stop() {
     clearTimer();
+    stopAvatarPoll();
     unwatch();
     erroredRef.current = false;
     try {
@@ -209,10 +280,13 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     setState("idle");
     setMsg("Call ended.");
     setVideo(null);
+    releaseAudio();
   }
 
   return (
-    <VoiceCallCtx.Provider value={{ state, msg, start, stop, video }}>{children}</VoiceCallCtx.Provider>
+    <VoiceCallCtx.Provider value={{ state, msg, start, stop, video, avatarNote }}>
+      {children}
+    </VoiceCallCtx.Provider>
   );
 }
 
@@ -220,11 +294,13 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
 // element, which plays whether or not this is mounted. Renders nothing outside
 // a provider, so the Test panel needs no call to render.
 export function CallVideo() {
-  const track = useContext(VoiceCallCtx)?.video ?? null;
+  const ctx = useContext(VoiceCallCtx);
+  const track = ctx?.video ?? null;
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     if (ref.current && track) ref.current.srcObject = new MediaStream([track]);
   }, [track]);
-  if (!track) return null;
+  // Where the face would be: why it isn't there, when TurnCall said.
+  if (!track) return ctx?.avatarNote ? <p className="muted call-avatar-note">{ctx.avatarNote}</p> : null;
   return <video ref={ref} className="call-video" autoPlay playsInline muted />;
 }

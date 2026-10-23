@@ -282,7 +282,9 @@ it("avatar: the hint says a sandbox session is short and free, and where an Avat
   );
   expect(screen.getByText(/sandbox.*about a minute.*free/i)).toBeTruthy();
   expect(screen.getByText(/only on browser calls/i)).toBeTruthy();
-  expect(screen.getByText(/hearing, thinking and speaking stages.*speech-to-speech/i)).toBeTruthy();
+  // Speech-to-speech Agents run an Avatar too (kobikis/turncall#401).
+  expect(screen.queryByText(/speech-to-speech/i)).toBeNull();
+  expect(screen.queryByText(/hearing, thinking and speaking stages/i)).toBeNull();
 
   rerender(<Avatar value={{ enabled: true, provider: "tavus", replica_id: "r1" }} editable onChange={() => {}} />);
   expect(screen.queryByText(/about a minute/i)).toBeNull();
