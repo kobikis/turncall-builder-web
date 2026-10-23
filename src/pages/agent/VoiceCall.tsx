@@ -16,6 +16,9 @@ type Ctx = {
   stop: () => Promise<void>;
   // The remote video track — an Avatar's face — while the call carries one.
   video: MediaStreamTrack | null;
+  // Why an Agent's Avatar is not showing, as TurnCall recorded it; null when
+  // nothing was recorded (no Avatar, or one that runs).
+  avatarNote: string | null;
 };
 
 const VoiceCallCtx = createContext<Ctx | null>(null);
@@ -32,10 +35,47 @@ export function useVoiceCall(): Ctx {
 // timer and mark failures so onDisconnected doesn't overwrite the reason.
 const CONNECT_TIMEOUT_MS = 15000;
 
+// How long after the call is up to read why an Avatar is missing: a session
+// the provider refuses is recorded while it starts, which can outlast the
+// pipeline's own start by a few seconds.
+const AVATAR_CHECK_MS = 5000;
+
+const AVATAR_PROVIDERS: Record<string, string> = { heygen: "HeyGen", tavus: "Tavus" };
+
+// One sentence per `avatar.unavailable` reason (turncall#402). The latest
+// event wins: it is the one that explains what the panel shows now.
+function avatarUnavailableReason(events: { payload?: { provider?: unknown; reason?: unknown } }[]): string | null {
+  const p = events[events.length - 1]?.payload;
+  if (!p) return null;
+  const provider = typeof p.provider === "string" ? p.provider : "";
+  const name = AVATAR_PROVIDERS[provider] ?? "The Avatar provider";
+  const none = "No Avatar on this call";
+  switch (p.reason) {
+    case "transport":
+      return `${none} — an Avatar shows on browser calls only.`;
+    case "pipeline_mode":
+      return `${none} — a speech-to-speech Agent can't show one yet.`;
+    case "missing_id":
+      return `${none} — the Agent has no ${provider === "tavus" ? "replica ID" : "Avatar ID"} set.`;
+    case "session_refused":
+      return `${none} — ${name} refused or couldn't start the session.`;
+    case "session_ended":
+      return provider === "heygen"
+        ? "The Avatar stopped — the HeyGen session ended (a sandbox session lasts about a minute)."
+        : `The Avatar stopped — the ${name} session ended.`;
+    default:
+      return `${none}.`;
+  }
+}
+
 export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<CallState>("idle");
   const [msg, setMsg] = useState("");
   const [video, setVideo] = useState<MediaStreamTrack | null>(null);
+  const [avatarNote, setAvatarNote] = useState<string | null>(null);
+  const avatarTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Which call a read belongs to, so one that answers late can't label the next.
+  const callSeqRef = useRef(0);
   const clientRef = useRef<{ disconnect: () => Promise<void> } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const erroredRef = useRef(false);
@@ -55,10 +95,16 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     unwatchRef.current = null;
   };
 
+  const clearAvatarTimer = () => {
+    if (avatarTimerRef.current) clearTimeout(avatarTimerRef.current);
+    avatarTimerRef.current = null;
+  };
+
   // Tear down only when the provider unmounts (leaving the agent).
   useEffect(
     () => () => {
       clearTimer();
+      clearAvatarTimer();
       unwatch();
       void clientRef.current?.disconnect().catch(() => {});
     },
@@ -85,6 +131,9 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
       return;
     }
     erroredRef.current = false;
+    callSeqRef.current += 1;
+    clearAvatarTimer();
+    setAvatarNote(null);
     setState("connecting");
     setMsg("Requesting mic + connecting…");
     // Signaling failures don't reject connect() (the transport retries then
@@ -122,6 +171,11 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
             unwatch();
             setState("connected");
             setMsg("Connected — speak now.");
+            clearAvatarTimer();
+            avatarTimerRef.current = setTimeout(() => {
+              const callId = callIdRef.current;
+              if (callId) void explainAvatar(agentId, callId);
+            }, AVATAR_CHECK_MS);
           },
           onDisconnected: () => {
             clientRef.current = null;
@@ -134,7 +188,10 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
             // hangup from here; TurnCall recorded why before the line dropped.
             const callId = callIdRef.current;
             callIdRef.current = null;
-            if (callId) void explainEnd(agentId, callId);
+            if (callId) {
+              void explainEnd(agentId, callId);
+              void explainAvatar(agentId, callId);
+            }
           },
           onTransportStateChanged: (s: string) => {
             if (s === "error") fail("Connection error.");
@@ -158,6 +215,10 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
           onTrackStopped: (track: MediaStreamTrack, participant?: { local?: boolean }) => {
             if (participant?.local) return;
             setVideo((held) => (held === track ? null : held));
+            // The face dropping mid-call is when TurnCall records a session
+            // that ended (the sandbox's cutoff), so ask why now.
+            const callId = callIdRef.current;
+            if (track.kind === "video" && callId) void explainAvatar(agentId, callId);
           },
         },
       });
@@ -196,6 +257,20 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Read once a few seconds into the call, when the face drops mid-call, and
+  // when the call ends — the moments a reason can have been recorded — rather
+  // than polling the event log for the whole call.
+  async function explainAvatar(agentId: string, callId: string) {
+    const seq = callSeqRef.current;
+    try {
+      const r = await api(`/agents/${agentId}/calls/${callId}/events?event_type=avatar.unavailable`);
+      const note = avatarUnavailableReason(r.data || []);
+      if (note && seq === callSeqRef.current) setAvatarNote(note);
+    } catch {
+      /* no reason to show; the panel just has no face */
+    }
+  }
+
   async function stop() {
     clearTimer();
     unwatch();
@@ -212,7 +287,9 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <VoiceCallCtx.Provider value={{ state, msg, start, stop, video }}>{children}</VoiceCallCtx.Provider>
+    <VoiceCallCtx.Provider value={{ state, msg, start, stop, video, avatarNote }}>
+      {children}
+    </VoiceCallCtx.Provider>
   );
 }
 
@@ -220,11 +297,13 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
 // element, which plays whether or not this is mounted. Renders nothing outside
 // a provider, so the Test panel needs no call to render.
 export function CallVideo() {
-  const track = useContext(VoiceCallCtx)?.video ?? null;
+  const ctx = useContext(VoiceCallCtx);
+  const track = ctx?.video ?? null;
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     if (ref.current && track) ref.current.srcObject = new MediaStream([track]);
   }, [track]);
-  if (!track) return null;
+  // Where the face would be: why it isn't there, when TurnCall said.
+  if (!track) return ctx?.avatarNote ? <p className="muted call-avatar-note">{ctx.avatarNote}</p> : null;
   return <video ref={ref} className="call-video" autoPlay playsInline muted />;
 }

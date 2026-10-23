@@ -30,10 +30,20 @@ vi.mock("@pipecat-ai/client-js", () => ({
   },
 }));
 vi.mock("@pipecat-ai/small-webrtc-transport", () => ({ SmallWebRTCTransport: class {} }));
-vi.mock("../../api", () => ({ api: vi.fn(async () => ({ data: [] })), getActiveWorkspaceId: () => "w1" }));
+// The call's event log, as builder-api's proxy answers it: only the Avatar's
+// events are ever set here, so every other read finds nothing.
+let avatarEvents: { event_type: string; payload: Record<string, unknown> }[] = [];
+const api = vi.fn(async (path: string) => ({
+  data: path.includes("event_type=avatar.unavailable") ? avatarEvents : [],
+}));
+vi.mock("../../api", () => ({ api: (path: string) => api(path), getActiveWorkspaceId: () => "w1" }));
 vi.mock("../../webrtc", () => ({
   buildConnectRequest: () => ({ url: "/connect" }),
-  watchConnect: () => () => {},
+  // TurnCall's answer names the call, which is what its events are read by.
+  watchConnect: (_url: string, on: { call: (id: string) => void }) => {
+    on.call("c1");
+    return () => {};
+  },
   agentStopReason: () => null,
 }));
 vi.mock("../../auth", () => ({ useAuth: () => ({ activeWorkspace: { role: "editor" } }) }));
@@ -64,6 +74,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   callbacks = {};
+  avatarEvents = [];
+  vi.useRealTimers();
   vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
@@ -178,4 +190,79 @@ it("removes the video while the agent's video track is stopped, and shows it aga
 
   act(() => callbacks.onTrackStarted?.(face));
   expect(shownTracks()).toEqual([face]);
+});
+
+// Why the face is missing (#121). TurnCall records `avatar.unavailable`
+// {provider, reason} on the call's event log; the panel reads it a few seconds
+// after the call is up, when the agent's video stops mid-call, and when the
+// call ends.
+const unavailable = (provider: string, reason: string) => [
+  { event_type: "avatar.unavailable", payload: { provider, reason } },
+];
+
+// Fake timers only once the call is being placed: the panel's lazy Voice tab
+// is found with real ones.
+async function startTimedCall() {
+  render(<Page />);
+  fireEvent.click(screen.getByText("Voice"));
+  fireEvent.click(await screen.findByText("Start a test call"));
+  vi.useFakeTimers();
+  await act(async () => {});
+  act(() => callbacks.onBotReady?.());
+}
+const settle = () => act(async () => vi.advanceTimersByTimeAsync(10_000));
+
+it("says why there is no Avatar once the call is up", async () => {
+  avatarEvents = unavailable("heygen", "session_refused");
+  await startTimedCall();
+  expect(screen.queryByText(/No Avatar on this call/)).toBeNull();
+
+  await settle();
+
+  expect(api).toHaveBeenCalledWith("/agents/a1/calls/c1/events?event_type=avatar.unavailable");
+  expect(screen.getByText("No Avatar on this call — HeyGen refused or couldn't start the session.")).toBeTruthy();
+  // Where the face would be: above the Chat|Voice toggle.
+  const note = screen.getByText(/No Avatar on this call/);
+  const toggle = screen.getByRole("group", { name: "Test mode" });
+  expect(note.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+it("says the Avatar stopped while the call is still up, when its session ends mid-call", async () => {
+  await startTimedCall();
+  const face = track("video");
+  act(() => callbacks.onTrackStarted?.(face));
+  await settle(); // nothing recorded yet: the face is up
+
+  // The sandbox's cutoff: TurnCall records it, and the face drops.
+  avatarEvents = unavailable("heygen", "session_ended");
+  act(() => callbacks.onTrackStopped?.(face));
+  await settle();
+
+  expect(
+    screen.getByText("The Avatar stopped — the HeyGen session ended (a sandbox session lasts about a minute)."),
+  ).toBeTruthy();
+  expect(screen.getByText("End call")).toBeTruthy();
+  expect(disconnect).not.toHaveBeenCalled();
+});
+
+it("reads why again when the call ends", async () => {
+  await startTimedCall();
+  await settle(); // nothing recorded yet
+
+  avatarEvents = unavailable("tavus", "session_refused");
+  act(() => callbacks.onDisconnected?.());
+  await settle();
+
+  expect(screen.getByText("No Avatar on this call — Tavus refused or couldn't start the session.")).toBeTruthy();
+});
+
+it("shows no such line for an Agent without an Avatar, or an Avatar that runs", async () => {
+  await startTimedCall();
+  act(() => callbacks.onTrackStarted?.(track("video"), remote));
+  await settle();
+  await act(async () => fireEvent.click(screen.getByText("End call")));
+  await settle();
+
+  expect(api).toHaveBeenCalledWith("/agents/a1/calls/c1/events?event_type=avatar.unavailable");
+  expect(screen.queryByText(/Avatar/)).toBeNull();
 });
