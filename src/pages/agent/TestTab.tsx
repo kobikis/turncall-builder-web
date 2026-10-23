@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import { useAgent } from "./AgentPage";
 import SaveAsScenario from "./SaveAsScenario";
+import { CallVideo } from "./VoiceCall";
 import { filled, loadValues, placeholders, saveValues } from "./testVariables";
 
 // Voice pulls in the (heavy) pipecat WebRTC client — code-split so it only loads
@@ -30,6 +31,8 @@ export default function TestTab() {
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      {/* Above the toggle: an Avatar's face shows whichever way you test. */}
+      <CallVideo />
       <div role="group" aria-label="Test mode" className="seg" style={{ alignSelf: "flex-start", marginBottom: 10 }}>
         <button type="button" aria-pressed={mode === "chat"} onClick={() => setMode("chat")}>Chat</button>
         <button type="button" aria-pressed={mode === "voice"} onClick={() => setMode("voice")}>Voice</button>
