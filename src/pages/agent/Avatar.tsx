@@ -17,11 +17,20 @@ type AvatarValue = {
 // with any other, so Sandbox fixes the ID rather than leaving it to choose.
 export const SANDBOX_AVATAR_ID = "dd73ea75-1218-4ef3-92ce-606d5f7fbc0a";
 
-// Why this Avatar cannot be saved, or "". TurnCall accepts a block with no ID,
-// but no Avatar starts without one, so the Console refuses it at Save
-// (AgentPage) and says why here. Off is no block, and nothing to refuse.
-export function avatarIdMissing(avatar: AvatarValue | undefined): string {
+// TurnCall reads an unset is_sandbox as on.
+const inSandbox = (avatar: AvatarValue | undefined) =>
+  avatar?.enabled && avatar.provider === "heygen" && avatar.is_sandbox !== false;
+
+// Why this Avatar's ID cannot be saved, or "". TurnCall accepts a block with
+// no ID, and a sandbox block with any ID, but neither Avatar starts, so the
+// Console refuses them at Save (AgentPage) and says why here. A block stored
+// before the Console fixed the sandbox ID can hold another one, or none; the
+// section offers the sandbox Avatar back. Off is no block, and nothing to refuse.
+export function avatarIdProblem(avatar: AvatarValue | undefined): string {
   if (!avatar?.enabled) return "";
+  if (inSandbox(avatar) && avatar.avatar_id !== SANDBOX_AVATAR_ID) {
+    return "The sandbox runs only its own Avatar — use it, or untick Sandbox to choose another.";
+  }
   const tavus = avatar.provider === "tavus";
   if ((tavus ? avatar.replica_id : avatar.avatar_id)?.trim()) return "";
   return `Choose ${tavus ? "a replica ID" : "an Avatar ID"} — an Avatar cannot be saved without one.`;
@@ -53,10 +62,10 @@ export function Avatar({ value, editable, onChange }: {
 }) {
   const provider = value?.enabled ? value.provider : "";
   const idKey = provider === "tavus" ? "replica_id" : "avatar_id";
-  // TurnCall reads an unset is_sandbox as on.
-  const sandbox = provider === "heygen" && value?.is_sandbox !== false;
+  const sandbox = !!inSandbox(value);
   const avatars = useAvatars(provider);
-  const missing = avatarIdMissing(value);
+  const missing = avatarIdProblem(value);
+  const useSandboxAvatar = () => set({ is_sandbox: true, avatar_id: SANDBOX_AVATAR_ID });
   const set = (patch: Partial<AvatarValue>) =>
     onChange({ enabled: true, provider: value?.provider || "heygen", ...value, ...patch });
 
@@ -96,7 +105,7 @@ export function Avatar({ value, editable, onChange }: {
         <label>
           <input type="checkbox" checked={sandbox} disabled={!editable}
             onChange={(e) => {
-              if (e.target.checked) return set({ is_sandbox: true, avatar_id: SANDBOX_AVATAR_ID });
+              if (e.target.checked) return useSandboxAvatar();
               // The sandbox Avatar is refused outside the sandbox, so it goes with it.
               const { avatar_id, ...rest } = value!;
               onChange(avatar_id === SANDBOX_AVATAR_ID ? { ...rest, is_sandbox: false } : { ...value!, is_sandbox: false });
@@ -104,7 +113,14 @@ export function Avatar({ value, editable, onChange }: {
           Sandbox
         </label>
       )}
-      {missing && <p className="error-text" style={{ margin: "4px 0 0" }}>{missing}</p>}
+      {missing && (
+        <p className="error-text" style={{ margin: "4px 0 0" }}>
+          {missing}
+          {sandbox && editable && (
+            <>{" "}<button type="button" className="btn" onClick={useSandboxAvatar}>Use the sandbox Avatar</button></>
+          )}
+        </p>
+      )}
       <p className="hint" style={{ margin: "4px 0 0" }}>
         {sandbox && "A sandbox Avatar runs short, about a minute, on free sessions. "}
         An Avatar shows only on browser calls, such as this Console's voice test; phone calls have no

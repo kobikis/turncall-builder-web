@@ -9,7 +9,7 @@ import { usePoll } from "../../usePoll";
 import { Backend, ToolStatuses } from "../../types";
 import { agentStatus } from "../../agentStatus";
 import { dirtySections, type SectionId } from "./sections";
-import { avatarIdMissing } from "./Avatar";
+import { avatarIdProblem } from "./Avatar";
 
 // Re-export so the tabs keep importing these from AgentPage.
 export type { Backend, ToolStatuses };
@@ -130,8 +130,11 @@ export default function AgentPage() {
       return false;
     }
     // Read from the draft, not set by the section: leaving the Avatar section
-    // does not give the Avatar an ID.
-    const noAvatarId = avatarIdMissing(draft?.avatar);
+    // does not give the Avatar an ID. Only where the section is shown: a
+    // speech-to-speech agent has no Avatar section to fix it in, and TurnCall
+    // ignores its block with a warning.
+    const s2s = (draft?.pipeline_mode || "cascade") === "s2s";
+    const noAvatarId = s2s ? "" : avatarIdProblem(draft?.avatar);
     if (noAvatarId) {
       setSaveErr(`Avatar: ${noAvatarId}`);
       return false;
