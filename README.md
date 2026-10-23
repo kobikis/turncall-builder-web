@@ -65,7 +65,13 @@ you save.
 
 The **Test** pane on the right talks to the saved agent, by text (Chat) or in
 the browser over WebRTC (Voice); a voice call keeps running while you move
-between tabs. Its **Variables** box has an input for each `{{placeholder}}` the
+between tabs. An agent with a **video avatar** shows its face at the top of the
+pane during a voice call — on any pipeline, speech-to-speech included — and, when
+the face does not show or stops, one line saying why (no ID, a session the
+provider refused, the sandbox's one-minute session ending). The avatar section
+lists the account's HeyGen avatars or Tavus replicas by name, still takes a
+typed ID, and with **Sandbox** ticked locks the ID to LiveAvatar's free sandbox
+avatar. Its **Variables** box has an input for each `{{placeholder}}` the
 agent's config uses and fills them the way call-init would on a real call —
 Chat from the next message, Voice from the next call — kept per agent in the
 browser.
