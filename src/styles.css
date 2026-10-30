@@ -904,6 +904,38 @@ table.list.latency-table tr.slowest td { background: var(--danger-soft); white-s
 .mcp-list .mcp-main { flex: 1; min-width: 0; }
 .mcp-list .mcp-main .muted { display: block; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ---------- procedures ---------- */
+
+/* One procedure: its form, and the outline of its graph beside it. */
+.procedure-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  gap: 16px;
+  margin: 0 0 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+.procedure-form { min-width: 0; }
+.procedure-row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; }
+.procedure-row > .btn { margin-bottom: 14px; }
+.procedure-steps { list-style: none; padding: 0; margin: 0 0 10px; }
+.procedure-step { padding: 12px 0; border-top: 1px solid var(--border); }
+.procedure-moves { list-style: none; padding: 0; margin: 0 0 4px; }
+.procedure-moves > li { margin-bottom: 6px; align-items: center; }
+.procedure-moves select { width: auto; }
+.procedure-transfer { padding: 10px 12px 0; margin: 0 0 12px; border-left: 2px solid var(--warn-border); }
+.procedure-briefing { border: 0; padding: 0; margin: 0 0 14px; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.procedure-briefing legend { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.procedure-briefing textarea { flex-basis: 100%; }
+.procedure-outline { font-size: 13px; padding-left: 14px; border-left: 1px solid var(--border); min-width: 0; overflow-wrap: anywhere; }
+.procedure-outline ol, .procedure-outline ul { margin: 6px 0; padding-left: 18px; }
+@media (max-width: 900px) {
+  .procedure-card { grid-template-columns: minmax(0, 1fr); }
+  .procedure-outline { padding-left: 0; border-left: 0; border-top: 1px solid var(--border); padding-top: 10px; }
+}
+
 /* ---------- activity ribbon ---------- */
 
 /* Twenty-four hours of an agent, now at the right edge. Sized once here so the

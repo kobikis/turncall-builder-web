@@ -9,7 +9,7 @@
 type Cfg = Record<string, unknown>;
 
 export type SectionId =
-  | "setup" | "prompt" | "models" | "tools" | "skills" | "knowledge" | "takeaways"
+  | "setup" | "prompt" | "models" | "tools" | "skills" | "procedures" | "knowledge" | "takeaways"
   | "turn-taking" | "guardrails" | "compliance" | "avatar" | "advanced";
 
 export const SECTIONS: { id: SectionId; title: string; keys?: string[] }[] = [
@@ -23,6 +23,8 @@ export const SECTIONS: { id: SectionId; title: string; keys?: string[] }[] = [
   },
   // The Workspace skills this agent may load mid-call (builder-api #133).
   { id: "skills", title: "Skills", keys: ["skills", "max_loaded_skills"] },
+  // Graphs of steps the agent follows on a call (turncall#417).
+  { id: "procedures", title: "Procedures", keys: ["procedures"] },
   { id: "knowledge", title: "Knowledge" },
   { id: "takeaways", title: "Takeaways" },
   {

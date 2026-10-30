@@ -102,6 +102,9 @@ export type Call = {
   // The skills the call resolved (turncall#425): [] with none, absent
   // from a TurnCall older than skills.
   skills?: CallSkill[] | null;
+  // What the call did of each procedure (turncall#443): [] with none, null
+  // once its events expired, absent from a TurnCall older than procedures.
+  procedures?: CallProcedure[] | null;
 };
 
 export type Spread = { p50_ms: number; p95_ms: number; count: number };
@@ -320,3 +323,50 @@ export type SkillRef = { skill: string; version_id?: string };
 // One skill a call resolved (TurnCall's call read, turncall#425).
 // `loaded` is null when the call's events have expired: not known.
 export type CallSkill = { skill: string; version: number; pinned: boolean; loaded: boolean | null };
+
+// An agent's procedures (turncall#417): graphs of steps the agent follows on
+// a cascade call. TurnCall's `procedures` config, as its API takes it.
+export type StepKind = "ask" | "instruct" | "check" | "escalate" | "end";
+export type ProcedureMove = { to: string; when: string };
+// The `transfer_call` tool's fields; `briefing` is spoken to the operator on
+// a warm transfer, written or a summary of the call so far.
+export type TransferEscalation = {
+  target_number: string;
+  transfer_mode?: "cold" | "warm";
+  transfer_message?: string;
+  briefing?: string | { from_summary: true };
+  fallback_message?: string;
+  reason?: string;
+};
+export type StepEscalation = {
+  transfer_call?: TransferEscalation;
+  // Kept as written when a config has one; the Builder offers transfers only.
+  handoff_to_agent?: { agent_id: string; reason?: string; context?: string };
+};
+export type ProcedureStep = {
+  id: string;
+  kind: StepKind;
+  text: string;
+  start?: boolean;
+  tool?: string;
+  moves?: ProcedureMove[];
+  escalate?: StepEscalation;
+};
+export type Procedure = {
+  name: string;
+  description?: string;
+  start?: "call" | "on_request";
+  window_depth?: number;
+  steps: ProcedureStep[];
+};
+
+// One procedure a call followed (TurnCall's call read, turncall#443): every
+// step reached in order, where it ended, and how many moves were refused.
+export type CallProcedure = {
+  name: string;
+  path: string[];
+  completed: boolean;
+  ended_at: string | null;
+  escalated_at: string | null;
+  refused_moves: number;
+};
