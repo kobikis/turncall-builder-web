@@ -131,8 +131,8 @@ const LEADS: Partial<Record<SectionId, string>> = {
   prompt: "What the agent knows and how it behaves on every call.",
   models: "How the agent hears, thinks and speaks.",
   tools: "What the agent can do during a call.",
-  capabilities:
-    "Workspace Capabilities the agent can load mid-call. It sees each one's name and when to use it, and loads its instructions and tools when it needs them.",
+  skills:
+    "Workspace skills the agent can load mid-call. It sees each one's name and when to use it, and loads its instructions and tools when it needs them.",
   "turn-taking": "When the caller's turn ends, when the call ends, and how much it may use.",
   guardrails: "What the agent will not discuss.",
   avatar: "A lip-synced face for browser calls.",
@@ -143,7 +143,7 @@ const TITLES: Partial<Record<SectionId, string>> = {
   prompt: "Prompt",
   models: "Speech and models",
   tools: "Tools and apps",
-  capabilities: "Capabilities",
+  skills: "Skills",
   "turn-taking": "Turn-taking and limits",
   guardrails: "Guardrails",
   avatar: "Video avatar",
@@ -679,7 +679,7 @@ export default function ConfigTab({ section }: { section: SectionId }) {
         </p>
       </>)}
 
-      {section === "capabilities" && (
+      {section === "skills" && (
         <AgentCapabilities
           skills={Array.isArray(cfg.skills) ? cfg.skills : []}
           maxLoaded={typeof cfg.max_loaded_skills === "number" ? cfg.max_loaded_skills : undefined}

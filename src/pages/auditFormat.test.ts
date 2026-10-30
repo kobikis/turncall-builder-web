@@ -14,6 +14,12 @@ describe("resourceLabel", () => {
     expect(resourceLabel("mcp_server")).toBe("MCP server");
     expect(resourceLabel("api_key")).toBe("Api key");
   });
+
+  it("calls an agent's skills Skills and the Builder's own guidance Builder skills", () => {
+    expect(resourceLabel("capability")).toBe("Skill");
+    expect(resourceLabel("capability_library")).toBe("Skill library");
+    expect(resourceLabel("skill")).toBe("Builder skill");
+  });
 });
 
 describe("dayRangeToQuery", () => {

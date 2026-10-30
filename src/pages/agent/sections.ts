@@ -9,7 +9,7 @@
 type Cfg = Record<string, unknown>;
 
 export type SectionId =
-  | "setup" | "prompt" | "models" | "tools" | "capabilities" | "knowledge" | "takeaways"
+  | "setup" | "prompt" | "models" | "tools" | "skills" | "knowledge" | "takeaways"
   | "turn-taking" | "guardrails" | "compliance" | "avatar" | "advanced";
 
 export const SECTIONS: { id: SectionId; title: string; keys?: string[] }[] = [
@@ -21,8 +21,8 @@ export const SECTIONS: { id: SectionId; title: string; keys?: string[] }[] = [
     title: "Tools and apps",
     keys: ["tools", "custom_tools", "integrations", "needs_integrations", "mcp_servers", "workspace_mcp_servers", "server_url"],
   },
-  // The Workspace Capabilities this agent may load mid-call (builder-api #133).
-  { id: "capabilities", title: "Capabilities", keys: ["skills", "max_loaded_skills"] },
+  // The Workspace skills this agent may load mid-call (builder-api #133).
+  { id: "skills", title: "Skills", keys: ["skills", "max_loaded_skills"] },
   { id: "knowledge", title: "Knowledge" },
   { id: "takeaways", title: "Takeaways" },
   {

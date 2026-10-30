@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// The Capabilities page (#125), driven the way a person uses it, against a
+// The Skills page (#125), driven the way a person uses it, against a
 // small in-memory Builder API that keeps TurnCall's version rules: only a draft
 // is edited, publishing archives the live version, rolling back restores one.
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -103,9 +103,9 @@ const at = (path: string) =>
   render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
-        <Route path="/capabilities" element={<Capabilities />} />
-        <Route path="/capabilities/new" element={<NewCapability />} />
-        <Route path="/capabilities/:name" element={<CapabilityView />} />
+        <Route path="/skills" element={<Capabilities />} />
+        <Route path="/skills/new" element={<NewCapability />} />
+        <Route path="/skills/:name" element={<CapabilityView />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -127,14 +127,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it("lists each Capability with its live version and a draft when it has one", async () => {
+it("lists each skill with its live version and a draft when it has one", async () => {
   rows = [
     row({ name: "verify_caller", version: 1, state: "archived" }),
     row({ name: "verify_caller", version: 2, state: "published" }),
     row({ name: "verify_caller", version: 3, state: "draft" }),
     row({ name: "book_table", version: 1, state: "draft" }),
   ];
-  at("/capabilities");
+  at("/skills");
   const line = (await screen.findByRole("link", { name: "verify_caller" })).closest("tr")!;
   expect(within(line).getByText("v2")).toBeTruthy();
   expect(within(line).getByText("Draft v3")).toBeTruthy();
@@ -142,8 +142,8 @@ it("lists each Capability with its live version and a draft when it has one", as
   expect(within(other).getByText("Not published")).toBeTruthy();
 });
 
-it("creates a Capability as a draft, publishes it, and the list shows it live", async () => {
-  at("/capabilities/new");
+it("creates a skill as a draft, publishes it, and the list shows it live", async () => {
+  at("/skills/new");
   type(screen.getByRole("textbox", { name: "Name" }), "verify_caller");
   type(screen.getByLabelText("When to use it"), "Use before sharing account details.");
   type(screen.getByLabelText("Instructions"), "Ask for the account number.");
@@ -176,7 +176,7 @@ it("creates a Capability as a draft, publishes it, and the list shows it live", 
   expect(rows[0].instructions).toBe("Ask for the account number and postcode.");
 
   cleanup();
-  at("/capabilities");
+  at("/skills");
   const line = (await screen.findByRole("link", { name: "verify_caller" })).closest("tr")!;
   expect(within(line).getByText("v1")).toBeTruthy();
 });
@@ -186,7 +186,7 @@ it("starts the next version from the live one, prefilled", async () => {
     version: 1, state: "published", instructions: "Live instructions.",
     tools: [{ name: "verify_account", description: "d", webhook_url: "https://t.example/v", parameters_schema: { type: "object" } }],
   })];
-  at("/capabilities/verify_caller");
+  at("/skills/verify_caller");
   fireEvent.click(await screen.findByRole("button", { name: "New version from live" }));
 
   await screen.findByText(/Started v2 from v1/);
@@ -202,7 +202,7 @@ it("starts the next version from the live one, prefilled", async () => {
 
 it("rolls back to an archived version, which becomes the live one", async () => {
   rows = [row({ version: 1, state: "archived" }), row({ version: 2, state: "published" })];
-  at("/capabilities/verify_caller");
+  at("/skills/verify_caller");
   fireEvent.click(await screen.findByRole("button", { name: "Roll back to v1" }));
   await screen.findByText(/v1 is live again/);
   expect(sent.some((s) => s.method === "POST" && s.path === "/capability-versions/v1/rollback")).toBe(true);
@@ -225,7 +225,7 @@ it("shows a refused field on that field: a tool's URL on that tool", async () =>
       errors: [{ field: "tools[1].webhook_url", message: "plain http is not allowed" }],
     },
   };
-  at("/capabilities/verify_caller");
+  at("/skills/verify_caller");
   type(await screen.findByLabelText("Instructions"), "Changed.");
   fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
 
@@ -238,7 +238,7 @@ it("shows a refused field on that field: a tool's URL on that tool", async () =>
 
 it("refuses parameters that are not JSON on their own field, before sending", async () => {
   rows = [row({ version: 1, state: "draft", tools: [{ name: "lookup", description: "a", webhook_url: "https://t" }] })];
-  at("/capabilities/verify_caller");
+  at("/skills/verify_caller");
   type(await screen.findByLabelText("Tool 1 parameters"), "{ not json");
   fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
   await waitFor(() => expect(screen.getByLabelText("Tool 1 parameters").getAttribute("aria-invalid")).toBe("true"));
@@ -252,7 +252,7 @@ it("a viewer reads every version and gets no way to change one", async () => {
     row({ version: 2, state: "published", tools: [{ name: "lookup", description: "a", webhook_url: "https://t" }] }),
     row({ version: 3, state: "draft" }),
   ];
-  at("/capabilities/verify_caller");
+  at("/skills/verify_caller");
   await screen.findByRole("region", { name: "Version 3" });
   for (const name of [/new version/i, /roll back/i, /delete/i, /publish/i, /save draft/i, /add tool/i])
     expect(screen.queryByRole("button", { name })).toBeNull();
@@ -262,14 +262,14 @@ it("a viewer reads every version and gets no way to change one", async () => {
   expect((within(versionPane(2)).getByLabelText("Tool 1 URL") as HTMLInputElement).disabled).toBe(true);
 
   cleanup();
-  at("/capabilities");
+  at("/skills");
   await screen.findByRole("link", { name: "verify_caller" });
-  expect(screen.queryByText("+ New Capability")).toBeNull();
+  expect(screen.queryByText("+ New skill")).toBeNull();
 });
 
 it("deletes a version", async () => {
   rows = [row({ version: 1, state: "published" }), row({ version: 2, state: "draft" })];
-  at("/capabilities/verify_caller");
+  at("/skills/verify_caller");
   fireEvent.click(await screen.findByRole("button", { name: "Delete v2" }));
   await screen.findByText("Deleted v2.");
   expect(rows.map((r) => r.version)).toEqual([1]);
@@ -289,7 +289,7 @@ it("lists the agents using it, with the version each runs and whether it is pinn
     { ...agent({ agent_id: "ag-2", name: "Billing", agent_state: "draft", agent_version: 1 }), resolved_skill_id: "v1", resolved_version: 1, pinned: true },
     { ...agent({ agent_id: null, name: null, known: false, project_id: "p-x" }), resolved_skill_id: null, resolved_version: null, pinned: true },
   ];
-  at("/capabilities/verify_caller");
+  at("/skills/verify_caller");
   const table = (await screen.findByRole("heading", { name: "Used by" })).parentElement!;
 
   const support = (await within(table).findByRole("link", { name: "Support" })).closest("tr")!;
@@ -318,7 +318,7 @@ it("a refused delete names the agents that block it, linked", async () => {
       agents: [agent({}), agent({ agent_id: null, name: "x", known: false, project_id: "p-x" })],
     },
   };
-  at("/capabilities/verify_caller");
+  at("/skills/verify_caller");
   fireEvent.click(await screen.findByRole("button", { name: "Delete v1" }));
 
   const alert = await screen.findByRole("alert");

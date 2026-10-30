@@ -87,8 +87,8 @@ export default function Skills() {
     <div>
       <div className="page-head">
         <div>
-          <h2>Skills</h2>
-          <p>Guidance the builder reads when the agent it is building matches a skill's description.</p>
+          <h2>Builder skills</h2>
+          <p>Guidance the builder reads when the agent it is building matches a builder skill's description.</p>
         </div>
         <button
           className="btn btn-primary"
@@ -99,7 +99,7 @@ export default function Skills() {
             setOpen(true);
           }}
         >
-          + New skill
+          + New builder skill
         </button>
       </div>
 
@@ -146,14 +146,14 @@ export default function Skills() {
           {skills.length === 0 && (
             <tr>
               <td colSpan={3} className="muted" style={{ padding: 16 }}>
-                No skills yet. The built-in skills still apply.
+                No builder skills yet. The built-in builder skills still apply.
               </td>
             </tr>
           )}
         </tbody>
       </table>
       <p className="hint" style={{ marginTop: 10 }}>
-        Built-in skills: {reserved.join(", ") || "—"}. Their names are taken.
+        Built-in builder skills: {reserved.join(", ") || "—"}. Their names are taken.
       </p>
 
       {open && (
@@ -162,12 +162,12 @@ export default function Skills() {
             className="modal modal-wide"
             role="dialog"
             aria-modal="true"
-            aria-label={editing ? `Edit ${editing}` : "New skill"}
+            aria-label={editing ? `Edit ${editing}` : "New builder skill"}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-head">
               <div className="title">
-                <div className="name">{editing ? `Edit ${editing}` : "New skill"}</div>
+                <div className="name">{editing ? `Edit ${editing}` : "New builder skill"}</div>
                 <div className="roles">
                   Teaches the builder how to decide, not what to pick — it is read only
                   when it looks relevant, so it is the wrong place for "always use this voice".
@@ -189,7 +189,7 @@ export default function Skills() {
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               />
               <p className="hint" style={{ margin: "4px 0 0" }}>
-                Lowercase words joined by hyphens. Taken by built-in skills:{" "}
+                Lowercase words joined by hyphens. Taken by built-in builder skills:{" "}
                 {reserved.join(", ") || "—"}.
               </p>
             </div>
@@ -206,7 +206,7 @@ export default function Skills() {
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               />
               <p className="hint" style={{ margin: "4px 0 0" }}>
-                The one part the builder always sees — a vague line means the skill is never opened.
+                The one part the builder always sees — a vague line means the builder skill is never opened.
               </p>
             </div>
 
@@ -233,7 +233,7 @@ export default function Skills() {
                 Cancel
               </button>
               <button className="btn btn-primary" disabled={busy || !complete} onClick={save}>
-                {editing ? `Save ${editing}` : "Add skill"}
+                {editing ? `Save ${editing}` : "Add builder skill"}
               </button>
             </div>
           </div>

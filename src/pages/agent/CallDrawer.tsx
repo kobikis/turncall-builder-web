@@ -92,16 +92,16 @@ export default function CallDrawer({ agentId, call }: { agentId: string; call: C
       {capabilities.length > 0 && (
         // What the call could load and what it did: a Capability published
         // since is not what this call ran, so its version is named.
-        <Section id="call.capabilities" title="Capabilities" hint={capabilitiesHint(capabilities)}>
+        <Section id="call.capabilities" title="Skills" hint={capabilitiesHint(capabilities)}>
           <table className="list">
             <thead>
-              <tr><th>Capability</th><th>Version</th><th>Loaded</th></tr>
+              <tr><th>Skill</th><th>Version</th><th>Loaded</th></tr>
             </thead>
             <tbody>
               {capabilities.map((c) => (
-                <tr key={`${c.skill}:${c.version}`} aria-label={`Capability ${c.skill}`}>
+                <tr key={`${c.skill}:${c.version}`} aria-label={`Skill ${c.skill}`}>
                   <td className="mono">
-                    <Link to={`/capabilities/${encodeURIComponent(c.skill)}`}>{c.skill}</Link>
+                    <Link to={`/skills/${encodeURIComponent(c.skill)}`}>{c.skill}</Link>
                   </td>
                   <td className="num nowrap">
                     v{c.version}

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// A call's Capabilities (#128): which the call could load, at which version,
+// A call's skills (#128): which the call could load, at which version,
 // and which it did — from `skills` on TurnCall's call read.
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
@@ -33,38 +33,38 @@ const open = (c: Call) =>
 
 afterEach(cleanup);
 
-it("a call that loaded a Capability shows it loaded, with the version it ran", () => {
+it("a call that loaded a skill shows it loaded, with the version it ran", () => {
   open(call({
     skills: [
       { skill: "verify_caller", version: 3, pinned: false, loaded: true },
       { skill: "explain_bill", version: 1, pinned: true, loaded: false },
     ],
   }));
-  const section = screen.getByRole("group", { name: "Capabilities" });
+  const section = screen.getByRole("group", { name: "Skills" });
   expect(section.textContent).toMatch(/1 of 2 loaded/);
 
-  const verify = within(section).getByRole("row", { name: "Capability verify_caller" });
+  const verify = within(section).getByRole("row", { name: "Skill verify_caller" });
   expect(within(verify).getByText("v3")).toBeTruthy();
   expect(within(verify).getByText("Loaded")).toBeTruthy();
-  expect(within(verify).getByRole("link", { name: "verify_caller" }).getAttribute("href")).toBe("/capabilities/verify_caller");
+  expect(within(verify).getByRole("link", { name: "verify_caller" }).getAttribute("href")).toBe("/skills/verify_caller");
 
-  const bill = within(section).getByRole("row", { name: "Capability explain_bill" });
+  const bill = within(section).getByRole("row", { name: "Skill explain_bill" });
   expect(bill.textContent).toMatch(/v1 · pinned/);
   expect(within(bill).getByText("Not loaded")).toBeTruthy();
 });
 
-it("a call with no Capabilities shows nothing extra", () => {
+it("a call with no skills shows nothing extra", () => {
   open(call({ skills: [] }));
-  expect(screen.queryByRole("group", { name: "Capabilities" })).toBeNull();
+  expect(screen.queryByRole("group", { name: "Skills" })).toBeNull();
   cleanup();
   open(call()); // a TurnCall that predates the field
-  expect(screen.queryByRole("group", { name: "Capabilities" })).toBeNull();
+  expect(screen.queryByRole("group", { name: "Skills" })).toBeNull();
 });
 
 it("an unknown load (the call's events expired) reads as unknown, not as not loaded", () => {
   open(call({ skills: [{ skill: "verify_caller", version: 2, pinned: false, loaded: null }] }));
-  const row = screen.getByRole("row", { name: "Capability verify_caller" });
+  const row = screen.getByRole("row", { name: "Skill verify_caller" });
   expect(within(row).getByText("Unknown")).toBeTruthy();
   expect(within(row).queryByText("Not loaded")).toBeNull();
-  expect(screen.getByRole("group", { name: "Capabilities" }).textContent).toMatch(/loads unknown/);
+  expect(screen.getByRole("group", { name: "Skills" }).textContent).toMatch(/loads unknown/);
 });

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 //
-// The Capabilities section of an agent's Build page (#126), through the page's
-// own Save: pick published Capabilities, pin one, set how many load at once,
+// The Skills section of an agent's Build page (#126), through the page's
+// own Save: pick published skills, pin one, set how many load at once,
 // and see TurnCall's refusal of one entry on that entry.
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -65,7 +65,7 @@ function renderPage() {
     <MemoryRouter initialEntries={["/agents/a1"]}>
       <Routes>
         <Route path="agents/:id" element={<AgentPage />}>
-          <Route index element={<ConfigTab section="capabilities" />} />
+          <Route index element={<ConfigTab section="skills" />} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -81,9 +81,9 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-it("offers only published Capabilities", async () => {
+it("offers only published skills", async () => {
   renderPage();
-  const picker = await screen.findByLabelText("Capability to add");
+  const picker = await screen.findByLabelText("Skill to add");
   const offered = within(picker).getAllByRole("option").map((o) => o.textContent);
   expect(offered).toEqual(["explain_bill", "verify_caller"]);
 });
@@ -100,9 +100,9 @@ it("pins to published and archived versions, never a draft", async () => {
 
 it("saves skills and max_loaded_skills, and shows them on reload", async () => {
   renderPage();
-  fireEvent.change(await screen.findByLabelText("Capability to add"), { target: { value: "verify_caller" } });
-  fireEvent.click(screen.getByRole("button", { name: "Add Capability" }));
-  fireEvent.click(screen.getByRole("button", { name: "Add Capability" })); // explain_bill, the one left
+  fireEvent.change(await screen.findByLabelText("Skill to add"), { target: { value: "verify_caller" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add skill" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add skill" })); // explain_bill, the one left
   const pin = screen.getByLabelText("Version of verify_caller");
   await waitFor(() => expect(within(pin).getAllByRole("option")).toHaveLength(3));
   fireEvent.change(pin, { target: { value: "verify_caller-v1" } });
@@ -119,7 +119,7 @@ it("saves skills and max_loaded_skills, and shows them on reload", async () => {
   renderPage();
   const again = await screen.findByLabelText("Version of verify_caller");
   await waitFor(() => expect((again as HTMLSelectElement).value).toBe("verify_caller-v1"));
-  expect(screen.getByRole("listitem", { name: "Capability explain_bill" })).toBeTruthy();
+  expect(screen.getByRole("listitem", { name: "Skill explain_bill" })).toBeTruthy();
   expect((screen.getByLabelText("Loaded at once") as HTMLInputElement).value).toBe("2");
 });
 
@@ -136,9 +136,9 @@ it("shows TurnCall's refusal of skills[1] on the second entry", async () => {
   fireEvent.change(await screen.findByLabelText("Loaded at once"), { target: { value: "4" } });
   save();
 
-  const second = screen.getByRole("listitem", { name: "Capability explain_bill" });
+  const second = screen.getByRole("listitem", { name: "Skill explain_bill" });
   await waitFor(() => expect(within(second).getByText(/collides with the agent's own tool/)).toBeTruthy());
-  const first = screen.getByRole("listitem", { name: "Capability verify_caller" });
+  const first = screen.getByRole("listitem", { name: "Skill verify_caller" });
   expect(within(first).queryByText(/collides/)).toBeNull();
 });
 
@@ -151,13 +151,13 @@ it("removing the last one drops the key", async () => {
   expect(puts[0]).not.toHaveProperty("skills");
 });
 
-it("a viewer sees the agent's Capabilities and cannot change them", async () => {
+it("a viewer sees the agent's skills and cannot change them", async () => {
   role = "viewer";
   stored = { skills: [{ skill: "verify_caller", version_id: "verify_caller-v1" }] };
   renderPage();
   const pin = await screen.findByLabelText("Version of verify_caller");
   expect((pin as HTMLSelectElement).disabled).toBe(true);
-  expect(screen.queryByLabelText("Capability to add")).toBeNull();
+  expect(screen.queryByLabelText("Skill to add")).toBeNull();
   expect(screen.queryByRole("button", { name: /remove/i })).toBeNull();
   expect((screen.getByLabelText("Loaded at once") as HTMLInputElement).disabled).toBe(true);
 });

@@ -130,20 +130,20 @@ export default function App() {
         </Route>
         {/* Per-user, not workspace-scoped: you can only connect your own. */}
         <Route path="integrations" element={<Integrations />} />
-        {/* A Workspace's Capabilities: any member reads them, an editor writes. */}
-        <Route path="capabilities" element={<Capabilities />} />
+        {/* A Workspace's skills: any member reads them, an editor writes. */}
+        <Route path="skills" element={<Capabilities />} />
         <Route
-          path="capabilities/new"
+          path="skills/new"
           element={
             <RequireRole min="editor">
               <NewCapability />
             </RequireRole>
           }
         />
-        <Route path="capabilities/:name" element={<CapabilityView />} />
+        <Route path="skills/:name" element={<CapabilityView />} />
         <Route path="settings/github" element={<GitHubSettings />} />
         <Route
-          path="skills"
+          path="builder-skills"
           element={
             <RequireRole min="admin">
               <Skills />

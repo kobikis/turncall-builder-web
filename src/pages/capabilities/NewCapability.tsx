@@ -31,11 +31,11 @@ export default function NewCapability() {
         method: "POST",
         body: JSON.stringify(out.body),
       });
-      navigate(`/capabilities/${encodeURIComponent(r.data.name)}?version=${r.data.id}`, {
+      navigate(`/skills/${encodeURIComponent(r.data.name)}?version=${r.data.id}`, {
         state: { notice: `Created ${r.data.name} v${r.data.version} as a draft. Publish it to make it live.` },
       });
     } catch (e) {
-      setFailure(failureOf(e, "Could not create the Capability."));
+      setFailure(failureOf(e, "Could not create the skill."));
       setBusy(false);
     }
   }
@@ -44,7 +44,7 @@ export default function NewCapability() {
     <div style={{ maxWidth: 820 }}>
       <div className="page-head">
         <div>
-          <h2>New Capability</h2>
+          <h2>New skill</h2>
           <p>Starts as a draft: no call runs it until it is published.</p>
         </div>
       </div>
@@ -55,7 +55,7 @@ export default function NewCapability() {
         <p className="error-text">A name is lowercase letters, digits and underscores, starting with a letter or underscore.</p>
       )}
       <div className="modal-actions">
-        <Link to="/capabilities" className="btn">Cancel</Link>
+        <Link to="/skills" className="btn">Cancel</Link>
         <button type="button" className="btn btn-primary" disabled={busy || !complete} onClick={() => void create()}>
           {busy ? "Creating…" : "Create draft"}
         </button>

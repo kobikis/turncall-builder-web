@@ -89,7 +89,7 @@ export function CapabilityForm({ value, withName = false, editable, errors, onCh
       )}
 
       <Field id="cap-description" label="When to use it" messages={descErrs}
-        hint="The one part the agent always sees. It loads the Capability when this matches the conversation.">
+        hint="The one part the agent always sees. It loads the skill when this matches the conversation.">
         <textarea id="cap-description" className="input" rows={2} value={value.description} disabled={!editable}
           placeholder="Use when the caller asks about their account, before sharing anything about it."
           {...invalid(descErrs, "cap-description")}
@@ -97,7 +97,7 @@ export function CapabilityForm({ value, withName = false, editable, errors, onCh
       </Field>
 
       <Field id="cap-instructions" label="Instructions" messages={instrErrs}
-        hint="Added to the agent's prompt once it loads the Capability.">
+        hint="Added to the agent's prompt once it loads the skill.">
         <textarea id="cap-instructions" className="input" rows={8} value={value.instructions} disabled={!editable}
           placeholder={"Ask for the account number and the postcode on it.\nCall verify_account before saying anything about the account."}
           {...invalid(instrErrs, "cap-instructions")}
@@ -107,7 +107,7 @@ export function CapabilityForm({ value, withName = false, editable, errors, onCh
       <h3>Tools</h3>
       <p className="hint" style={{ marginTop: 0 }}>
         Each tool POSTs to your own Tool server at its URL, and joins the agent's tools once the
-        Capability is loaded.
+        skill is loaded.
       </p>
       <Problems id="cap-tools-error" messages={errorsAt(errors, "tools")} />
       {value.tools.length === 0 && <p className="muted">No tools.</p>}

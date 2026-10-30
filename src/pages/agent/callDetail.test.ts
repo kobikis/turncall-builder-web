@@ -117,7 +117,7 @@ describe("prettyJson", () => {
   });
 });
 
-it("a Capability's load reads loaded, not loaded, or unknown when the events expired", () => {
+it("a skill's load reads loaded, not loaded, or unknown when the events expired", () => {
   expect(capabilityLoadedLabel(true)).toBe("Loaded");
   expect(capabilityLoadedLabel(false)).toBe("Not loaded");
   expect(capabilityLoadedLabel(null)).toBe("Unknown");

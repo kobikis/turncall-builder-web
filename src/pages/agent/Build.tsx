@@ -41,7 +41,7 @@ export default function Build() {
     setup: checks ? `${checks.length - left!}/${checks.length}` : "",
     tools: tools || "",
     guardrails: draft.guardrails?.prohibited_topics?.length || "",
-    capabilities: draft.skills?.length || "",
+    skills: draft.skills?.length || "",
     avatar: draft.avatar?.enabled ? draft.avatar.provider : "Off",
   };
 

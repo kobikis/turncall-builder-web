@@ -28,9 +28,11 @@ const RESOURCE_LABELS: Record<string, string> = {
   mcp_server: "MCP server",
   member: "Member",
   invite: "Invite",
-  skill: "Skill",
+  skill: "Builder skill",
   linked_repo: "Linked repo",
   compliance: "Compliance",
+  capability: "Skill",
+  capability_library: "Skill library",
 };
 
 /** A resource type as a reader says it; an unknown one (a newer API, or one

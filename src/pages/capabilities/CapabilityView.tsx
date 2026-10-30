@@ -60,7 +60,7 @@ export default function CapabilityView() {
           return r.data;
         })
         .catch((e) => {
-          setLoadError(errMsg(e, "Could not load the Capability."));
+          setLoadError(errMsg(e, "Could not load the skill."));
           return null;
         }),
     [name],
@@ -152,12 +152,12 @@ export default function CapabilityView() {
 
   async function remove(v: CapabilityVersion) {
     const last = versions.length === 1;
-    if (!confirm(last ? `Delete ${name}? It is its only version, so the Capability goes too.` : `Delete v${v.version} of ${name}?`))
+    if (!confirm(last ? `Delete ${name}? It is its only version, so the skill goes too.` : `Delete v${v.version} of ${name}?`))
       return;
     await run("Could not delete the version.", async () => {
       await api(`/capability-versions/${v.id}`, { method: "DELETE" });
       if (last) {
-        navigate("/capabilities", { state: { notice: `Deleted ${name}.` } });
+        navigate("/skills", { state: { notice: `Deleted ${name}.` } });
         return "";
       }
       setParams({}, { replace: true });
@@ -177,7 +177,7 @@ export default function CapabilityView() {
       <div className="page-head">
         <div>
           <p className="muted" style={{ margin: 0 }}>
-            <Link to="/capabilities">Capabilities</Link> /
+            <Link to="/skills">Skills</Link> /
           </p>
           <h2 className="mono">{name}</h2>
           <p>
@@ -195,7 +195,7 @@ export default function CapabilityView() {
 
       {notice && <div className="callout info" role="status">{notice}</div>}
       {!editable && (
-        <p className="muted">Changing a Capability is an editor's action. You can read every version.</p>
+        <p className="muted">Changing a skill is an editor's action. You can read every version.</p>
       )}
       {editable && draftVersion && liveVersion && selected.id !== draftVersion.id && (
         <p className="hint">

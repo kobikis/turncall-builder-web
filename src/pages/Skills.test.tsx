@@ -27,38 +27,38 @@ afterEach(() => {
   cleanup();
 });
 
-it("names the built-in skills so a refused name is explainable", async () => {
+it("names the built-in builder skills so a refused name is explainable", async () => {
   render(<Skills />);
   await waitFor(() => expect(screen.getByText(/agent-tools, guardrails/)).toBeDefined());
-  fireEvent.click(screen.getByText("+ New skill"));
+  fireEvent.click(screen.getByText("+ New builder skill"));
   expect(screen.getAllByText(/agent-tools, guardrails/)).toHaveLength(2); // the dialog says it too
   expect(screen.getByText("takeaway-orders")).toBeDefined();
 });
 
-it("saves a skill by name", async () => {
+it("saves a builder skill by name", async () => {
   render(<Skills />);
   await waitFor(() => expect(screen.getByText("takeaway-orders")).toBeDefined());
-  fireEvent.click(screen.getByText("+ New skill"));
+  fireEvent.click(screen.getByText("+ New builder skill"));
 
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "restaurant-reservations" } });
   fireEvent.change(screen.getByLabelText("When should the builder use this?"), {
     target: { value: "Use when taking table bookings" },
   });
   fireEvent.change(screen.getByLabelText("Instructions"), { target: { value: "Ask for covers first." } });
-  fireEvent.click(screen.getByRole("button", { name: "Add skill" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add builder skill" }));
 
   await waitFor(() =>
     expect(calls.some((c) => c.path === "/skills/restaurant-reservations" && c.method === "PUT")).toBe(true),
   );
 });
 
-it("says an edited skill reaches conversations already open", async () => {
+it("says an edited builder skill reaches conversations already open", async () => {
   render(<Skills />);
   await waitFor(() => expect(screen.getByText("takeaway-orders")).toBeDefined());
-  fireEvent.click(screen.getByText("+ New skill"));
+  fireEvent.click(screen.getByText("+ New builder skill"));
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "a-skill" } });
   fireEvent.change(screen.getByLabelText("When should the builder use this?"), { target: { value: "d" } });
   fireEvent.change(screen.getByLabelText("Instructions"), { target: { value: "b" } });
-  fireEvent.click(screen.getByRole("button", { name: "Add skill" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add builder skill" }));
   await waitFor(() => expect(screen.getByText(/already open/)).toBeDefined());
 });

@@ -47,7 +47,7 @@ export function AgentCapabilities({ skills, maxLoaded, isS2S, editable, errors, 
   useEffect(() => {
     api<ApiResponse<CapabilityList>>("/capabilities")
       .then((r) => setPublished(r.data.capabilities.filter((c) => c.live)))
-      .catch((e) => setListError(errMsg(e, "Could not load the workspace's Capabilities.")));
+      .catch((e) => setListError(errMsg(e, "Could not load the workspace's skills.")));
   }, []);
 
   const names = skills.map((s) => s.skill).join("\n");
@@ -83,13 +83,13 @@ export function AgentCapabilities({ skills, maxLoaded, isS2S, editable, errors, 
     <>
       {isS2S && (
         <p className="callout warn">
-          A speech-to-speech agent loads no Capabilities: TurnCall skips them on its calls. They apply
+          A speech-to-speech agent loads no skills: TurnCall skips them on its calls. They apply
           if the agent goes back to the cascade pipeline.
         </p>
       )}
       {listError && <p role="alert" className="error-text">{listError}</p>}
 
-      {skills.length === 0 && <p className="muted">This agent has no Capabilities.</p>}
+      {skills.length === 0 && <p className="muted">This agent has no skills.</p>}
       {skills.length > 0 && (
       <ul className="mcp-list">
         {skills.map((entry, i) => {
@@ -98,13 +98,13 @@ export function AgentCapabilities({ skills, maxLoaded, isS2S, editable, errors, 
           const problems = errorsUnder(errors, `skills[${i}]`);
           const orphanPin = entry.version_id && Array.isArray(vs) && !vs.some((v) => v.id === entry.version_id);
           return (
-            <li key={`${entry.skill}:${i}`} aria-label={`Capability ${entry.skill}`}>
+            <li key={`${entry.skill}:${i}`} aria-label={`Skill ${entry.skill}`}>
               <div className="mcp-main" style={{ flex: 1, minWidth: 0 }}>
-                <Link to={`/capabilities/${encodeURIComponent(entry.skill)}`} className="mono">{entry.skill}</Link>
+                <Link to={`/skills/${encodeURIComponent(entry.skill)}`} className="mono">{entry.skill}</Link>
                 {c && <span className="muted">{c.description}</span>}
                 {published && !c && (
                   <span className="error-text" style={{ display: "block" }}>
-                    Not a published Capability: TurnCall refuses to save it. Publish it, or remove it here.
+                    Not a published skill: TurnCall refuses to save it. Publish it, or remove it here.
                   </span>
                 )}
                 {typeof vs === "string" && <span className="error-text" style={{ display: "block" }}>{vs}</span>}
@@ -138,18 +138,18 @@ export function AgentCapabilities({ skills, maxLoaded, isS2S, editable, errors, 
 
       {editable && published && addable.length > 0 && (
         <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "6px 0 0" }}>
-          <select className="input" style={{ width: "auto" }} aria-label="Capability to add"
+          <select className="input" style={{ width: "auto" }} aria-label="Skill to add"
             value={adding || addable[0].name} onChange={(e) => setAdding(e.target.value)}>
             {addable.map((c) => (
               <option key={c.name} value={c.name}>{c.name}</option>
             ))}
           </select>
-          <button type="button" className="btn" onClick={add}>Add Capability</button>
+          <button type="button" className="btn" onClick={add}>Add skill</button>
         </div>
       )}
       {published && published.length === 0 && (
         <p className="hint">
-          This workspace has no published Capabilities yet. <Link to="/capabilities">Write one</Link>, publish it,
+          This workspace has no published skills yet. <Link to="/skills">Write one</Link>, publish it,
           and it can be added here.
         </p>
       )}

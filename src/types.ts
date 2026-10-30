@@ -232,7 +232,7 @@ export type PurchasedNumber = {
 export type PendingPurchase = { purchase_status?: "pending" | null };
 
 // ---- Capabilities (builder-api #130, ADR-0029) -------------------------------
-// A Capability is a TurnCall skill as the Console calls it: a versioned bundle
+// A Capability is a TurnCall skill as builder-api calls it: a versioned bundle
 // an agent loads mid-call. "Skill" means the Builder's own guidance here.
 
 export type CapabilityState = "draft" | "published" | "archived";

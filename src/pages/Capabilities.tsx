@@ -1,8 +1,7 @@
 // The Workspace's Capabilities (builder-api ADR-0029): what its agents can load
 // mid-call — instructions and webhook tools, written once, versioned, and shared
-// by every agent that lists them. TurnCall calls them skills; on the Console
-// "Skill" is the Builder's own guidance (the Skills page), so these keep their
-// own name.
+// by every agent that lists them. TurnCall calls them skills, and so does the
+// Console; the Builder's own guidance is "Builder skills" (/builder-skills).
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { api } from "../api";
@@ -23,21 +22,21 @@ export default function Capabilities() {
   useEffect(() => {
     api<ApiResponse<CapabilityList>>("/capabilities")
       .then((r) => setItems(r.data.capabilities))
-      .catch((e) => setError(errMsg(e, "Could not load Capabilities.")));
+      .catch((e) => setError(errMsg(e, "Could not load skills.")));
   }, []);
 
   return (
     <div>
       <div className="page-head">
         <div>
-          <h2>Capabilities</h2>
+          <h2>Skills</h2>
           <p>
             What this workspace's agents can load mid-call: instructions and tools, written once and
             shared. An agent sees each one's name and when to use it, and loads it when it needs it.
           </p>
         </div>
         {editable && (
-          <Link to="/capabilities/new" className="btn btn-primary">+ New Capability</Link>
+          <Link to="/skills/new" className="btn btn-primary">+ New skill</Link>
         )}
       </div>
 
@@ -54,7 +53,7 @@ export default function Capabilities() {
           {items?.map((c) => (
             <tr key={c.name}>
               <td className="mono" style={{ whiteSpace: "nowrap" }}>
-                <Link to={`/capabilities/${encodeURIComponent(c.name)}`}>{c.name}</Link>
+                <Link to={`/skills/${encodeURIComponent(c.name)}`}>{c.name}</Link>
               </td>
               <td className="hint">{c.description}</td>
               <td className="num nowrap">
@@ -68,7 +67,7 @@ export default function Capabilities() {
           {items?.length === 0 && (
             <tr>
               <td colSpan={4} className="muted" style={{ padding: 16 }}>
-                No Capabilities yet.{editable ? " Create one, publish it, then add it to an agent on its Build page." : ""}
+                No skills yet.{editable ? " Create one, publish it, then add it to an agent on its Build page." : ""}
               </td>
             </tr>
           )}
@@ -111,7 +110,7 @@ function LibraryLinks({ editable }: { editable: boolean }) {
   return (
     <div className="callout warn" role="status">
       {unlinked.length || "Some"} {unlinked.length === 1 ? "agent is" : "agents are"} not linked to the
-      Capability library yet, so {unlinked.length === 1 ? "it" : "they"} can't load Capabilities
+      skill library yet, so {unlinked.length === 1 ? "it" : "they"} can't load skills
       {unlinked.length > 0 && <>: {unlinked.map((l) => l.name || l.project_id).join(", ")}</>}.
       {editable && (
         <button type="button" className="btn" style={{ marginLeft: 8 }} disabled={busy} onClick={() => void retry()}>

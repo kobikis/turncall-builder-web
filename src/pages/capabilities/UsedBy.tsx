@@ -93,7 +93,7 @@ export function InUseNote({ failure }: { failure: Failure }) {
           ))}
         </ul>
       )}
-      <p style={{ marginBottom: 0 }}>Remove it from each agent's Capabilities and save, then delete it.</p>
+      <p style={{ marginBottom: 0 }}>Remove it from each agent's skills and save, then delete it.</p>
     </div>
   );
 }
