@@ -19,6 +19,7 @@ const sent: { path: string; method: string; body?: any }[] = [];
 // One refusal to answer the next matching request with.
 let refuse: { path: RegExp; status: number; body: Record<string, unknown> } | null = null;
 let seq = 0;
+let uses: Record<string, unknown>[] = [];
 
 const row = (over: Partial<Row>): Row => ({
   id: `v${++seq}`, project_id: "lib", name: "verify_caller", version: 1, state: "draft",
@@ -73,7 +74,7 @@ vi.mock("../api", async (orig) => {
         const vs = rows.filter((r) => r.name === m![1]).sort((a, b) => b.version - a.version);
         return { data: { name: m[1], live: ref(vs.find((v) => v.state === "published")), versions: vs } };
       }
-      if (/^\/capabilities\/[a-z_0-9]+\/agents$/.test(path)) return { data: [] };
+      if (/^\/capabilities\/[a-z_0-9]+\/agents$/.test(path)) return { data: uses };
       m = /^\/capability-versions\/([^/]+)(?:\/(publish|rollback))?$/.exec(path);
       if (m) {
         const target = rows.find((r) => r.id === m![1])!;
@@ -117,6 +118,7 @@ beforeEach(() => {
   rows = [];
   refuse = null;
   seq = 0;
+  uses = [];
   vi.spyOn(window, "confirm").mockReturnValue(true);
 });
 afterEach(() => {
@@ -271,4 +273,57 @@ it("deletes a version", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "Delete v2" }));
   await screen.findByText("Deleted v2.");
   expect(rows.map((r) => r.version)).toEqual([1]);
+});
+
+// ---- #127: who uses it, and the delete it blocks ---------------------------
+
+const agent = (over: Record<string, unknown>) => ({
+  agent_id: "ag-1", name: "Support", known: true, project_id: "p-1", turncall_agent_id: "t-1",
+  agent_version: 2, agent_state: "published", ...over,
+});
+
+it("lists the agents using it, with the version each runs and whether it is pinned, linked", async () => {
+  rows = [row({ version: 1, state: "archived" }), row({ version: 2, state: "published" })];
+  uses = [
+    { ...agent({}), resolved_skill_id: "v2", resolved_version: 2, pinned: false },
+    { ...agent({ agent_id: "ag-2", name: "Billing", agent_state: "draft", agent_version: 1 }), resolved_skill_id: "v1", resolved_version: 1, pinned: true },
+    { ...agent({ agent_id: null, name: null, known: false, project_id: "p-x" }), resolved_skill_id: null, resolved_version: null, pinned: true },
+  ];
+  at("/capabilities/verify_caller");
+  const table = (await screen.findByRole("heading", { name: "Used by" })).parentElement!;
+
+  const support = (await within(table).findByRole("link", { name: "Support" })).closest("tr")!;
+  expect(support.querySelector("a")!.getAttribute("href")).toBe("/agents/ag-1");
+  expect(within(support).getByText("v2")).toBeTruthy();
+  expect(within(support).getByText("Follows live")).toBeTruthy();
+
+  const billing = within(table).getByRole("link", { name: "Billing" }).closest("tr")!;
+  expect(within(billing).getByText("v1")).toBeTruthy();
+  expect(within(billing).getByText("Pinned")).toBeTruthy();
+
+  const unknown = within(table).getByText(/unknown agent/).closest("tr")!;
+  expect(unknown.textContent).toMatch(/project p-x/);
+  expect(within(unknown).queryByRole("link")).toBeNull();
+});
+
+it("a refused delete names the agents that block it, linked", async () => {
+  rows = [row({ version: 1, state: "published" })];
+  refuse = {
+    path: /capability-versions/,
+    status: 409,
+    body: {
+      detail: "'verify_caller' is used by 'Support'; take it off them first",
+      reason: "capability_in_use",
+      capability: "verify_caller",
+      agents: [agent({}), agent({ agent_id: null, name: "x", known: false, project_id: "p-x" })],
+    },
+  };
+  at("/capabilities/verify_caller");
+  fireEvent.click(await screen.findByRole("button", { name: "Delete v1" }));
+
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toMatch(/Not deleted.*used by 'Support'/);
+  expect(within(alert).getByRole("link", { name: "Support" }).getAttribute("href")).toBe("/agents/ag-1");
+  expect(alert.textContent).toMatch(/unknown agent \(project p-x\)/);
+  expect(rows).toHaveLength(1);
 });

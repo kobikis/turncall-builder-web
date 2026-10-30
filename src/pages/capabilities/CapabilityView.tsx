@@ -15,6 +15,7 @@ import type { ApiResponse, CapabilityDetail, CapabilityState, CapabilityVersion 
 import { CapabilityForm } from "./CapabilityForm";
 import { fromVersion, sameDraft, toBody, type Draft } from "./draft";
 import { FailureNote, failureOf, type Failure } from "./failure";
+import { InUseNote, isInUse, UsedBy } from "./UsedBy";
 
 export const STATE_LABELS: Record<CapabilityState, string> = {
   published: "Live",
@@ -240,6 +241,9 @@ export default function CapabilityView() {
           ))}
         </tbody>
       </table>
+      {failure && isInUse(failure) && <InUseNote failure={failure} />}
+
+      <UsedBy name={name} refresh={detail} />
 
       <section aria-label={`Version ${selected.version}`} style={{ marginTop: 18 }}>
         <h3>
@@ -256,7 +260,7 @@ export default function CapabilityView() {
         {warnings.map((w) => (
           <p key={w.code + w.message} className="callout warn">{w.message}</p>
         ))}
-        {failure && <FailureNote failure={failure} toolCount={draft.tools.length} />}
+        {failure && !isInUse(failure) && <FailureNote failure={failure} toolCount={draft.tools.length} />}
         <CapabilityForm value={draft} editable={editable && isDraft && !busy} errors={failure?.errors ?? []}
           onChange={setDraft} />
         {editable && isDraft && (
