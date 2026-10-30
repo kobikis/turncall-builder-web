@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  capabilitiesHint,
+  capabilityLoadedLabel,
   endedReasonLabel,
   endedReasonTone,
   offsetLabel,
@@ -113,4 +115,12 @@ describe("prettyJson", () => {
     expect(prettyJson("no json here")).toBe("no json here");
     expect(prettyJson(null)).toBe("—");
   });
+});
+
+it("a Capability's load reads loaded, not loaded, or unknown when the events expired", () => {
+  expect(capabilityLoadedLabel(true)).toBe("Loaded");
+  expect(capabilityLoadedLabel(false)).toBe("Not loaded");
+  expect(capabilityLoadedLabel(null)).toBe("Unknown");
+  expect(capabilitiesHint([{ loaded: true }, { loaded: false }])).toBe("1 of 2 loaded");
+  expect(capabilitiesHint([{ loaded: true }, { loaded: null }])).toBe("2 · loads unknown");
 });

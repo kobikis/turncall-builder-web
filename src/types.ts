@@ -99,6 +99,9 @@ export type Call = {
   agent_name?: string | null;
   agent_version?: number | null;
   latency_summary?: LatencySummary | null;
+  // The Capabilities the call resolved (turncall#425): [] with none, absent
+  // from a TurnCall older than skills.
+  skills?: CallCapability[] | null;
 };
 
 export type Spread = { p50_ms: number; p95_ms: number; count: number };
