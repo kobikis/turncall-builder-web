@@ -29,6 +29,12 @@ const ICONS = {
     <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" /><rect x="9" y="2.5" width="4.5" height="4.5" rx="1" />
     <rect x="2.5" y="9" width="4.5" height="4.5" rx="1" /><rect x="9" y="9" width="4.5" height="4.5" rx="1" />
   </>),
+  // Stacked layers (Lucide layers): versioned pieces an agent stacks on itself
+  // mid-call. Not Skills' scroll — those are the Builder's own guidance.
+  capabilities: icon(<>
+    <path d="m12 2 9 5-9 5-9-5Z" />
+    <path d="m3 12 9 5 9-5M3 17l9 5 9-5" />
+  </>, 24),
   members: icon(<>
     <circle cx="6" cy="6" r="2.2" /><circle cx="11.5" cy="7" r="1.7" />
     <path d="M2 13c.6-2 2.1-3 4-3s3.4 1 4 3M10.5 10.2c1.6 0 2.8.9 3.3 2.6" />
@@ -70,6 +76,7 @@ export default function Layout() {
         <RailLink to="/agents" label="Agents">{ICONS.agents}</RailLink>
         <RailLink to="/phone-numbers" label="Phone numbers">{ICONS.phone}</RailLink>
         <RailLink to="/integrations" label="Integrations">{ICONS.integrations}</RailLink>
+        <RailLink to="/capabilities" label="Capabilities">{ICONS.capabilities}</RailLink>
         {isAdmin(activeWorkspace?.role) && (
           // Members is admin-only — hidden for non-admins (the route is gated too).
           <RailLink to="/members" label="Members">{ICONS.members}</RailLink>

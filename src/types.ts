@@ -227,3 +227,93 @@ export type PurchasedNumber = {
 // registry row (GET /phone-numbers and /phone-numbers/{id}). Cleared by the
 // first successful bind.
 export type PendingPurchase = { purchase_status?: "pending" | null };
+
+// ---- Capabilities (builder-api #130, ADR-0029) -------------------------------
+// A Capability is a TurnCall skill as the Console calls it: a versioned bundle
+// an agent loads mid-call. "Skill" means the Builder's own guidance here.
+
+export type CapabilityState = "draft" | "published" | "archived";
+export type VersionRef = { id: string; version: number };
+
+// A Capability tool: TurnCall's webhook tool shape. Keys the form doesn't edit
+// are kept as they came.
+export type CapabilityTool = {
+  name: string;
+  description: string;
+  parameters_schema?: Record<string, unknown>;
+  webhook_url?: string;
+  timeout_seconds?: number;
+  [k: string]: unknown;
+};
+
+// One version of a Capability (a TurnCall skill row).
+export type CapabilityVersion = {
+  id: string;
+  project_id: string;
+  name: string;
+  version: number;
+  state: CapabilityState;
+  description: string;
+  instructions: string;
+  tools: CapabilityTool[];
+  knowledge_bases: unknown[];
+  warnings?: { code: string; message: string }[];
+  created_at: string;
+  updated_at: string;
+  published_at: string | null;
+};
+
+// GET /capabilities: one entry per name.
+export type CapabilitySummary = {
+  name: string;
+  description: string;
+  live: VersionRef | null;
+  draft: VersionRef | null;
+  latest: VersionRef & { state: CapabilityState };
+  versions: number;
+};
+export type CapabilityList = { library: { project_id: string } | null; capabilities: CapabilitySummary[] };
+
+// GET /capabilities/{name}: its versions, newest first.
+export type CapabilityDetail = { name: string; live: VersionRef | null; versions: CapabilityVersion[] };
+
+// An agent listing a Capability: the Console agent when the project is one of
+// this Workspace's agents (`known`), else TurnCall's name for it.
+export type CapabilityAgent = {
+  agent_id: string | null;
+  name: string | null;
+  known: boolean;
+  project_id: string | null;
+  turncall_agent_id: string | null;
+  agent_version: number | null;
+  agent_state: string | null;
+};
+// GET /capabilities/{name}/agents: with the version each resolves to now.
+export type CapabilityUse = CapabilityAgent & {
+  resolved_skill_id: string | null;
+  resolved_version: number | null;
+  pinned: boolean;
+};
+
+// GET /capability-library: whether every project of the Workspace is linked.
+export type CapabilityLibraryLink = {
+  project_id: string;
+  kind: "agent" | "webhook_numbers";
+  agent_id: string | null;
+  name: string | null;
+  state: "linked" | "failed" | "pending";
+  error: string | null;
+  updated_at: string;
+};
+export type CapabilityLibrary = {
+  library: { project_id: string } | null;
+  links: CapabilityLibraryLink[];
+  complete: boolean;
+};
+
+// An agent's config entry: a Capability name, pinned to a version id or not.
+export type CapabilityRef = { skill: string; version_id?: string };
+
+// One Capability a call resolved (TurnCall's call read, turncall#425).
+// `loaded` is null when the call's events have expired: not known.
+export type CallCapability = { skill: string; version: number; pinned: boolean; loaded: boolean | null };

@@ -22,6 +22,9 @@ import GitHubSettings from "./pages/GitHubSettings";
 import Skills from "./pages/Skills";
 import Compliance from "./pages/Compliance";
 import Integrations from "./pages/Integrations";
+import Capabilities from "./pages/Capabilities";
+import NewCapability from "./pages/capabilities/NewCapability";
+import CapabilityView from "./pages/capabilities/CapabilityView";
 import PhoneNumbersList from "./pages/PhoneNumbersList";
 import AddPhoneNumber from "./pages/AddPhoneNumber";
 import EditPhoneNumber from "./pages/EditPhoneNumber";
@@ -127,6 +130,17 @@ export default function App() {
         </Route>
         {/* Per-user, not workspace-scoped: you can only connect your own. */}
         <Route path="integrations" element={<Integrations />} />
+        {/* A Workspace's Capabilities: any member reads them, an editor writes. */}
+        <Route path="capabilities" element={<Capabilities />} />
+        <Route
+          path="capabilities/new"
+          element={
+            <RequireRole min="editor">
+              <NewCapability />
+            </RequireRole>
+          }
+        />
+        <Route path="capabilities/:name" element={<CapabilityView />} />
         <Route path="settings/github" element={<GitHubSettings />} />
         <Route
           path="skills"
