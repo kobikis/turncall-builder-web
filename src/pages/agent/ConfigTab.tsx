@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Ambience } from "./Ambience";
+import { AgentCapabilities } from "./AgentCapabilities";
 import { Avatar } from "./Avatar";
 import { Backups } from "./Backups";
 import { PickControl, type Opt } from "./PickControl";
@@ -130,6 +131,8 @@ const LEADS: Partial<Record<SectionId, string>> = {
   prompt: "What the agent knows and how it behaves on every call.",
   models: "How the agent hears, thinks and speaks.",
   tools: "What the agent can do during a call.",
+  capabilities:
+    "Workspace Capabilities the agent can load mid-call. It sees each one's name and when to use it, and loads its instructions and tools when it needs them.",
   "turn-taking": "When the caller's turn ends, when the call ends, and how much it may use.",
   guardrails: "What the agent will not discuss.",
   avatar: "A lip-synced face for browser calls.",
@@ -140,6 +143,7 @@ const TITLES: Partial<Record<SectionId, string>> = {
   prompt: "Prompt",
   models: "Speech and models",
   tools: "Tools and apps",
+  capabilities: "Capabilities",
   "turn-taking": "Turn-taking and limits",
   guardrails: "Guardrails",
   avatar: "Video avatar",
@@ -149,7 +153,7 @@ const TITLES: Partial<Record<SectionId, string>> = {
 // One section of the agent's configuration. The draft and its save live in
 // AgentPage; this edits the part of it the section owns.
 export default function ConfigTab({ section }: { section: SectionId }) {
-  const { agentId, data, draft: cfg, patch, setDraft: setCfg } = useAgent();
+  const { agentId, data, draft: cfg, patch, setDraft: setCfg, saveErrors } = useAgent();
   const { activeWorkspace } = useAuth();
   const editable = canEdit(activeWorkspace?.role); // viewers can view but not save
   const [providers, setProviders] = useState<Providers>(FALLBACK_PROVIDERS);
@@ -674,6 +678,24 @@ export default function ConfigTab({ section }: { section: SectionId }) {
           Custom tools are edited in <strong>Advanced (JSON)</strong>.
         </p>
       </>)}
+
+      {section === "capabilities" && (
+        <AgentCapabilities
+          skills={Array.isArray(cfg.skills) ? cfg.skills : []}
+          maxLoaded={typeof cfg.max_loaded_skills === "number" ? cfg.max_loaded_skills : undefined}
+          isS2S={isS2S}
+          editable={editable}
+          errors={saveErrors ?? []}
+          onSkills={(skills) =>
+            patch((c) => {
+              // TurnCall replaces the whole config on save, so no key is none.
+              if (skills.length) c.skills = skills;
+              else delete c.skills;
+            })
+          }
+          onMaxLoaded={(v) => setCfg((c: any) => withField(c, "max_loaded_skills", v))}
+        />
+      )}
 
       {section === "turn-taking" && (<>
         <TurnTaking cfg={cfg} isS2S={isS2S} editable={editable}
