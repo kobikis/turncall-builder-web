@@ -11,6 +11,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 const puts: Record<string, unknown>[] = [];
 let stored: Record<string, unknown> = {};
 let refusal: Record<string, unknown> | null = null;
+let catalog: unknown[] | null = null;
 
 vi.mock("../../api", async (orig) => {
   const actual = await orig<typeof import("../../api")>();
@@ -30,6 +31,7 @@ vi.mock("../../api", async (orig) => {
       }
       if (path === "/agents/a1")
         return { data: { agent_id: "a1", config: { name: "Ann", pipeline_mode: "cascade", ...stored }, backend: null, tool_statuses: null, tool_signing_secret: null } };
+      if (path === "/integrations/catalog" && catalog) return { data: catalog };
       throw new Error("unavailable");
     }),
   };
@@ -40,6 +42,7 @@ vi.mock("../../auth", () => ({ useAuth: () => ({ activeWorkspace: { role } }) })
 import AgentPage from "./AgentPage";
 import ConfigTab from "./ConfigTab";
 import type { Procedure } from "../../types";
+import { OTHER_TOOL } from "./procedures/stepTools";
 
 function renderPage() {
   return render(
@@ -63,6 +66,7 @@ beforeEach(() => {
   puts.length = 0;
   stored = {};
   refusal = null;
+  catalog = null;
   role = "editor";
 });
 afterEach(cleanup);
@@ -150,6 +154,65 @@ it("a step's tool is picked from the agent's tools", async () => {
   save();
   await waitFor(() => expect(puts).toHaveLength(1));
   expect((puts[0].procedures as Procedure[])[0].steps[1]).toMatchObject({ id: "check", tool: "line_status" });
+});
+
+it("a step's tool can be one of a Connected app's tools the agent uses during calls", async () => {
+  catalog = [
+    { app: "google_calendar", name: "Google Calendar", tools: ["google_calendar-create-event"] },
+    { app: "slack_v2", name: "Slack", tools: ["slack_v2-send-message"] },
+  ];
+  stored = {
+    custom_tools: [{ name: "line_status" }],
+    // Slack only posts when a call ends, so its tools are never in front of the model.
+    integrations: [{ app: "google_calendar", mid_call: true }, { app: "slack_v2", call_ended: { action: "post", args: {} } }],
+    procedures: [TRIAGE],
+  };
+  renderPage();
+  const check = within(await screen.findByRole("group", { name: "Procedure 1" })).getByRole("listitem", { name: "Step check" });
+  const tool = within(check).getByLabelText("Tool");
+  await waitFor(() =>
+    expect(within(tool).getByRole("group", { name: "Google Calendar" })).toBeTruthy(),
+  );
+  expect(within(tool).getAllByRole("option").map((o) => o.textContent)).toEqual([
+    "No tool", "line_status", "google_calendar-create-event",
+  ]);
+  type(tool, "google_calendar-create-event");
+  save();
+  await waitFor(() => expect(puts).toHaveLength(1));
+  expect((puts[0].procedures as Procedure[])[0].steps[1]).toMatchObject({ tool: "google_calendar-create-event" });
+});
+
+it("an agent with MCP servers can name a tool they serve, which is only known on a call", async () => {
+  stored = {
+    mcp_servers: [{ name: "crm", transport: "http", url: "https://mcp.example.com/mcp" }],
+    procedures: [TRIAGE],
+  };
+  renderPage();
+  const check = within(await screen.findByRole("group", { name: "Procedure 1" })).getByRole("listitem", { name: "Step check" });
+  type(within(check).getByLabelText("Tool"), OTHER_TOOL);
+  type(within(check).getByLabelText("MCP tool name"), "crm_lookup");
+  save();
+  await waitFor(() => expect(puts).toHaveLength(1));
+  expect((puts[0].procedures as Procedure[])[0].steps[1]).toMatchObject({ tool: "crm_lookup" });
+});
+
+it("a stored MCP tool name is shown as typed, not as a tool the agent lacks", async () => {
+  stored = {
+    workspace_mcp_servers: ["s1"],
+    procedures: [{ ...TRIAGE, steps: TRIAGE.steps.map((s) => (s.id === "check" ? { ...s, tool: "crm_lookup" } : s)) }],
+  };
+  renderPage();
+  const check = within(await screen.findByRole("group", { name: "Procedure 1" })).getByRole("listitem", { name: "Step check" });
+  expect((within(check).getByLabelText("MCP tool name") as HTMLInputElement).value).toBe("crm_lookup");
+  expect(within(check).queryByText(/not one of the agent's tools/)).toBeNull();
+});
+
+it("without MCP servers a tool cannot be typed", async () => {
+  stored = { procedures: [TRIAGE] };
+  renderPage();
+  const check = within(await screen.findByRole("group", { name: "Procedure 1" })).getByRole("listitem", { name: "Step check" });
+  const tool = within(check).getByLabelText("Tool");
+  expect(within(tool).queryByRole("option", { name: OTHER_TOOL })).toBeNull();
 });
 
 it("an escalate step is a transfer, briefed from the call's summary", async () => {

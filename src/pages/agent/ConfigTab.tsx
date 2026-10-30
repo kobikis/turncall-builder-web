@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Ambience } from "./Ambience";
 import { AgentSkills } from "./AgentSkills";
 import { AgentProcedures } from "./procedures/AgentProcedures";
+import { stepToolChoices } from "./procedures/stepTools";
 import { Avatar } from "./Avatar";
 import { Backups } from "./Backups";
 import { PickControl, type Opt } from "./PickControl";
@@ -705,10 +706,7 @@ export default function ConfigTab({ section }: { section: SectionId }) {
       {section === "procedures" && (
         <AgentProcedures
           procedures={Array.isArray(cfg.procedures) ? cfg.procedures : []}
-          toolNames={[
-            ...(cfg.custom_tools || []).map((t: { name: string }) => t.name),
-            ...tools,
-          ]}
+          tools={stepToolChoices(cfg, catalog)}
           isS2S={isS2S}
           editable={editable}
           errors={saveErrors ?? []}

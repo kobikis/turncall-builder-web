@@ -8,11 +8,12 @@ import type { Procedure } from "../../../types";
 import { errorsAt, errorsUnder } from "../../skills/fieldErrors";
 import { addStep } from "./edits";
 import { ProcedureCard } from "./ProcedureCard";
+import type { StepToolChoices } from "./stepTools";
 
 type Props = {
   procedures: Procedure[];
-  /** The tools the agent can call: what a step's tool is picked from. */
-  toolNames: string[];
+  /** What a step's tool is picked from. */
+  tools: StepToolChoices;
   isS2S: boolean;
   editable: boolean;
   /** The last save's refused fields: `procedures[i]`, `procedures[i].steps[j]`. */
@@ -27,7 +28,7 @@ const freshName = (procedures: Procedure[]): string => {
   return `procedure_${n}`;
 };
 
-export function AgentProcedures({ procedures, toolNames, isS2S, editable, errors, onChange }: Props) {
+export function AgentProcedures({ procedures, tools, isS2S, editable, errors, onChange }: Props) {
   const add = () => onChange([...procedures, addStep({ name: freshName(procedures), steps: [] })]);
   return (
     <>
@@ -42,7 +43,7 @@ export function AgentProcedures({ procedures, toolNames, isS2S, editable, errors
       ))}
       {procedures.length === 0 && <p className="muted">This agent has no procedures.</p>}
       {procedures.map((p, i) => (
-        <ProcedureCard key={i} index={i} procedure={p} toolNames={toolNames} editable={editable}
+        <ProcedureCard key={i} index={i} procedure={p} tools={tools} editable={editable}
           errors={errors.filter((e) => errorsUnder([e], `procedures[${i}]`).length > 0)}
           onChange={(next) => onChange(procedures.map((q, n) => (n === i ? next : q)))}
           onRemove={() => onChange(procedures.filter((_, n) => n !== i))} />

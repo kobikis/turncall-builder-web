@@ -2,6 +2,7 @@
 // out of it, and — on an escalate step — the transfer it runs.
 import { useEffect, useState } from "react";
 import type { ProcedureMove, ProcedureStep, StepKind } from "../../../types";
+import { OTHER_TOOL, allNames, type StepToolChoices } from "./stepTools";
 import { TransferFields } from "./TransferFields";
 
 export const KINDS: { value: StepKind; label: string }[] = [
@@ -17,8 +18,8 @@ type Props = {
   step: ProcedureStep;
   /** Every step id of the procedure, this one's included. */
   stepIds: string[];
-  /** The tools the agent can call, for the step's tool. */
-  toolNames: string[];
+  /** What the step's tool is picked from. */
+  tools: StepToolChoices;
   errors: string[];
   editable: boolean;
   onChange: (next: ProcedureStep) => void;
@@ -29,7 +30,7 @@ type Props = {
 
 const STEP_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
-export function StepEditor({ id, step, stepIds, toolNames, errors, editable, onChange, onRename, onRemove }: Props) {
+export function StepEditor({ id, step, stepIds, tools, errors, editable, onChange, onRename, onRemove }: Props) {
   // The id is committed when the field is left: renaming on every keystroke
   // would carry moves through each half-typed id, merging them with any step
   // the half-typed id happened to match.
@@ -66,7 +67,15 @@ export function StepEditor({ id, step, stepIds, toolNames, errors, editable, onC
     const { tool: _, ...rest } = step;
     onChange(tool ? { ...rest, tool } : rest);
   };
-  const unknownTool = step.tool && !toolNames.includes(step.tool);
+  const names = allNames(tools);
+  const unlisted = Boolean(step.tool) && !names.includes(step.tool!);
+  // A name no list holds is an MCP tool's on an agent with servers; on one
+  // without, it is a tool the agent lacks, which TurnCall refuses at Save.
+  const [typing, setTyping] = useState(tools.typed && unlisted);
+  const pickTool = (value: string) => {
+    setTyping(value === OTHER_TOOL);
+    setTool(value === OTHER_TOOL ? "" : value);
+  };
 
   return (
     <li className="procedure-step" aria-label={`Step ${step.id}`}>
@@ -86,13 +95,23 @@ export function StepEditor({ id, step, stepIds, toolNames, errors, editable, onC
         </div>
         <div className="field" style={{ flex: 1 }}>
           <label htmlFor={`${id}-tool`}>Tool</label>
-          <select id={`${id}-tool`} className="input" value={step.tool ?? ""} onChange={(e) => setTool(e.target.value)}>
+          <select id={`${id}-tool`} className="input" value={typing ? OTHER_TOOL : (step.tool ?? "")}
+            onChange={(e) => pickTool(e.target.value)}>
             <option value="">No tool</option>
-            {unknownTool && <option value={step.tool}>{step.tool} (not one of the agent's tools)</option>}
-            {toolNames.map((t) => (
-              <option key={t} value={t}>{t}</option>
+            {unlisted && !typing && <option value={step.tool}>{step.tool} (not one of the agent's tools)</option>}
+            {tools.groups.map((g) => (
+              <optgroup key={g.label} label={g.label}>
+                {g.names.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </optgroup>
             ))}
+            {tools.typed && <option value={OTHER_TOOL}>{OTHER_TOOL}</option>}
           </select>
+          {typing && (
+            <input className="input mono" aria-label="MCP tool name" value={step.tool ?? ""}
+              placeholder="the tool's name on its server" onChange={(e) => setTool(e.target.value)} />
+          )}
         </div>
         {editable && (
           <button type="button" className="btn" aria-label={`Remove step ${step.id}`} onClick={onRemove}>

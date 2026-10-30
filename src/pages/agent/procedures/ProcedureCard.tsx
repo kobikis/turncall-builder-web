@@ -7,6 +7,7 @@ import { NumberField, withField } from "../SettingFields";
 import { addStep, removeStep, renameStep, replaceStep, setStartStep } from "./edits";
 import { ProcedureOutline } from "./ProcedureOutline";
 import { StepEditor } from "./StepEditor";
+import type { StepToolChoices } from "./stepTools";
 
 // TurnCall's default window depth, and the most it allows.
 export const DEFAULT_WINDOW_DEPTH = 1;
@@ -15,14 +16,14 @@ export const MAX_WINDOW_DEPTH = 5;
 type Props = {
   index: number;
   procedure: Procedure;
-  toolNames: string[];
+  tools: StepToolChoices;
   errors: FieldError[];
   editable: boolean;
   onChange: (next: Procedure) => void;
   onRemove: () => void;
 };
 
-export function ProcedureCard({ index, procedure: p, toolNames, errors, editable, onChange, onRemove }: Props) {
+export function ProcedureCard({ index, procedure: p, tools, errors, editable, onChange, onRemove }: Props) {
   const at = `procedures[${index}]`;
   const id = `proc-${index}`;
   const stepIds = p.steps.map((s) => s.id);
@@ -78,7 +79,7 @@ export function ProcedureCard({ index, procedure: p, toolNames, errors, editable
 
         <ol className="procedure-steps">
           {p.steps.map((step, j) => (
-            <StepEditor key={j} id={`${id}-step-${j}`} step={step} stepIds={stepIds} toolNames={toolNames}
+            <StepEditor key={j} id={`${id}-step-${j}`} step={step} stepIds={stepIds} tools={tools}
               errors={errorsUnder(errors, `${at}.steps[${j}]`)} editable={editable}
               onChange={(next) => onChange(replaceStep(p, j, next))}
               onRename={(to) => onChange(renameStep(p, step.id, to))}
