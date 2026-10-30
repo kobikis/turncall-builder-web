@@ -312,14 +312,14 @@ export default function ConfigTab({ section }: { section: SectionId }) {
           label={asDelegate ? "Delegate model" : "Model"}
           value={cfg.llm?.model || ""}
           options={models}
-          placeholder={LLM_MODEL_HINTS[llmProvider] ?? "gpt-4o-mini"}
+          placeholder={LLM_MODEL_HINTS[llmProvider] ?? "gpt-5.4-mini"}
           onChange={(v) => patch((c) => (c.llm = { ...c.llm, model: v }))}
         />
       </div>
       {asDelegate && (
         <p className="hint" style={{ margin: "2px 0 0" }}>
           Runs the agent's tools; GPT-Live-1 does the talking. Optional: left as is, it is
-          OpenAI gpt-4o-mini. A blank model uses the provider's default.
+          OpenAI gpt-5.4-mini. A blank model uses the provider's default.
         </p>
       )}
     </>
