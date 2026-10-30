@@ -18,9 +18,6 @@ export const pointerLabel = (pointer: string): string => {
 };
 
 // The API's closed vocabulary (builder-api app/audit.py RESOURCE_TYPES).
-// These are the stored names: audit entries are append-only, so `skill` (the
-// Builder's own guidance), `capability` and `capability_library` (agent
-// skills) keep the names they were written under; only the labels changed.
 const RESOURCE_LABELS: Record<string, string> = {
   agent: "Agent",
   phone_number: "Phone number",
@@ -31,11 +28,11 @@ const RESOURCE_LABELS: Record<string, string> = {
   mcp_server: "MCP server",
   member: "Member",
   invite: "Invite",
-  skill: "Builder skill",
+  builder_skill: "Builder skill",
   linked_repo: "Linked repo",
   compliance: "Compliance",
-  capability: "Skill",
-  capability_library: "Skill library",
+  skill: "Skill",
+  skill_library: "Skill library",
 };
 
 /** A resource type as a reader says it; an unknown one (a newer API, or one

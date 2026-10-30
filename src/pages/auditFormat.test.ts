@@ -16,9 +16,9 @@ describe("resourceLabel", () => {
   });
 
   it("calls an agent's skills Skills and the Builder's own guidance Builder skills", () => {
-    expect(resourceLabel("capability")).toBe("Skill");
-    expect(resourceLabel("capability_library")).toBe("Skill library");
-    expect(resourceLabel("skill")).toBe("Builder skill");
+    expect(resourceLabel("skill")).toBe("Skill");
+    expect(resourceLabel("skill_library")).toBe("Skill library");
+    expect(resourceLabel("builder_skill")).toBe("Builder skill");
   });
 });
 
