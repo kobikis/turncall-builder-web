@@ -2,7 +2,7 @@
 //
 // The S2S picker for Grok Voice (#113, turncall#384): `xai` is offered, its
 // hints are Grok's rather than OpenAI's, and its model and voice pickers read
-// builder-api's `xai` catalogs, naming a model xAI has deprecated.
+// builder-api's `xai` catalogs.
 //
 // The cascade pickers for xAI (#115, turncall#385): `xai` is offered for STT,
 // LLM and TTS, its hints are TurnCall's xAI defaults, its catalogs are listed,
@@ -15,7 +15,7 @@ let catalogs = false; // false: every list is unavailable, so the fields are fre
 vi.mock("../../api", () => ({
   api: vi.fn(async (path: string) => {
     if (catalogs && path === "/providers/s2s/xai/models") {
-      return { data: { models: ["grok-voice-3.0", "grok-voice-2.0"], deprecated: ["grok-voice-2.0"] } };
+      return { data: { models: ["grok-voice-3.0"] } };
     }
     if (catalogs && path === "/providers/s2s/xai/voices") {
       return { data: { voices: [{ value: "eve", label: "Eve" }, { value: "v-own", label: "My voice" }] } };
@@ -79,7 +79,7 @@ it("hints Grok's model and voice, not OpenAI's", () => {
   expect((screen.getByLabelText("Voice") as HTMLInputElement).placeholder).toBe("eve");
 });
 
-it("lists the xai catalogs and labels a deprecated model as such", async () => {
+it("lists the xai catalogs", async () => {
   catalogs = true;
   show();
   const model = await waitFor(() => screen.getByRole("combobox", { name: "S2S model" }));
@@ -87,7 +87,6 @@ it("lists the xai catalogs and labels a deprecated model as such", async () => {
   expect(models).toEqual([
     ["", "— select —"],
     ["grok-voice-3.0", "grok-voice-3.0"],
-    ["grok-voice-2.0", "grok-voice-2.0 (deprecated)"],
   ]);
 
   const voice = await waitFor(() => screen.getByRole("combobox", { name: "Voice" }));

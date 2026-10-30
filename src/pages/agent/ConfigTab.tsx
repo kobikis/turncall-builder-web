@@ -73,11 +73,6 @@ const STATUS_HINTS: Record<string, string> = {
   stopped: "the backend container is not running — calls to this agent's tools and events will fail until it's started",
 };
 
-// A model its vendor has deprecated still runs, so it stays pickable — named as
-// such, from the catalog's own `deprecated` list (builder-api#121).
-export const s2sModelOptions = (models: string[], deprecated: string[]): Opt[] =>
-  models.map((m) => (deprecated.includes(m) ? { value: m, label: `${m} (deprecated)` } : m));
-
 // Placeholder hints per cascade provider: TurnCall's own default where it has
 // one we pin (a blank field runs it), else the long-standing example.
 const STT_MODEL_HINTS: Record<string, string> = { xai: "grok-voice-transcribe-2.0" };
@@ -223,7 +218,7 @@ export default function ConfigTab({ section }: { section: SectionId }) {
   useEffect(() => {
     let ok = true;
     api(`/providers/s2s/${s2sProvider}/models`)
-      .then((r) => ok && setS2sModels(s2sModelOptions(r.data.models || [], r.data.deprecated || [])))
+      .then((r) => ok && setS2sModels(r.data.models || []))
       .catch(() => ok && setS2sModels([]));
     api(`/providers/s2s/${s2sProvider}/voices`)
       .then((r) => ok && setS2sVoices(r.data.voices || []))
