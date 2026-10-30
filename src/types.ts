@@ -99,6 +99,9 @@ export type Call = {
   agent_name?: string | null;
   agent_version?: number | null;
   latency_summary?: LatencySummary | null;
+  // The skills the call resolved (turncall#425): [] with none, absent
+  // from a TurnCall older than skills.
+  skills?: CallSkill[] | null;
 };
 
 export type Spread = { p50_ms: number; p95_ms: number; count: number };
@@ -227,3 +230,93 @@ export type PurchasedNumber = {
 // registry row (GET /phone-numbers and /phone-numbers/{id}). Cleared by the
 // first successful bind.
 export type PendingPurchase = { purchase_status?: "pending" | null };
+
+// ---- Skills (builder-api #130, ADR-0029) -------------------------------------
+// A skill is a TurnCall skill: a versioned bundle an agent loads mid-call. The
+// Builder's own guidance is a builder skill, typed in pages/BuilderSkills.tsx.
+
+export type SkillState = "draft" | "published" | "archived";
+export type VersionRef = { id: string; version: number };
+
+// A skill tool: TurnCall's webhook tool shape. Keys the form doesn't edit
+// are kept as they came.
+export type SkillTool = {
+  name: string;
+  description: string;
+  parameters_schema?: Record<string, unknown>;
+  webhook_url?: string;
+  timeout_seconds?: number;
+  [k: string]: unknown;
+};
+
+// One version of a skill (a TurnCall skill row).
+export type SkillVersion = {
+  id: string;
+  project_id: string;
+  name: string;
+  version: number;
+  state: SkillState;
+  description: string;
+  instructions: string;
+  tools: SkillTool[];
+  knowledge_bases: unknown[];
+  warnings?: { code: string; message: string }[];
+  created_at: string;
+  updated_at: string;
+  published_at: string | null;
+};
+
+// GET /skills: one entry per name.
+export type SkillSummary = {
+  name: string;
+  description: string;
+  live: VersionRef | null;
+  draft: VersionRef | null;
+  latest: VersionRef & { state: SkillState };
+  versions: number;
+};
+export type SkillList = { library: { project_id: string } | null; skills: SkillSummary[] };
+
+// GET /skills/{name}: its versions, newest first.
+export type SkillDetail = { name: string; live: VersionRef | null; versions: SkillVersion[] };
+
+// An agent listing a skill: the Console agent when the project is one of
+// this Workspace's agents (`known`), else TurnCall's name for it.
+export type SkillAgent = {
+  agent_id: string | null;
+  name: string | null;
+  known: boolean;
+  project_id: string | null;
+  turncall_agent_id: string | null;
+  agent_version: number | null;
+  agent_state: string | null;
+};
+// GET /skills/{name}/agents: with the version each resolves to now.
+export type SkillUse = SkillAgent & {
+  resolved_skill_id: string | null;
+  resolved_version: number | null;
+  pinned: boolean;
+};
+
+// GET /skill-library: whether every project of the Workspace is linked.
+export type SkillLibraryLink = {
+  project_id: string;
+  kind: "agent" | "webhook_numbers";
+  agent_id: string | null;
+  name: string | null;
+  state: "linked" | "failed" | "pending";
+  error: string | null;
+  updated_at: string;
+};
+export type SkillLibrary = {
+  library: { project_id: string } | null;
+  links: SkillLibraryLink[];
+  complete: boolean;
+};
+
+// An agent's config entry: a skill name, pinned to a version id or not.
+export type SkillRef = { skill: string; version_id?: string };
+
+// One skill a call resolved (TurnCall's call read, turncall#425).
+// `loaded` is null when the call's events have expired: not known.
+export type CallSkill = { skill: string; version: number; pinned: boolean; loaded: boolean | null };

@@ -189,11 +189,11 @@ it("opens on the judge the scenario actually names", () => {
 it("saves the chosen judge as a typed block, never a dotted path", async () => {
   openWith(null);
   fireEvent.change(screen.getByLabelText("Judge"), { target: { value: "openai" } });
-  fireEvent.change(screen.getByLabelText("Judge model"), { target: { value: "gpt-4o" } });
-  fireEvent.change(screen.getByLabelText("Judge temperature"), { target: { value: "0.2" } });
+  // gpt-5.4 reasons, so it takes no temperature and the form offers none.
+  fireEvent.change(screen.getByLabelText("Judge model"), { target: { value: "gpt-5.4" } });
   fireEvent.click(screen.getByText("Save"));
   await waitFor(() => expect(saved).toHaveBeenCalled());
-  expect(body().judge).toEqual({ provider: "openai", model: "gpt-4o", temperature: 0.2 });
+  expect(body().judge).toEqual({ provider: "openai", model: "gpt-5.4" });
 });
 
 it("sends an explicit null to go back to the platform default", async () => {
@@ -332,7 +332,7 @@ it("names the provider's own default model rather than inventing one", () => {
   openWith({ provider: "openai" });
   const field = screen.getByLabelText("Judge model") as HTMLSelectElement;
   expect(field.value).toBe("");
-  expect([...field.options].find((o) => o.value === "")?.textContent).toBe("gpt-4o-mini");
+  expect([...field.options].find((o) => o.value === "")?.textContent).toBe("gpt-5.4-mini");
 });
 
 it("offers the known models to pick from, and still takes a typed one", () => {
@@ -343,7 +343,7 @@ it("offers the known models to pick from, and still takes a typed one", () => {
   // which is what "Other…" is for.
   openWith({ provider: "openai" });
   const field = screen.getByLabelText("Judge model") as HTMLSelectElement;
-  expect([...field.options].map((o) => o.value)).toContain("gpt-4o-mini");
+  expect([...field.options].map((o) => o.value)).toContain("gpt-5.4");
 
   typeModel("some-model-we-never-heard-of");
   expect((screen.getByLabelText("Judge model") as HTMLInputElement).value).toBe(

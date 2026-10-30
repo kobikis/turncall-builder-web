@@ -33,8 +33,8 @@ export const PROVIDERS = [
   {
     id: "openai",
     label: "OpenAI",
-    defaultModel: "gpt-4o-mini",
-    models: ["gpt-4o-mini", "gpt-4o"],
+    defaultModel: "gpt-5.4-mini",
+    models: ["gpt-5.4-mini", "gpt-5.4"],
   },
   {
     id: "anthropic",

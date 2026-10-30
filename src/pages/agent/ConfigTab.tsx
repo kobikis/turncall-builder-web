@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Ambience } from "./Ambience";
+import { AgentSkills } from "./AgentSkills";
 import { Avatar } from "./Avatar";
 import { Backups } from "./Backups";
 import { PickControl, type Opt } from "./PickControl";
@@ -72,11 +73,6 @@ const STATUS_HINTS: Record<string, string> = {
   stopped: "the backend container is not running — calls to this agent's tools and events will fail until it's started",
 };
 
-// A model its vendor has deprecated still runs, so it stays pickable — named as
-// such, from the catalog's own `deprecated` list (builder-api#121).
-export const s2sModelOptions = (models: string[], deprecated: string[]): Opt[] =>
-  models.map((m) => (deprecated.includes(m) ? { value: m, label: `${m} (deprecated)` } : m));
-
 // Placeholder hints per cascade provider: TurnCall's own default where it has
 // one we pin (a blank field runs it), else the long-standing example.
 const STT_MODEL_HINTS: Record<string, string> = { xai: "grok-voice-transcribe-2.0" };
@@ -130,6 +126,8 @@ const LEADS: Partial<Record<SectionId, string>> = {
   prompt: "What the agent knows and how it behaves on every call.",
   models: "How the agent hears, thinks and speaks.",
   tools: "What the agent can do during a call.",
+  skills:
+    "Workspace skills the agent can load mid-call. It sees each one's name and when to use it, and loads its instructions and tools when it needs them.",
   "turn-taking": "When the caller's turn ends, when the call ends, and how much it may use.",
   guardrails: "What the agent will not discuss.",
   avatar: "A lip-synced face for browser calls.",
@@ -140,6 +138,7 @@ const TITLES: Partial<Record<SectionId, string>> = {
   prompt: "Prompt",
   models: "Speech and models",
   tools: "Tools and apps",
+  skills: "Skills",
   "turn-taking": "Turn-taking and limits",
   guardrails: "Guardrails",
   avatar: "Video avatar",
@@ -149,7 +148,7 @@ const TITLES: Partial<Record<SectionId, string>> = {
 // One section of the agent's configuration. The draft and its save live in
 // AgentPage; this edits the part of it the section owns.
 export default function ConfigTab({ section }: { section: SectionId }) {
-  const { agentId, data, draft: cfg, patch, setDraft: setCfg } = useAgent();
+  const { agentId, data, draft: cfg, patch, setDraft: setCfg, saveErrors } = useAgent();
   const { activeWorkspace } = useAuth();
   const editable = canEdit(activeWorkspace?.role); // viewers can view but not save
   const [providers, setProviders] = useState<Providers>(FALLBACK_PROVIDERS);
@@ -219,7 +218,7 @@ export default function ConfigTab({ section }: { section: SectionId }) {
   useEffect(() => {
     let ok = true;
     api(`/providers/s2s/${s2sProvider}/models`)
-      .then((r) => ok && setS2sModels(s2sModelOptions(r.data.models || [], r.data.deprecated || [])))
+      .then((r) => ok && setS2sModels(r.data.models || []))
       .catch(() => ok && setS2sModels([]));
     api(`/providers/s2s/${s2sProvider}/voices`)
       .then((r) => ok && setS2sVoices(r.data.voices || []))
@@ -313,14 +312,14 @@ export default function ConfigTab({ section }: { section: SectionId }) {
           label={asDelegate ? "Delegate model" : "Model"}
           value={cfg.llm?.model || ""}
           options={models}
-          placeholder={LLM_MODEL_HINTS[llmProvider] ?? "gpt-4o-mini"}
+          placeholder={LLM_MODEL_HINTS[llmProvider] ?? "gpt-5.4-mini"}
           onChange={(v) => patch((c) => (c.llm = { ...c.llm, model: v }))}
         />
       </div>
       {asDelegate && (
         <p className="hint" style={{ margin: "2px 0 0" }}>
           Runs the agent's tools; GPT-Live-1 does the talking. Optional: left as is, it is
-          OpenAI gpt-4o-mini. A blank model uses the provider's default.
+          OpenAI gpt-5.4-mini. A blank model uses the provider's default.
         </p>
       )}
     </>
@@ -371,6 +370,12 @@ export default function ConfigTab({ section }: { section: SectionId }) {
             <option value="s2s">speech-to-speech (single realtime model)</option>
           </select>
         </div>
+        {isS2S && Array.isArray(cfg.skills) && cfg.skills.length > 0 && (
+          <p className="callout warn">
+            This agent's skills ({cfg.skills.map((s: { skill: string }) => s.skill).join(", ")}) are not
+            loaded in speech-to-speech: TurnCall skips them on its calls. Switch back to cascade to use them.
+          </p>
+        )}
 
         {isS2S ? (
           <>
@@ -674,6 +679,24 @@ export default function ConfigTab({ section }: { section: SectionId }) {
           Custom tools are edited in <strong>Advanced (JSON)</strong>.
         </p>
       </>)}
+
+      {section === "skills" && (
+        <AgentSkills
+          skills={Array.isArray(cfg.skills) ? cfg.skills : []}
+          maxLoaded={typeof cfg.max_loaded_skills === "number" ? cfg.max_loaded_skills : undefined}
+          isS2S={isS2S}
+          editable={editable}
+          errors={saveErrors ?? []}
+          onSkills={(skills) =>
+            patch((c) => {
+              // TurnCall replaces the whole config on save, so no key is none.
+              if (skills.length) c.skills = skills;
+              else delete c.skills;
+            })
+          }
+          onMaxLoaded={(v) => setCfg((c: any) => withField(c, "max_loaded_skills", v))}
+        />
+      )}
 
       {section === "turn-taking" && (<>
         <TurnTaking cfg={cfg} isS2S={isS2S} editable={editable}

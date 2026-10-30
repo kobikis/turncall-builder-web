@@ -103,7 +103,7 @@ function TakeawayForm(props: {
       <div className="field">
         <label htmlFor="tk-model">Model override (optional)</label>
         <input id="tk-model" className="input" value={f.model} autoComplete="off" spellCheck={false}
-          onChange={(e) => setF({ ...f, model: e.target.value })} placeholder="gpt-4o-mini" />
+          onChange={(e) => setF({ ...f, model: e.target.value })} placeholder="gpt-5.4-mini" />
       </div>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <button className="btn btn-primary" onClick={submit} disabled={props.busy}>

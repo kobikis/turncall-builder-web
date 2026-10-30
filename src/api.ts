@@ -1,28 +1,47 @@
+// One field a refusal names (`tools[1].webhook_url`, `skills[0]`), as the
+// builder API passes TurnCall's 422 on (builder-api `field_errors`). Anything
+// else TurnCall said about it (`skill`, `tool`, ...) rides along.
+export type FieldError = { field: string; message: string; [k: string]: unknown };
+
 // `reason` and `numbers` are a refusal's machine-readable parts, when the body
 // has them (e.g. 409 `numbers_not_on_account`, builder-api#114); `message` is
-// still the sentence every other caller shows.
+// still the sentence every other caller shows. `errors` names each field a 422
+// refused, and `body` is the whole answer, for a refusal with more to say (a
+// 409 `skill_in_use` names the agents).
 export class ApiError extends Error {
   reason?: string;
   numbers?: string[];
+  errors?: FieldError[];
+  body?: unknown;
   constructor(
     message: string,
     public status: number,
-    extra?: { reason?: string; numbers?: string[] },
+    extra?: { reason?: string; numbers?: string[]; errors?: FieldError[]; body?: unknown },
   ) {
     super(message);
     this.reason = extra?.reason;
     this.numbers = extra?.numbers;
+    this.errors = extra?.errors;
+    this.body = extra?.body;
   }
 }
 
-const refusalParts = (body: unknown): { reason?: string; numbers?: string[] } => {
-  const b = (body ?? {}) as { reason?: unknown; numbers?: unknown };
+const isFieldError = (e: unknown): e is FieldError =>
+  typeof e === "object" && e !== null &&
+  typeof (e as FieldError).field === "string" && typeof (e as FieldError).message === "string";
+
+const refusalParts = (
+  body: unknown,
+): { reason?: string; numbers?: string[]; errors?: FieldError[]; body?: unknown } => {
+  const b = (body ?? {}) as { reason?: unknown; numbers?: unknown; errors?: unknown };
   return {
     reason: typeof b.reason === "string" ? b.reason : undefined,
     numbers:
       Array.isArray(b.numbers) && b.numbers.every((n) => typeof n === "string")
         ? (b.numbers as string[])
         : undefined,
+    errors: Array.isArray(b.errors) ? b.errors.filter(isFieldError) : undefined,
+    body: body ?? undefined,
   };
 };
 

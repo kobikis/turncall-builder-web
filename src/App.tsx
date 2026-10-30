@@ -19,9 +19,12 @@ import CampaignsTab from "./pages/agent/CampaignsTab";
 import EvalsTab from "./pages/agent/EvalsTab";
 import CodeTab from "./pages/agent/CodeTab";
 import GitHubSettings from "./pages/GitHubSettings";
-import Skills from "./pages/Skills";
+import BuilderSkills from "./pages/BuilderSkills";
 import Compliance from "./pages/Compliance";
 import Integrations from "./pages/Integrations";
+import Skills from "./pages/Skills";
+import NewSkill from "./pages/skills/NewSkill";
+import SkillView from "./pages/skills/SkillView";
 import PhoneNumbersList from "./pages/PhoneNumbersList";
 import AddPhoneNumber from "./pages/AddPhoneNumber";
 import EditPhoneNumber from "./pages/EditPhoneNumber";
@@ -127,12 +130,23 @@ export default function App() {
         </Route>
         {/* Per-user, not workspace-scoped: you can only connect your own. */}
         <Route path="integrations" element={<Integrations />} />
+        {/* A Workspace's skills: any member reads them, an editor writes. */}
+        <Route path="skills" element={<Skills />} />
+        <Route
+          path="skills/new"
+          element={
+            <RequireRole min="editor">
+              <NewSkill />
+            </RequireRole>
+          }
+        />
+        <Route path="skills/:name" element={<SkillView />} />
         <Route path="settings/github" element={<GitHubSettings />} />
         <Route
-          path="skills"
+          path="builder-skills"
           element={
             <RequireRole min="admin">
-              <Skills />
+              <BuilderSkills />
             </RequireRole>
           }
         />

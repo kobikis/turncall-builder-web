@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  skillsHint,
+  skillLoadedLabel,
   endedReasonLabel,
   endedReasonTone,
   offsetLabel,
@@ -113,4 +115,12 @@ describe("prettyJson", () => {
     expect(prettyJson("no json here")).toBe("no json here");
     expect(prettyJson(null)).toBe("—");
   });
+});
+
+it("a skill's load reads loaded, not loaded, or unknown when the events expired", () => {
+  expect(skillLoadedLabel(true)).toBe("Loaded");
+  expect(skillLoadedLabel(false)).toBe("Not loaded");
+  expect(skillLoadedLabel(null)).toBe("Unknown");
+  expect(skillsHint([{ loaded: true }, { loaded: false }])).toBe("1 of 2 loaded");
+  expect(skillsHint([{ loaded: true }, { loaded: null }])).toBe("2 · loads unknown");
 });

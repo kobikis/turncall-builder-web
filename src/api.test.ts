@@ -75,6 +75,20 @@ describe("api()", () => {
     });
   });
 
+  it("carries the fields a 422 names, and the whole refusal", async () => {
+    const body = {
+      detail: "Validation error",
+      reason: "validation_error",
+      errors: [{ field: "tools[1].webhook_url", message: "plain http is not allowed" }, "junk"],
+    };
+    stubFetch({ ok: false, status: 422, body });
+    await expect(api("/skills")).rejects.toMatchObject({
+      status: 422,
+      errors: [{ field: "tools[1].webhook_url", message: "plain http is not allowed" }],
+      body,
+    });
+  });
+
   it("turns a network failure into ApiError status 0", async () => {
     vi.stubGlobal(
       "fetch",

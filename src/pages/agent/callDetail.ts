@@ -39,6 +39,17 @@ export const endedReasonTone = (reason: string | null | undefined): "good" | "ba
 export const endedReasonLabel = (reason: string | null | undefined): string | null =>
   reason ? ENDED_REASONS[reason] ?? reason.replace(/_/g, " ") : null;
 
+/** Whether the call loaded a skill. `null` is not "no": the call's events
+ *  expired, and with them the record of what it loaded. */
+export const skillLoadedLabel = (loaded: boolean | null | undefined): string =>
+  loaded === true ? "Loaded" : loaded === false ? "Not loaded" : "Unknown";
+
+/** The fold's summary: how many it loaded, unless that can't be known. */
+export const skillsHint = (skills: { loaded: boolean | null }[]): string =>
+  skills.some((s) => s.loaded == null)
+    ? `${skills.length} · loads unknown`
+    : `${skills.filter((s) => s.loaded).length} of ${skills.length} loaded`;
+
 export const offsetSeconds = (
   at: string | null | undefined,
   startedAt: string | null | undefined

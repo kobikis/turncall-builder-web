@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom";
-import { api } from "../../api";
+import { api, ApiError, type FieldError } from "../../api";
 import { useAuth } from "../../auth";
 import { canEdit } from "../../roles";
 import Uid from "../../components/Uid";
@@ -37,6 +37,9 @@ export type AgentCtx = {
   save: () => Promise<boolean>;
   /** Set by the JSON editor while its text does not parse; blocks a save. */
   setJsonError: (e: string) => void;
+  /** The fields the last save's refusal named (`skills[1]`), for the section
+   *  that edits them to show on the entry. Empty after a save that landed. */
+  saveErrors: FieldError[];
 };
 
 export const useAgent = () => useOutletContext<AgentCtx>();
@@ -75,6 +78,7 @@ export default function AgentPage() {
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
   const [saveErr, setSaveErr] = useState("");
+  const [saveErrors, setSaveErrors] = useState<FieldError[]>([]);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -125,6 +129,7 @@ export default function AgentPage() {
     if (!data) return false;
     setMsg("");
     setSaveErr("");
+    setSaveErrors([]);
     if (jsonError) {
       setSaveErr(`Config is not valid JSON: ${jsonError}`);
       return false;
@@ -158,6 +163,7 @@ export default function AgentPage() {
       return true;
     } catch (e) {
       setSaveErr(e instanceof Error ? e.message : "Save failed.");
+      setSaveErrors(e instanceof ApiError ? e.errors ?? [] : []);
       return false;
     } finally {
       setSaving(false);
@@ -257,7 +263,7 @@ export default function AgentPage() {
         {/* Build lays out its own panes; every other tab is one scrolling page. */}
         <div className={active ? "wb-page" : "wb-build"}>
           <Outlet
-            context={{ agentId: id!, data, setBackend, draft, patch, setDraft, dirty, save, setJsonError } satisfies AgentCtx}
+            context={{ agentId: id!, data, setBackend, draft, patch, setDraft, dirty, save, setJsonError, saveErrors } satisfies AgentCtx}
           />
         </div>
       </VoiceCallProvider>
