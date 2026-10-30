@@ -195,3 +195,14 @@ describe("pipeline mode and skills", () => {
     expect(screen.queryByText(/skips them/)).toBeNull();
   });
 });
+
+it("links the Procedures section to the docs page", () => {
+  draft = { pipeline_mode: "cascade" };
+  render(<ConfigTab section="procedures" />);
+  const link = screen.getByRole("link", { name: /how procedures work/i });
+  expect(link.getAttribute("href")).toBe("https://docs.turncall.io/guides/procedures");
+  expect(link.getAttribute("target")).toBe("_blank");
+  cleanup();
+  render(<ConfigTab section="models" />);
+  expect(screen.queryByRole("link", { name: /how .* work/i })).toBeNull();
+});

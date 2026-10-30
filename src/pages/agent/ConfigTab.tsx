@@ -138,6 +138,11 @@ const LEADS: Partial<Record<SectionId, string>> = {
   advanced: "The whole configuration. Custom tools, voicemail and analysis are edited here.",
 };
 
+// A section's page on docs.turncall.io, linked under its lead.
+const DOCS: Partial<Record<SectionId, { href: string; label: string }>> = {
+  procedures: { href: "https://docs.turncall.io/guides/procedures", label: "How procedures work" },
+};
+
 const TITLES: Partial<Record<SectionId, string>> = {
   prompt: "Prompt",
   models: "Speech and models",
@@ -337,7 +342,14 @@ export default function ConfigTab({ section }: { section: SectionId }) {
   return (
     <section aria-labelledby="cfg-h" className="wb-section">
       <h2 id="cfg-h">{TITLES[section]}</h2>
-      {LEADS[section] && <p className="muted lead">{LEADS[section]}</p>}
+      {LEADS[section] && (
+        <p className="muted lead">
+          {LEADS[section]}
+          {DOCS[section] && (
+            <> <a href={DOCS[section]!.href} target="_blank" rel="noreferrer">{DOCS[section]!.label} ↗</a></>
+          )}
+        </p>
+      )}
       {statusHint && <p className="callout warn">{statusHint}</p>}
 
       {section === "prompt" && (<>
