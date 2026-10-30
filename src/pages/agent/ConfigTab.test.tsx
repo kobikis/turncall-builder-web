@@ -179,3 +179,20 @@ describe("cascade with xai", () => {
     expect(screen.queryByText(/xAI accepts/)).toBeNull();
   });
 });
+
+describe("pipeline mode and skills", () => {
+  it("says the agent's skills are skipped while it is speech-to-speech", () => {
+    draft = { ...draft, skills: [{ skill: "verify_identity" }, { skill: "explain_bill" }] };
+    show();
+    expect(screen.getByText(/verify_identity, explain_bill/).textContent).toMatch(/skips them/);
+  });
+
+  it("says nothing without skills, or on cascade", () => {
+    show();
+    expect(screen.queryByText(/skips them/)).toBeNull();
+    cleanup();
+    draft = { pipeline_mode: "cascade", skills: [{ skill: "verify_identity" }] };
+    show();
+    expect(screen.queryByText(/skips them/)).toBeNull();
+  });
+});

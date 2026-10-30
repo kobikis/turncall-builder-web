@@ -375,6 +375,12 @@ export default function ConfigTab({ section }: { section: SectionId }) {
             <option value="s2s">speech-to-speech (single realtime model)</option>
           </select>
         </div>
+        {isS2S && Array.isArray(cfg.skills) && cfg.skills.length > 0 && (
+          <p className="callout warn">
+            This agent's skills ({cfg.skills.map((s: { skill: string }) => s.skill).join(", ")}) are not
+            loaded in speech-to-speech: TurnCall skips them on its calls. Switch back to cascade to use them.
+          </p>
+        )}
 
         {isS2S ? (
           <>
