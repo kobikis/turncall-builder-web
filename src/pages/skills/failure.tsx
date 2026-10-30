@@ -1,9 +1,9 @@
-// A refused write, as a Capability page keeps it: the sentence, the fields it
+// A refused write, as a skill page keeps it: the sentence, the fields it
 // names (shown on those fields by the form), and whatever else the refusal
-// carried (a delete's 409 names the agents using the Capability).
+// carried (a delete's 409 names the agents using the skill).
 import { ApiError, type FieldError } from "../../api";
 import { errMsg } from "../../errors";
-import { placed } from "./CapabilityForm";
+import { placed } from "./SkillForm";
 
 export type Failure = { message: string; errors: FieldError[]; reason?: string; body?: unknown };
 

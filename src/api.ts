@@ -7,7 +7,7 @@ export type FieldError = { field: string; message: string; [k: string]: unknown 
 // has them (e.g. 409 `numbers_not_on_account`, builder-api#114); `message` is
 // still the sentence every other caller shows. `errors` names each field a 422
 // refused, and `body` is the whole answer, for a refusal with more to say (a
-// 409 `capability_in_use` names the agents).
+// 409 `skill_in_use` names the agents).
 export class ApiError extends Error {
   reason?: string;
   numbers?: string[];

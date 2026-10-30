@@ -1,4 +1,4 @@
-// A Capability version's content: when to use it, its instructions and its
+// A skill version's content: when to use it, its instructions and its
 // tools. Editable for a draft and an editor; the same fields, disabled, show a
 // published or archived version and a viewer what it says.
 import type { ReactNode } from "react";
@@ -60,7 +60,7 @@ function Field({ id, label, hint, messages, children }: {
 const invalid = (messages: string[], id: string) =>
   messages.length ? { "aria-invalid": true, "aria-describedby": `${id}-error` } : {};
 
-export function CapabilityForm({ value, withName = false, editable, errors, onChange }: Props) {
+export function SkillForm({ value, withName = false, editable, errors, onChange }: Props) {
   const set = (patch: Partial<Draft>) => onChange({ ...value, ...patch });
   const setTool = (i: number, patch: Partial<ToolDraft>) =>
     set({ tools: value.tools.map((t, n) => (n === i ? { ...t, ...patch } : t)) });

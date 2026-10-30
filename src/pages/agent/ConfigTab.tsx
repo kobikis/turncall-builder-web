@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Ambience } from "./Ambience";
-import { AgentCapabilities } from "./AgentCapabilities";
+import { AgentSkills } from "./AgentSkills";
 import { Avatar } from "./Avatar";
 import { Backups } from "./Backups";
 import { PickControl, type Opt } from "./PickControl";
@@ -680,7 +680,7 @@ export default function ConfigTab({ section }: { section: SectionId }) {
       </>)}
 
       {section === "skills" && (
-        <AgentCapabilities
+        <AgentSkills
           skills={Array.isArray(cfg.skills) ? cfg.skills : []}
           maxLoaded={typeof cfg.max_loaded_skills === "number" ? cfg.max_loaded_skills : undefined}
           isS2S={isS2S}

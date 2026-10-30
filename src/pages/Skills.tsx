@@ -1,244 +1,123 @@
+// The Workspace's skills (builder-api ADR-0029): what its agents can load
+// mid-call — instructions and webhook tools, written once, versioned, and shared
+// by every agent that lists them. TurnCall calls them skills, and so does the
+// Console; the Builder's own guidance is "Builder skills" (/builder-skills).
 import { useEffect, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { api } from "../api";
-
-// The workspace's own Builder skills (ADR-0015). A skill teaches the builder how
-// to build a kind of agent — it is guidance, not configuration: it only loads
-// when the model judges it applies, so it must not be used to pin a default.
-
-type Skill = { name: string; description: string; body: string; updated_at: string };
-
-const BLANK = { name: "", description: "", body: "" };
+import { useAuth } from "../auth";
+import { canEdit } from "../roles";
+import { errMsg } from "../errors";
+import SkeletonRows from "../components/SkeletonRows";
+import type { ApiResponse, SkillLibrary, SkillList, SkillSummary } from "../types";
 
 export default function Skills() {
-  const [skills, setSkills] = useState<Skill[]>([]);
-  const [reserved, setReserved] = useState<string[]>([]);
-  const [form, setForm] = useState(BLANK);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { activeWorkspace } = useAuth();
+  const editable = canEdit(activeWorkspace?.role);
+  const location = useLocation();
+  const [items, setItems] = useState<SkillSummary[] | null>(null); // null = loading
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [open, setOpen] = useState(false); // the add/edit dialog
-
-  const load = () =>
-    api("/skills").then((r) => {
-      setSkills(r.data.skills);
-      setReserved(r.data.reserved);
-    });
+  const notice = (location.state as { notice?: string } | null)?.notice ?? "";
 
   useEffect(() => {
-    void load();
+    api<ApiResponse<SkillList>>("/skills")
+      .then((r) => setItems(r.data.skills))
+      .catch((e) => setError(errMsg(e, "Could not load skills.")));
   }, []);
-
-  const run = async (fn: () => Promise<void>) => {
-    setBusy(true);
-    setError("");
-    setNotice("");
-    try {
-      await fn();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const save = () =>
-    run(async () => {
-      await api(`/skills/${encodeURIComponent(form.name.trim())}`, {
-        method: "PUT",
-        body: JSON.stringify({ description: form.description, body: form.body }),
-      });
-      await load();
-      setNotice(
-        `Saved. It applies from the next message of every conversation, including ones already open.`
-      );
-      setForm(BLANK);
-      setEditing(null);
-      setOpen(false);
-    });
-
-  const edit = (s: Skill) => {
-    setForm({ name: s.name, description: s.description, body: s.body });
-    setEditing(s.name);
-    setError("");
-    setNotice("");
-  };
-
-  const remove = (name: string) =>
-    run(async () => {
-      await api(`/skills/${encodeURIComponent(name)}`, { method: "DELETE" });
-      await load();
-      if (editing === name) {
-        setForm(BLANK);
-        setEditing(null);
-      }
-      setNotice(`Removed ${name}.`);
-    });
-
-  const complete = form.name.trim() && form.description.trim() && form.body.trim();
-  const close = () => {
-    setOpen(false);
-    setForm(BLANK);
-    setEditing(null);
-    setError("");
-  };
 
   return (
     <div>
       <div className="page-head">
         <div>
-          <h2>Builder skills</h2>
-          <p>Guidance the builder reads when the agent it is building matches a builder skill's description.</p>
+          <h2>Skills</h2>
+          <p>
+            What this workspace's agents can load mid-call: instructions and tools, written once and
+            shared. An agent sees each one's name and when to use it, and loads it when it needs it.
+          </p>
         </div>
-        <button
-          className="btn btn-primary"
-          onClick={() => {
-            setForm(BLANK);
-            setEditing(null);
-            setNotice("");
-            setOpen(true);
-          }}
-        >
-          + New builder skill
-        </button>
+        {editable && (
+          <Link to="/skills/new" className="btn btn-primary">+ New skill</Link>
+        )}
       </div>
 
-      {notice && !open && <div className="callout info" role="status">{notice}</div>}
-      {error && !open && <p role="alert" className="error-text">{error}</p>}
+      {notice && <div className="callout info" role="status">{notice}</div>}
+      {error && <p role="alert" className="error-text">{error}</p>}
+      <LibraryLinks editable={editable} />
 
-      <table className="list">
+      <table className="list" aria-busy={items === null}>
         <thead>
-          <tr>
-            <th>Name</th>
-            <th>When the builder uses it</th>
-            <th></th>
-          </tr>
+          <tr><th>Name</th><th>When to use it</th><th>Live</th><th>Draft</th></tr>
         </thead>
         <tbody>
-          {skills.map((s) => (
-            <tr key={s.name}>
-              <td className="num" style={{ fontWeight: 500, whiteSpace: "nowrap" }}>
-                <button className="link-button" onClick={() => { edit(s); setOpen(true); }}>
-                  {s.name}
-                </button>
+          {items === null && !error && <SkeletonRows columns={4} />}
+          {items?.map((c) => (
+            <tr key={c.name}>
+              <td className="mono" style={{ whiteSpace: "nowrap" }}>
+                <Link to={`/skills/${encodeURIComponent(c.name)}`}>{c.name}</Link>
               </td>
-              <td className="hint">{s.description}</td>
-              <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                <button
-                  className="btn"
-                  style={{ padding: "3px 10px", marginRight: 6 }}
-                  disabled={busy}
-                  onClick={() => { edit(s); setOpen(true); }}
-                >
-                  edit
-                </button>
-                <button
-                  className="btn btn-danger"
-                  style={{ padding: "3px 10px" }}
-                  disabled={busy}
-                  onClick={() => remove(s.name)}
-                >
-                  delete
-                </button>
+              <td className="hint">{c.description}</td>
+              <td className="num nowrap">
+                {c.live ? `v${c.live.version}` : <span className="muted">Not published</span>}
+              </td>
+              <td className="nowrap">
+                {c.draft && <span className="badge degraded">Draft v{c.draft.version}</span>}
               </td>
             </tr>
           ))}
-          {skills.length === 0 && (
+          {items?.length === 0 && (
             <tr>
-              <td colSpan={3} className="muted" style={{ padding: 16 }}>
-                No builder skills yet. The built-in builder skills still apply.
+              <td colSpan={4} className="muted" style={{ padding: 16 }}>
+                No skills yet.{editable ? " Create one, publish it, then add it to an agent on its Build page." : ""}
               </td>
             </tr>
           )}
         </tbody>
       </table>
-      <p className="hint" style={{ marginTop: 10 }}>
-        Built-in builder skills: {reserved.join(", ") || "—"}. Their names are taken.
-      </p>
+    </div>
+  );
+}
 
-      {open && (
-        <div className="modal-backdrop" onClick={() => !busy && close()}>
-          <div
-            className="modal modal-wide"
-            role="dialog"
-            aria-modal="true"
-            aria-label={editing ? `Edit ${editing}` : "New builder skill"}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-head">
-              <div className="title">
-                <div className="name">{editing ? `Edit ${editing}` : "New builder skill"}</div>
-                <div className="roles">
-                  Teaches the builder how to decide, not what to pick — it is read only
-                  when it looks relevant, so it is the wrong place for "always use this voice".
-                </div>
-              </div>
-              <button type="button" className="modal-close" aria-label="Close" onClick={close}>
-                ×
-              </button>
-            </div>
+// Every agent's project is linked to the library so it can resolve the
+// Workspace's skills; a link that failed leaves that agent without them,
+// silently, unless it is shown. Best-effort: an unreadable report shows nothing.
+function LibraryLinks({ editable }: { editable: boolean }) {
+  const [report, setReport] = useState<SkillLibrary | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
-            <div className="field">
-              <label htmlFor="sk-name">Name</label>
-              <input
-                id="sk-name"
-                className="input"
-                placeholder="restaurant-reservations"
-                value={form.name}
-                disabled={busy || editing !== null}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              />
-              <p className="hint" style={{ margin: "4px 0 0" }}>
-                Lowercase words joined by hyphens. Taken by built-in builder skills:{" "}
-                {reserved.join(", ") || "—"}.
-              </p>
-            </div>
+  useEffect(() => {
+    api<ApiResponse<SkillLibrary>>("/skill-library")
+      .then((r) => setReport(r.data))
+      .catch(() => {});
+  }, []);
 
-            <div className="field">
-              <label htmlFor="sk-when">When should the builder use this?</label>
-              <textarea
-                id="sk-when"
-                className="input"
-                rows={2}
-                placeholder="Use when building an agent that takes table bookings — covers party size, seating preferences, waitlists and no-shows."
-                value={form.description}
-                disabled={busy}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              />
-              <p className="hint" style={{ margin: "4px 0 0" }}>
-                The one part the builder always sees — a vague line means the builder skill is never opened.
-              </p>
-            </div>
+  if (!report?.library || report.complete) return null;
+  const unlinked = report.links.filter((l) => l.state !== "linked");
 
-            <div className="field">
-              <label htmlFor="sk-body">Instructions</label>
-              <textarea
-                id="sk-body"
-                className="input"
-                rows={12}
-                placeholder={"# Taking a booking\n\nAsk for covers before time — the time you can offer depends on it.\nNever read options as a numbered list; the caller cannot skim."}
-                value={form.body}
-                disabled={busy}
-                onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
-              />
-              <p className="hint" style={{ margin: "4px 0 0" }}>
-                Markdown. Write it as instructions to the builder.
-              </p>
-            </div>
+  async function retry() {
+    setBusy(true);
+    setError("");
+    try {
+      const r = await api<ApiResponse<SkillLibrary>>("/skill-library/links", { method: "POST" });
+      setReport(r.data);
+    } catch (e) {
+      setError(errMsg(e, "Could not link them."));
+    } finally {
+      setBusy(false);
+    }
+  }
 
-            {error && <p role="alert" className="error-text">{error}</p>}
-
-            <div className="modal-actions">
-              <button type="button" className="btn" disabled={busy} onClick={close}>
-                Cancel
-              </button>
-              <button className="btn btn-primary" disabled={busy || !complete} onClick={save}>
-                {editing ? `Save ${editing}` : "Add builder skill"}
-              </button>
-            </div>
-          </div>
-        </div>
+  return (
+    <div className="callout warn" role="status">
+      {unlinked.length || "Some"} {unlinked.length === 1 ? "agent is" : "agents are"} not linked to the
+      skill library yet, so {unlinked.length === 1 ? "it" : "they"} can't load skills
+      {unlinked.length > 0 && <>: {unlinked.map((l) => l.name || l.project_id).join(", ")}</>}.
+      {editable && (
+        <button type="button" className="btn" style={{ marginLeft: 8 }} disabled={busy} onClick={() => void retry()}>
+          {busy ? "Linking…" : "Retry"}
+        </button>
       )}
+      {error && <p className="error-text">{error}</p>}
     </div>
   );
 }

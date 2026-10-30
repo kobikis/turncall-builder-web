@@ -8,8 +8,8 @@ import RecordingTimeline from "./RecordingTimeline";
 import LatencySection from "./LatencySection";
 import TranscriptView from "./TranscriptView";
 import {
-  capabilitiesHint,
-  capabilityLoadedLabel,
+  skillsHint,
+  skillLoadedLabel,
   ToolInvocation,
   TranscriptEntry,
   endedReasonLabel,
@@ -45,7 +45,7 @@ export default function CallDrawer({ agentId, call }: { agentId: string; call: C
   const analysis = call.analysis;
   const takeaways = analysis?.takeaways as Record<string, any> | undefined;
   const latency = call.latency_summary;
-  const capabilities = call.skills ?? [];
+  const skills = call.skills ?? [];
 
   return (
     <div className="call-drawer">
@@ -89,16 +89,16 @@ export default function CallDrawer({ agentId, call }: { agentId: string; call: C
         <SaveAsScenario agentId={agentId} callId={call.id} />
       </Section>
 
-      {capabilities.length > 0 && (
-        // What the call could load and what it did: a Capability published
+      {skills.length > 0 && (
+        // What the call could load and what it did: a skill published
         // since is not what this call ran, so its version is named.
-        <Section id="call.capabilities" title="Skills" hint={capabilitiesHint(capabilities)}>
+        <Section id="call.skills" title="Skills" hint={skillsHint(skills)}>
           <table className="list">
             <thead>
               <tr><th>Skill</th><th>Version</th><th>Loaded</th></tr>
             </thead>
             <tbody>
-              {capabilities.map((c) => (
+              {skills.map((c) => (
                 <tr key={`${c.skill}:${c.version}`} aria-label={`Skill ${c.skill}`}>
                   <td className="mono">
                     <Link to={`/skills/${encodeURIComponent(c.skill)}`}>{c.skill}</Link>
@@ -110,7 +110,7 @@ export default function CallDrawer({ agentId, call }: { agentId: string; call: C
                   <td
                     title={c.loaded == null ? "This call's events have expired, so whether it loaded is not known." : undefined}
                   >
-                    <span className={`badge ${c.loaded ? "running" : "stopped"}`}>{capabilityLoadedLabel(c.loaded)}</span>
+                    <span className={`badge ${c.loaded ? "running" : "stopped"}`}>{skillLoadedLabel(c.loaded)}</span>
                   </td>
                 </tr>
               ))}

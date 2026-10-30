@@ -31,7 +31,7 @@ const ICONS = {
   </>),
   // Stacked layers (Lucide layers): versioned pieces an agent stacks on itself
   // mid-call. Not Builder skills' scroll — those are the Builder's own guidance.
-  capabilities: icon(<>
+  skills: icon(<>
     <path d="m12 2 9 5-9 5-9-5Z" />
     <path d="m3 12 9 5 9-5M3 17l9 5 9-5" />
   </>, 24),
@@ -41,7 +41,7 @@ const ICONS = {
   </>),
   // A scroll (Lucide scroll-text): the icon Claude gives Skills, where the
   // SKILL.md format comes from — written instructions the model reads.
-  skills: icon(<>
+  builderSkills: icon(<>
     <path d="M15 12h-5M15 8h-5M19 17V5a2 2 0 0 0-2-2H4" />
     <path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3" />
   </>, 24),
@@ -76,7 +76,7 @@ export default function Layout() {
         <RailLink to="/agents" label="Agents">{ICONS.agents}</RailLink>
         <RailLink to="/phone-numbers" label="Phone numbers">{ICONS.phone}</RailLink>
         <RailLink to="/integrations" label="Integrations">{ICONS.integrations}</RailLink>
-        <RailLink to="/skills" label="Skills">{ICONS.capabilities}</RailLink>
+        <RailLink to="/skills" label="Skills">{ICONS.skills}</RailLink>
         {isAdmin(activeWorkspace?.role) && (
           // Members is admin-only — hidden for non-admins (the route is gated too).
           <RailLink to="/members" label="Members">{ICONS.members}</RailLink>
@@ -84,7 +84,7 @@ export default function Layout() {
         {isAdmin(activeWorkspace?.role) && (
           // A builder skill is prompt text in the builder that holds the deployment's
           // LLM key — authoring one is an admin's, like membership.
-          <RailLink to="/builder-skills" label="Builder skills">{ICONS.skills}</RailLink>
+          <RailLink to="/builder-skills" label="Builder skills">{ICONS.builderSkills}</RailLink>
         )}
         {isAdmin(activeWorkspace?.role) && (
           // Even reading it is an admin's: it lists every agent's state.

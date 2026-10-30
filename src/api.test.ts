@@ -82,7 +82,7 @@ describe("api()", () => {
       errors: [{ field: "tools[1].webhook_url", message: "plain http is not allowed" }, "junk"],
     };
     stubFetch({ ok: false, status: 422, body });
-    await expect(api("/capabilities")).rejects.toMatchObject({
+    await expect(api("/skills")).rejects.toMatchObject({
       status: 422,
       errors: [{ field: "tools[1].webhook_url", message: "plain http is not allowed" }],
       body,

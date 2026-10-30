@@ -37,18 +37,18 @@ vi.mock("../../api", async (orig) => {
       }
       if (path === "/agents/a1")
         return { data: { agent_id: "a1", config: { name: "Ann", pipeline_mode: "cascade", ...stored }, backend: null, tool_statuses: null, tool_signing_secret: null } };
-      if (path === "/capabilities")
+      if (path === "/skills")
         return {
           data: {
             library: { project_id: "lib" },
-            capabilities: [
+            skills: [
               { name: "draft_only", description: "never published", live: null, draft: { id: "d1", version: 1 }, latest: {}, versions: 1 },
               { name: "explain_bill", description: "Use when the caller asks about a bill.", live: { id: "explain_bill-v1", version: 1 }, draft: null, latest: {}, versions: 1 },
               { name: "verify_caller", description: "Use before sharing account details.", live: { id: "verify_caller-v2", version: 2 }, draft: { id: "verify_caller-v3", version: 3 }, latest: {}, versions: 3 },
             ],
           },
         };
-      const m = /^\/capabilities\/([a-z_]+)$/.exec(path);
+      const m = /^\/skills\/([a-z_]+)$/.exec(path);
       if (m) return { data: { name: m[1], live: null, versions: VERSIONS[m[1]] } };
       throw new Error("unavailable");
     }),

@@ -1,5 +1,5 @@
-// The Workspace Capabilities this agent may load mid-call (builder-api #133):
-// `skills` in its config, each a Capability name and, when pinned, one version
+// The Workspace skills this agent may load mid-call (builder-api #133):
+// `skills` in its config, each a skill name and, when pinned, one version
 // id, and `max_loaded_skills`, how many it holds at once. Saved with the rest of
 // the config by the page's Save; TurnCall checks every entry then, and its
 // refusal of one is shown on that entry.
@@ -9,44 +9,44 @@ import { api, type FieldError } from "../../api";
 import { errMsg } from "../../errors";
 import type {
   ApiResponse,
-  CapabilityDetail,
-  CapabilityList,
-  CapabilityRef,
-  CapabilitySummary,
-  CapabilityVersion,
+  SkillDetail,
+  SkillList,
+  SkillRef,
+  SkillSummary,
+  SkillVersion,
 } from "../../types";
-import { errorsAt, errorsUnder } from "../capabilities/fieldErrors";
+import { errorsAt, errorsUnder } from "../skills/fieldErrors";
 import { NumberField } from "./SettingFields";
 
 // TurnCall's default when the agent sets none.
 export const DEFAULT_MAX_LOADED = 3;
 
 type Props = {
-  skills: CapabilityRef[];
+  skills: SkillRef[];
   maxLoaded: number | undefined;
   isS2S: boolean;
   editable: boolean;
   /** The last save's refused fields; `skills[i]` is shown on entry i. */
   errors: FieldError[];
-  onSkills: (next: CapabilityRef[]) => void;
+  onSkills: (next: SkillRef[]) => void;
   onMaxLoaded: (next: number | "") => void;
 };
 
 // What a pin can name: a version calls have run or run now. Never a draft —
 // TurnCall refuses a pin on one, since it never runs.
-const pinnable = (v: CapabilityVersion) => v.state === "published" || v.state === "archived";
+const pinnable = (v: SkillVersion) => v.state === "published" || v.state === "archived";
 
-export function AgentCapabilities({ skills, maxLoaded, isS2S, editable, errors, onSkills, onMaxLoaded }: Props) {
-  const [published, setPublished] = useState<CapabilitySummary[] | null>(null);
+export function AgentSkills({ skills, maxLoaded, isS2S, editable, errors, onSkills, onMaxLoaded }: Props) {
+  const [published, setPublished] = useState<SkillSummary[] | null>(null);
   const [listError, setListError] = useState("");
-  // Each listed Capability's pinnable versions, newest first; a string is why
+  // Each listed skill's pinnable versions, newest first; a string is why
   // they could not be read.
-  const [versions, setVersions] = useState<Record<string, CapabilityVersion[] | string>>({});
+  const [versions, setVersions] = useState<Record<string, SkillVersion[] | string>>({});
   const [adding, setAdding] = useState("");
 
   useEffect(() => {
-    api<ApiResponse<CapabilityList>>("/capabilities")
-      .then((r) => setPublished(r.data.capabilities.filter((c) => c.live)))
+    api<ApiResponse<SkillList>>("/skills")
+      .then((r) => setPublished(r.data.skills.filter((c) => c.live)))
       .catch((e) => setListError(errMsg(e, "Could not load the workspace's skills.")));
   }, []);
 
@@ -55,7 +55,7 @@ export function AgentCapabilities({ skills, maxLoaded, isS2S, editable, errors, 
     let live = true;
     for (const name of names ? names.split("\n") : []) {
       if (versions[name] !== undefined) continue;
-      api<ApiResponse<CapabilityDetail>>(`/capabilities/${encodeURIComponent(name)}`)
+      api<ApiResponse<SkillDetail>>(`/skills/${encodeURIComponent(name)}`)
         .then((r) => live && setVersions((vs) => ({ ...vs, [name]: r.data.versions.filter(pinnable) })))
         .catch((e) => live && setVersions((vs) => ({ ...vs, [name]: errMsg(e, "Could not load its versions.") })));
     }

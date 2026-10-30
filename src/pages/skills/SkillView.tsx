@@ -1,9 +1,9 @@
-// One Capability: its versions, the one open (a draft to edit, or a published
+// One skill: its versions, the one open (a draft to edit, or a published
 // or archived one to read), and what can be done with it.
 //
 // A version's life is TurnCall's: only a draft is edited, publishing it
 // archives the live one, and rolling back makes an archived one live again —
-// for every agent that follows the Capability, on its next call.
+// for every agent that follows the skill, on its next call.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../../api";
@@ -11,31 +11,31 @@ import { useAuth } from "../../auth";
 import { canEdit } from "../../roles";
 import { fmtTime } from "../../dates";
 import { errMsg } from "../../errors";
-import type { ApiResponse, CapabilityDetail, CapabilityState, CapabilityVersion } from "../../types";
-import { CapabilityForm } from "./CapabilityForm";
+import type { ApiResponse, SkillDetail, SkillState, SkillVersion } from "../../types";
+import { SkillForm } from "./SkillForm";
 import { fromVersion, sameDraft, toBody, type Draft } from "./draft";
 import { FailureNote, failureOf, type Failure } from "./failure";
 import { InUseNote, isInUse, UsedBy } from "./UsedBy";
 
-export const STATE_LABELS: Record<CapabilityState, string> = {
+export const STATE_LABELS: Record<SkillState, string> = {
   published: "Live",
   draft: "Draft",
   archived: "Archived",
 };
-export const STATE_BADGES: Record<CapabilityState, string> = {
+export const STATE_BADGES: Record<SkillState, string> = {
   published: "running",
   draft: "degraded",
   archived: "stopped",
 };
 
-const bodyOf = (v: CapabilityVersion) => ({
+const bodyOf = (v: SkillVersion) => ({
   name: v.name,
   description: v.description,
   instructions: v.instructions,
   tools: v.tools,
 });
 
-export default function CapabilityView() {
+export default function SkillView() {
   const { name = "" } = useParams();
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
@@ -43,7 +43,7 @@ export default function CapabilityView() {
   const { activeWorkspace } = useAuth();
   const editable = canEdit(activeWorkspace?.role);
 
-  const [detail, setDetail] = useState<CapabilityDetail | null>(null);
+  const [detail, setDetail] = useState<SkillDetail | null>(null);
   const [loadError, setLoadError] = useState("");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
@@ -54,7 +54,7 @@ export default function CapabilityView() {
 
   const load = useCallback(
     () =>
-      api<ApiResponse<CapabilityDetail>>(`/capabilities/${encodeURIComponent(name)}`)
+      api<ApiResponse<SkillDetail>>(`/skills/${encodeURIComponent(name)}`)
         .then((r) => {
           setDetail(r.data);
           return r.data;
@@ -102,46 +102,46 @@ export default function CapabilityView() {
   const dirty = selected?.state === "draft" && !sameDraft(draft, saved);
 
   // A draft's edits, sent; throws the form's own refusal when they can't be.
-  async function putDraft(v: CapabilityVersion): Promise<void> {
+  async function putDraft(v: SkillVersion): Promise<void> {
     if (!draft) return;
     const out = toBody(draft);
     if ("errors" in out) {
       throw new ApiError("Some fields can't be sent as they are.", 0, { errors: out.errors });
     }
     const { description, instructions, tools } = out.body;
-    await api(`/capability-versions/${v.id}`, {
+    await api(`/skill-versions/${v.id}`, {
       method: "PUT",
       body: JSON.stringify({ description, instructions, tools }),
     });
   }
 
-  const saveDraft = (v: CapabilityVersion) =>
+  const saveDraft = (v: SkillVersion) =>
     run("Could not save the draft.", async () => {
       await putDraft(v);
       await load();
       return `Saved v${v.version}. It is still a draft: no call runs it until it is published.`;
     });
 
-  const publish = (v: CapabilityVersion) =>
+  const publish = (v: SkillVersion) =>
     run("Could not publish.", async () => {
       if (dirty) await putDraft(v);
-      await api(`/capability-versions/${v.id}/publish`, { method: "POST" });
+      await api(`/skill-versions/${v.id}/publish`, { method: "POST" });
       await load();
       open(v.id);
       return `Published v${v.version}. Every agent following ${name} gets it on its next call.`;
     });
 
-  const rollback = (v: CapabilityVersion) =>
+  const rollback = (v: SkillVersion) =>
     run("Could not roll back.", async () => {
-      await api(`/capability-versions/${v.id}/rollback`, { method: "POST" });
+      await api(`/skill-versions/${v.id}/rollback`, { method: "POST" });
       await load();
       open(v.id);
       return `v${v.version} is live again, for every agent following ${name}.`;
     });
 
-  const fromLive = (live: CapabilityVersion) =>
+  const fromLive = (live: SkillVersion) =>
     run("Could not start a new version.", async () => {
-      const r = await api<ApiResponse<CapabilityVersion>>("/capabilities", {
+      const r = await api<ApiResponse<SkillVersion>>("/skills", {
         method: "POST",
         body: JSON.stringify(bodyOf(live)),
       });
@@ -150,12 +150,12 @@ export default function CapabilityView() {
       return `Started v${r.data.version} from v${live.version}. Edit it, then publish.`;
     });
 
-  async function remove(v: CapabilityVersion) {
+  async function remove(v: SkillVersion) {
     const last = versions.length === 1;
     if (!confirm(last ? `Delete ${name}? It is its only version, so the skill goes too.` : `Delete v${v.version} of ${name}?`))
       return;
     await run("Could not delete the version.", async () => {
-      await api(`/capability-versions/${v.id}`, { method: "DELETE" });
+      await api(`/skill-versions/${v.id}`, { method: "DELETE" });
       if (last) {
         navigate("/skills", { state: { notice: `Deleted ${name}.` } });
         return "";
@@ -261,7 +261,7 @@ export default function CapabilityView() {
           <p key={w.code + w.message} className="callout warn">{w.message}</p>
         ))}
         {failure && !isInUse(failure) && <FailureNote failure={failure} toolCount={draft.tools.length} />}
-        <CapabilityForm value={draft} editable={editable && isDraft && !busy} errors={failure?.errors ?? []}
+        <SkillForm value={draft} editable={editable && isDraft && !busy} errors={failure?.errors ?? []}
           onChange={setDraft} />
         {editable && isDraft && (
           <div className="modal-actions">

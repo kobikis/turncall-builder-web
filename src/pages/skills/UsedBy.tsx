@@ -1,17 +1,17 @@
-// Which agents a Capability reaches (builder-api #134): every draft or
+// Which agents a skill reaches (builder-api #134): every draft or
 // published agent version listing it, across the Workspace's projects, with
 // the version each resolves to now and whether it is pinned. A change to the
-// Capability reaches exactly the ones that follow the live version.
+// skill reaches exactly the ones that follow the live version.
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../api";
 import { errMsg } from "../../errors";
-import type { ApiResponse, CapabilityAgent, CapabilityUse } from "../../types";
+import type { ApiResponse, SkillAgent, SkillUse } from "../../types";
 import type { Failure } from "./failure";
 
 /** The Console agent, linked; a project the Workspace doesn't know as one of
  *  its agents is named by its project. */
-export function AgentName({ agent }: { agent: CapabilityAgent }) {
+export function AgentName({ agent }: { agent: SkillAgent }) {
   if (agent.known && agent.agent_id)
     return <Link to={`/agents/${agent.agent_id}`}>{agent.name || agent.agent_id}</Link>;
   return (
@@ -21,19 +21,19 @@ export function AgentName({ agent }: { agent: CapabilityAgent }) {
   );
 }
 
-const agentVersion = (a: CapabilityAgent) =>
+const agentVersion = (a: SkillAgent) =>
   [a.agent_version != null && `v${a.agent_version}`, a.agent_state].filter(Boolean).join(" · ") || "—";
 
-/** `refresh` changes whenever the Capability's versions do: a publish or a
+/** `refresh` changes whenever the skill's versions do: a publish or a
  *  rollback moves what every following agent resolves to. */
 export function UsedBy({ name, refresh }: { name: string; refresh: unknown }) {
-  const [uses, setUses] = useState<CapabilityUse[] | null>(null);
+  const [uses, setUses] = useState<SkillUse[] | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let live = true;
     setError("");
-    api<ApiResponse<CapabilityUse[]>>(`/capabilities/${encodeURIComponent(name)}/agents`)
+    api<ApiResponse<SkillUse[]>>(`/skills/${encodeURIComponent(name)}/agents`)
       .then((r) => live && setUses(r.data))
       .catch((e) => live && setError(errMsg(e, "Could not load the agents using it.")));
     return () => {
@@ -70,13 +70,13 @@ export function UsedBy({ name, refresh }: { name: string; refresh: unknown }) {
   );
 }
 
-const inUseAgents = (failure: Failure): CapabilityAgent[] | null => {
-  if (failure.reason !== "capability_in_use") return null;
+const inUseAgents = (failure: Failure): SkillAgent[] | null => {
+  if (failure.reason !== "skill_in_use") return null;
   const agents = (failure.body as { agents?: unknown } | undefined)?.agents;
-  return Array.isArray(agents) ? (agents as CapabilityAgent[]) : [];
+  return Array.isArray(agents) ? (agents as SkillAgent[]) : [];
 };
 
-/** A refused delete, naming the agents that still list the Capability; null
+/** A refused delete, naming the agents that still list the skill; null
  *  for any other refusal. */
 export function InUseNote({ failure }: { failure: Failure }) {
   const agents = inUseAgents(failure);
@@ -98,4 +98,4 @@ export function InUseNote({ failure }: { failure: Failure }) {
   );
 }
 
-export const isInUse = (failure: Failure | null): boolean => failure?.reason === "capability_in_use";
+export const isInUse = (failure: Failure | null): boolean => failure?.reason === "skill_in_use";

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  capabilitiesHint,
-  capabilityLoadedLabel,
+  skillsHint,
+  skillLoadedLabel,
   endedReasonLabel,
   endedReasonTone,
   offsetLabel,
@@ -118,9 +118,9 @@ describe("prettyJson", () => {
 });
 
 it("a skill's load reads loaded, not loaded, or unknown when the events expired", () => {
-  expect(capabilityLoadedLabel(true)).toBe("Loaded");
-  expect(capabilityLoadedLabel(false)).toBe("Not loaded");
-  expect(capabilityLoadedLabel(null)).toBe("Unknown");
-  expect(capabilitiesHint([{ loaded: true }, { loaded: false }])).toBe("1 of 2 loaded");
-  expect(capabilitiesHint([{ loaded: true }, { loaded: null }])).toBe("2 · loads unknown");
+  expect(skillLoadedLabel(true)).toBe("Loaded");
+  expect(skillLoadedLabel(false)).toBe("Not loaded");
+  expect(skillLoadedLabel(null)).toBe("Unknown");
+  expect(skillsHint([{ loaded: true }, { loaded: false }])).toBe("1 of 2 loaded");
+  expect(skillsHint([{ loaded: true }, { loaded: null }])).toBe("2 · loads unknown");
 });

@@ -1,14 +1,14 @@
-// A new Capability: version 1, a draft until it is published. The Workspace's
-// Capability library is made by the first one (builder-api ADR-0029).
+// A new skill: version 1, a draft until it is published. The Workspace's
+// skill library is made by the first one (builder-api ADR-0029).
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../api";
-import type { ApiResponse, CapabilityVersion } from "../../types";
-import { CapabilityForm } from "./CapabilityForm";
+import type { ApiResponse, SkillVersion } from "../../types";
+import { SkillForm } from "./SkillForm";
 import { blankDraft, NAME_PATTERN, toBody, type Draft } from "./draft";
 import { FailureNote, failureOf, type Failure } from "./failure";
 
-export default function NewCapability() {
+export default function NewSkill() {
   const navigate = useNavigate();
   const [draft, setDraft] = useState<Draft>(blankDraft);
   const [failure, setFailure] = useState<Failure | null>(null);
@@ -27,7 +27,7 @@ export default function NewCapability() {
     setBusy(true);
     setFailure(null);
     try {
-      const r = await api<ApiResponse<CapabilityVersion>>("/capabilities", {
+      const r = await api<ApiResponse<SkillVersion>>("/skills", {
         method: "POST",
         body: JSON.stringify(out.body),
       });
@@ -49,7 +49,7 @@ export default function NewCapability() {
         </div>
       </div>
       {failure && <FailureNote failure={failure} toolCount={draft.tools.length} withName />}
-      <CapabilityForm value={draft} withName editable={!busy} errors={failure?.errors ?? []}
+      <SkillForm value={draft} withName editable={!busy} errors={failure?.errors ?? []}
         onChange={(d) => setDraft(d)} />
       {name && !nameOk && (
         <p className="error-text">A name is lowercase letters, digits and underscores, starting with a letter or underscore.</p>
