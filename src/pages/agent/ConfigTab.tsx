@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Ambience } from "./Ambience";
 import { AgentSkills } from "./AgentSkills";
+import { AgentProcedures } from "./procedures/AgentProcedures";
+import { stepToolChoices } from "./procedures/stepTools";
 import { Avatar } from "./Avatar";
 import { Backups } from "./Backups";
 import { PickControl, type Opt } from "./PickControl";
@@ -128,10 +130,17 @@ const LEADS: Partial<Record<SectionId, string>> = {
   tools: "What the agent can do during a call.",
   skills:
     "Workspace skills the agent can load mid-call. It sees each one's name and when to use it, and loads its instructions and tools when it needs them.",
+  procedures:
+    "Step-by-step processes the agent follows: TurnCall holds the route, and the model sees the step it is on and where it may go next.",
   "turn-taking": "When the caller's turn ends, when the call ends, and how much it may use.",
   guardrails: "What the agent will not discuss.",
   avatar: "A lip-synced face for browser calls.",
   advanced: "The whole configuration. Custom tools, voicemail and analysis are edited here.",
+};
+
+// A section's page on docs.turncall.io, linked under its lead.
+const DOCS: Partial<Record<SectionId, { href: string; label: string }>> = {
+  procedures: { href: "https://docs.turncall.io/guides/procedures", label: "How procedures work" },
 };
 
 const TITLES: Partial<Record<SectionId, string>> = {
@@ -139,6 +148,7 @@ const TITLES: Partial<Record<SectionId, string>> = {
   models: "Speech and models",
   tools: "Tools and apps",
   skills: "Skills",
+  procedures: "Procedures",
   "turn-taking": "Turn-taking and limits",
   guardrails: "Guardrails",
   avatar: "Video avatar",
@@ -332,7 +342,14 @@ export default function ConfigTab({ section }: { section: SectionId }) {
   return (
     <section aria-labelledby="cfg-h" className="wb-section">
       <h2 id="cfg-h">{TITLES[section]}</h2>
-      {LEADS[section] && <p className="muted lead">{LEADS[section]}</p>}
+      {LEADS[section] && (
+        <p className="muted lead">
+          {LEADS[section]}
+          {DOCS[section] && (
+            <> <a href={DOCS[section]!.href} target="_blank" rel="noreferrer">{DOCS[section]!.label} ↗</a></>
+          )}
+        </p>
+      )}
       {statusHint && <p className="callout warn">{statusHint}</p>}
 
       {section === "prompt" && (<>
@@ -695,6 +712,23 @@ export default function ConfigTab({ section }: { section: SectionId }) {
             })
           }
           onMaxLoaded={(v) => setCfg((c: any) => withField(c, "max_loaded_skills", v))}
+        />
+      )}
+
+      {section === "procedures" && (
+        <AgentProcedures
+          procedures={Array.isArray(cfg.procedures) ? cfg.procedures : []}
+          tools={stepToolChoices(cfg, catalog)}
+          isS2S={isS2S}
+          editable={editable}
+          errors={saveErrors ?? []}
+          onChange={(procedures) =>
+            patch((c) => {
+              // TurnCall replaces the whole config on save, so no key is none.
+              if (procedures.length) c.procedures = procedures;
+              else delete c.procedures;
+            })
+          }
         />
       )}
 

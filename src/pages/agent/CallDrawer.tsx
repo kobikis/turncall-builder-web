@@ -7,6 +7,7 @@ import { Section } from "./Section";
 import RecordingTimeline from "./RecordingTimeline";
 import LatencySection from "./LatencySection";
 import TranscriptView from "./TranscriptView";
+import { CallProcedures } from "./procedures/CallProcedures";
 import {
   skillsHint,
   skillLoadedLabel,
@@ -46,6 +47,7 @@ export default function CallDrawer({ agentId, call }: { agentId: string; call: C
   const takeaways = analysis?.takeaways as Record<string, any> | undefined;
   const latency = call.latency_summary;
   const skills = call.skills ?? [];
+  const procedures = call.procedures ?? [];
 
   return (
     <div className="call-drawer">
@@ -118,6 +120,8 @@ export default function CallDrawer({ agentId, call }: { agentId: string; call: C
           </table>
         </Section>
       )}
+
+      {procedures.length > 0 && <CallProcedures procedures={procedures} />}
 
       <Section
         id="call.latency"

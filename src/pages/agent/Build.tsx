@@ -42,6 +42,7 @@ export default function Build() {
     tools: tools || "",
     guardrails: draft.guardrails?.prohibited_topics?.length || "",
     skills: draft.skills?.length || "",
+    procedures: draft.procedures?.length || "",
     avatar: draft.avatar?.enabled ? draft.avatar.provider : "Off",
   };
 
