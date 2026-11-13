@@ -12,6 +12,7 @@ import { Pronunciations } from "./Pronunciations";
 import { NumberField, withField } from "./SettingFields";
 import { TurnTaking } from "./TurnTaking";
 import { Delegation } from "./Delegation";
+import { ElevenRealtime } from "./ElevenRealtime";
 import { McpServers } from "./McpServers";
 import type { RegisteredServer } from "../integrations/McpRegistry";
 import { ProviderKeyNote, type ProviderCard } from "./ProviderKeyNote";
@@ -33,7 +34,7 @@ const FALLBACK_PROVIDERS: Providers = {
   stt: ["deepgram", "openai", "elevenlabs", "cartesia", "assemblyai", "xai"],
   llm: ["openai", "anthropic", "google", "openrouter", "ollama", "custom_openai", "bedrock", "xai"],
   tts: ["deepgram", "openai", "elevenlabs", "cartesia", "xai"],
-  s2s: ["openai", "openai_live", "google", "aws", "xai"],
+  s2s: ["openai", "openai_live", "google", "aws", "xai", "elevenlabs"],
 };
 
 // A raw provider id is only self-explanatory when it names a vendor. Several
@@ -59,6 +60,7 @@ const PROVIDER_LABELS: Record<keyof Providers, Record<string, string>> = {
     google: "google — Gemini Live",
     aws: "aws — Amazon Nova Sonic",
     xai: "xai — Grok Voice",
+    elevenlabs: "elevenlabs — Eleven Realtime",
   },
 };
 
@@ -221,6 +223,7 @@ export default function ConfigTab({ section }: { section: SectionId }) {
     aws: { model: "amazon.nova-2-sonic-v1:0", voice: "matthew" },
     // Pinned, as TurnCall runs it, never xAI's moving `grok-voice-latest`.
     xai: { model: "grok-voice-3.0", voice: "eve" },
+    elevenlabs: { model: "eleven_realtime_v1_mini", voice: "brian" },
   };
 
   // Fetch S2S model + voice lists whenever the S2S provider changes.
@@ -435,6 +438,9 @@ export default function ConfigTab({ section }: { section: SectionId }) {
               onChange={(v) => patch((c) => (c.s2s = { ...c.s2s, voice: v }))}
             />
           </div>
+          {s2sProvider === "elevenlabs" && (
+            <ElevenRealtime value={cfg.s2s} onChange={(s2s) => patch((c) => (c.s2s = s2s))} />
+          )}
           {s2sProvider === "openai_live" && (
             <Delegation
               value={cfg.s2s?.delegation}
