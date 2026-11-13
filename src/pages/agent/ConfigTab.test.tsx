@@ -206,3 +206,41 @@ it("links the Procedures section to the docs page", () => {
   render(<ConfigTab section="models" />);
   expect(screen.queryByRole("link", { name: /how .* work/i })).toBeNull();
 });
+
+describe("speech-to-speech with Eleven Realtime", () => {
+  beforeEach(() => {
+    draft = { pipeline_mode: "s2s", s2s: { provider: "elevenlabs" } };
+  });
+
+  it("is offered under its name, hinting ElevenLabs' defaults", () => {
+    show();
+    const picker = screen.getByLabelText("S2S provider") as HTMLSelectElement;
+    expect(within(picker).getByRole("option", { name: "elevenlabs — Eleven Realtime" })).toBeDefined();
+    expect(picker.value).toBe("elevenlabs");
+    expect((screen.getByLabelText("S2S model") as HTMLInputElement).placeholder).toBe("eleven_realtime_v1_mini");
+    expect((screen.getByLabelText("Voice") as HTMLInputElement).placeholder).toBe("brian");
+  });
+
+  it("sets language and eagerness in s2s.extra, temperature on the block", () => {
+    show();
+    fireEvent.change(screen.getByLabelText("Language"), { target: { value: "es" } });
+    expect(patched?.s2s).toEqual({ provider: "elevenlabs", extra: { language: "es" } });
+    fireEvent.change(screen.getByLabelText("Turn eagerness"), { target: { value: "low" } });
+    expect(patched?.s2s.extra).toEqual({ eagerness: "low" });
+    fireEvent.change(screen.getByLabelText("Temperature"), { target: { value: "0.4" } });
+    expect(patched?.s2s.temperature).toBe(0.4);
+  });
+
+  it("drops an emptied extra", () => {
+    draft = { pipeline_mode: "s2s", s2s: { provider: "elevenlabs", extra: { language: "es" } } };
+    show();
+    fireEvent.change(screen.getByLabelText("Language"), { target: { value: "" } });
+    expect(patched?.s2s).toEqual({ provider: "elevenlabs" });
+  });
+
+  it("is not shown for another provider", () => {
+    draft = { pipeline_mode: "s2s", s2s: { provider: "xai" } };
+    show();
+    expect(screen.queryByLabelText("Turn eagerness")).toBeNull();
+  });
+});
